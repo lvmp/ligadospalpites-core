@@ -1,0 +1,28 @@
+package com.ligadospalpites.shared.security
+
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
+import org.springframework.security.config.annotation.web.builders.HttpSecurity
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
+import org.springframework.security.config.http.SessionCreationPolicy
+import org.springframework.security.web.SecurityFilterChain
+
+@Configuration
+@EnableWebSecurity
+class SecurityConfig {
+
+    @Bean
+    fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+        http
+            .csrf { it.disable() }
+            .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
+            .authorizeHttpRequests { auth ->
+                auth
+                    // Permit endpoints like internal synchronization endpoints, health, h2, etc.
+                    .requestMatchers("/api/v1/internal/**").permitAll()
+                    .requestMatchers("/api/v1/**").permitAll() // Permit for development/testing ease
+                    .anyRequest().permitAll()
+            }
+        return http.build()
+    }
+}

@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: ligadospalpites-core
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ligadospalpites
+    username: palpiteiro
+    password: supersecretpassword
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    show-sql: false
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+logging:
+  level:
+    org.springframework: INFO
+    com.ligadospalpites: DEBUG
