@@ -33,7 +33,10 @@ class LeaderboardIntegrationTest : BaseIntegrationTest() {
     private lateinit var redisLeaderboardRepository: RedisLeaderboardRepository
 
     @Autowired
-    private lateinit var jdbcTemplate: JdbcTemplate
+    private lateinit var transactionTemplate: org.springframework.transaction.support.TransactionTemplate
+
+    @Autowired
+    private lateinit var jdbcTemplate: org.springframework.jdbc.core.JdbcTemplate
 
     @Test
     fun `should asynchronously update SQL and Redis rankings on PredictionsProcessedEvent`() {
@@ -69,7 +72,9 @@ class LeaderboardIntegrationTest : BaseIntegrationTest() {
         )
 
         // Act
-        eventPublisher.publishEvent(event)
+        transactionTemplate.executeWithoutResult {
+            eventPublisher.publishEvent(event)
+        }
 
         // Wait brief moments for async execution to complete
         Thread.sleep(1000)

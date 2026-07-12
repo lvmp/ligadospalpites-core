@@ -20,6 +20,9 @@ abstract class BaseIntegrationTest {
     @Autowired
     protected lateinit var redisTemplate: StringRedisTemplate
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    protected lateinit var mailSender: org.springframework.mail.javamail.JavaMailSender
+
     @AfterEach
     fun cleanUpRedis() {
         redisTemplate.connectionFactory?.connection?.serverCommands()?.flushDb()
@@ -38,6 +41,14 @@ abstract class BaseIntegrationTest {
             start()
         }
 
+        init {
+            org.flywaydb.core.Flyway.configure()
+                .dataSource(postgres.jdbcUrl, postgres.username, postgres.password)
+                .baselineOnMigrate(true)
+                .load()
+                .migrate()
+        }
+
         @JvmStatic
         @DynamicPropertySource
         fun configureProperties(registry: DynamicPropertyRegistry) {
@@ -45,6 +56,11 @@ abstract class BaseIntegrationTest {
             registry.add("spring.datasource.url", postgres::getJdbcUrl)
             registry.add("spring.datasource.username", postgres::getUsername)
             registry.add("spring.datasource.password", postgres::getPassword)
+
+            // Flyway integration properties
+            registry.add("spring.flyway.url", postgres::getJdbcUrl)
+            registry.add("spring.flyway.user", postgres::getUsername)
+            registry.add("spring.flyway.password", postgres::getPassword)
 
             // Redis integration properties
             registry.add("spring.data.redis.host", redis::getHost)
