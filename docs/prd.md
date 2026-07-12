@@ -2,11 +2,11 @@
 
 ## 1. Vision & Executive Summary
 
-**Liga dos Palpites** is a year-round **Sports Hub** designed to engage sports fans through news, schedules, real-time match tracking, and social prediction leagues ("palpites"). Originally launched with a focus on a single tournament (the FIFA World Cup), the application has evolved into a comprehensive multi-sport platform capable of aggregating multiple disciplines (e.g., Football/Soccer, Basketball, American Football) dynamically.
+**Liga dos Palpites** is a year-round, multi-sport **Sports Hub** designed to engage fans through real-time news, match schedules, live score tracking, and social prediction leagues ("palpites"). Originally conceived as a single-tournament app (FIFA World Cup), it has evolved into a comprehensive sports ecosystem aggregating multiple disciplines (Football, Basketball, American Football, etc.) dynamically.
 
-The application allows users to follow live scores, read news, and compete with friends in private or public prediction leagues. Each league can operate with its own unique set of scoring rules and tournament configurations.
+Rather than relying on client-side direct writes or decentralized synchronization, **the entire mobile application (Flutter) is powered by a robust, centralized Spring Boot REST Backend API**. This backend acts as the single source of truth, managing business logic, real-time rank updates, transactional predictions, and entitlement controls.
 
-To sustain the platform and incentivize growth, monetization is driven by mobile app store purchases (Apple App Store & Google Play Store), offering tiered subscription access, ad-removal packages, and sport-specific access passes ("Sport Passes").
+The platform sustains itself through native app store purchases (Apple App Store & Google Play Store), offering tiered subscription access, ad-removal packages, and sport-specific access passes ("Sport Passes").
 
 ---
 
@@ -35,9 +35,9 @@ The platform defines the following subscription tiers and purchase models:
 ### In-App Purchase (IAP) & Validation Flow
 1. **Purchase Execution**: The user initiates a purchase/subscription (e.g., buying a "Basketball Pass" or upgrading to "Premium Hub") inside the Android or iOS mobile application.
 2. **Receipt Generation**: The mobile OS executes the transaction through Google Play / Apple App Store and returns a payment receipt/token.
-3. **Validation Call**: The mobile client sends the receipt token and User ID to the Liga dos Palpites backend.
+3. **Validation Call**: The mobile client sends the receipt token and User ID to the Liga dos Palpites backend REST endpoint.
 4. **Backend Verification**: The backend calls Apple's App Store Server API / Google Play Developer API to verify the receipt's validity, expiration date, and product identifier.
-5. **Subscription Activation**: If valid, the backend updates the user's plan state and unlocked sports in the database.
+5. **Subscription Activation**: If valid, the backend updates the user's plan state and unlocked sports in the primary relational database.
 6. **Auto-Renewal & Webhooks**: The backend listens to App Store Server Notifications V2 and Google Play Developer Notifications (webhooks) to handle renewals, cancellations, refunds, and grace periods automatically.
 
 ---
@@ -111,25 +111,26 @@ The platform defines the following subscription tiers and purchase models:
 
 ## 6. Integration Specifications
 
-### 6.1. Third-Party Sports API (e.g., API-Sports)
+### 6.1. REST API Contract (Backend & Mobile App)
+- **Purpose**: Fully decouple the mobile interface from database structures.
+- **Specification**: All communication between the Flutter App and the backend occurs through standard REST endpoints. The official contract for payload formats, headers, and endpoints is detailed in:
+  - 📄 **[rest_api_contract_mobile.md](file:///c:/Users/Vinicius/workspace/ligadospalpites-core/docs/rest_api_contract_mobile.md)**
+
+### 6.2. Third-Party Sports API (e.g., API-Sports)
 - **Purpose**: Automate the ingestion of sports metadata (sports, countries, leagues, seasons), fixtures, match status, live updates, and official scores.
 - **Mechanism**: Scheduled cron jobs poll the API for upcoming matches (daily) and real-time updates of live matches (every 60 seconds). A webhook mechanism is preferred if supported by the provider.
 
-### 6.2. Firebase Cloud Messaging (FCM)
+### 6.3. Firebase Cloud Messaging (FCM)
 - **Purpose**: Dispatch real-time push alerts to iOS and Android applications.
 - **Mechanism**: Users register their FCM device tokens upon login. Tokens are stored linked to the User ID. The notification engine maps user preferences to active tokens to deliver personalized push alerts.
 
-### 6.3. Store Validation Engines (Apple & Google Play)
+### 6.4. Store Validation Engines (Apple & Google Play)
 - **Apple App Store Server API**: Validates receipts and listens to App Store Server Notifications V2 notifications (JSON Web Signature - JWS format).
 - **Google Play Developer API**: Verifies purchases using Google API Client libraries and listens to Real-time Developer Notifications via Google Cloud Pub/Sub.
 
-### 6.4. External Cron Trigger Engine
-- **Purpose**: Periodically invoke background synchronization jobs (such as match scoring, standings calculations, and news fetching) in a serverless container environment.
-- **Mechanism**: An external cron service (like Google Cloud Scheduler) makes periodic, secure HTTP requests to internal endpoints, scaling up the container instances on-demand and routing execution to a single pod.
-
-### 6.5. Firebase Firestore (User Profiles & Settings)
-- **Purpose**: Persist user display details and application configuration preferences to minimize high-write load on the primary relational database.
-- **Mechanism**: The mobile client writes settings and profile data (e.g. displayName, favoriteSport, notifications preferences) directly to Firestore. The Spring Boot backend queries this collections group data when aggregating leaderboards and profile outputs.
+### 6.5. Primary Relational & Cache Database (Postgres & Redis)
+- **Purpose**: Operational tables (users, fixtures, news, predictions, active devices, settings) are persisted in **Neon PostgreSQL**. Ultra-fast rankings and sorted leaderboards are processed inside **Upstash Redis ZSETs**.
+- **Rule**: No direct Firestore client-side writes are allowed for operational data. All configurations and preferences are processed through REST requests on the Spring Boot backend.
 
 ---
 
