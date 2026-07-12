@@ -17,6 +17,7 @@ Antes de propor alterações de banco de dados, infraestrutura ou padrões de c�
 | **[ADR-0005: External HTTP Scheduler Strategy](0005-serverless-scheduler-strategy.md)** | `Accepted` | Substitui cron interno do Spring (`@Scheduled`) por chamadas HTTP externas disparadas por schedulers em nuvem, garantindo compatibilidade com escala zero e execução em pod único. |
 | **[ADR-0006: Polymorphic Sports Ingestion & Tournament Engine](0006-sports-data-sync-engine.md)** | `Accepted` | Transforma o processador monolítico do torneio em um motor polimórfico orientado a metadados (Strategy), suportando múltiplos esportes/regras de pontuação, sincronização e resolução dinâmica de chaves de mata-mata. |
 | **[ADR-0007: App Dashboard and Modular BFF Gateway Architecture](0007-app-dashboard-bff-gateway.md)** | `Accepted` | Cria um agregador estilo BFF (Backend for Frontend) para consolidar a Home do aplicativo móvel em uma única requisição paralela, desacoplando DTOs externos para manter a compatibilidade do Flutter V1. |
+| **[ADR-0008: REST Controller Layer & Web API Mapping](0008-controller-layer-and-web-api-integration.md)** | `Accepted` | Descentraliza controllers HTTP por submódulo em arquitetura limpa, definindo regras rígidas de trancamento de palpites, segregação de leaderboards por fase de torneio no Redis, e agregação assíncrona paralela do BFF Dashboard. |
 
 ---
 

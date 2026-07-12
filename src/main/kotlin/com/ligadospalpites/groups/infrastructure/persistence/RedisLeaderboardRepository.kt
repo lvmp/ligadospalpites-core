@@ -22,4 +22,8 @@ class RedisLeaderboardRepository(private val redisTemplate: StringRedisTemplate)
         val rankOneBased = rankZeroBased?.let { it + 1 }
         return Pair(rankOneBased, score)
     }
+
+    fun removeUser(leaderboardKey: String, userId: UUID) {
+        redisTemplate.opsForZSet().remove(leaderboardKey, userId.toString())
+    }
 }

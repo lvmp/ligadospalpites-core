@@ -5,4 +5,5 @@ import java.util.UUID
 
 interface SpringDataPredictionRepository : JpaRepository<PredictionJpaEntity, UUID> {
     fun findByMatchId(matchId: UUID): List<PredictionJpaEntity>
+    fun findByUserIdAndMatchId(userId: UUID, matchId: UUID): PredictionJpaEntity?
 }

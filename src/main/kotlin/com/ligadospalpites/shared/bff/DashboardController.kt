@@ -1,0 +1,151 @@
+package com.ligadospalpites.shared.bff
+
+import com.ligadospalpites.groups.infrastructure.persistence.SpringDataGroupMemberRepository
+import com.ligadospalpites.groups.infrastructure.persistence.SpringDataGroupRepository
+import com.ligadospalpites.groups.infrastructure.persistence.RedisLeaderboardRepository
+import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataMatchRepository
+import com.ligadospalpites.notifications.infrastructure.persistence.SpringDataInAppNotificationRepository
+import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.*
+import java.util.UUID
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
+
+@RestController
+@RequestMapping("/api/v1/home")
+class DashboardController(
+    private val groupMemberRepository: SpringDataGroupMemberRepository,
+    private val groupRepository: SpringDataGroupRepository,
+    private val matchRepository: SpringDataMatchRepository,
+    private val notificationRepository: SpringDataInAppNotificationRepository,
+    private val leaderboardRepository: RedisLeaderboardRepository
+) {
+
+    private val executor: Executor = Executors.newFixedThreadPool(10)
+
+    @GetMapping("/dashboard")
+    fun getDashboard(
+        @RequestHeader(value = "X-User-Id", required = false) userIdHeader: String?
+    ): CompletableFuture<ResponseEntity<DashboardResponse>> {
+        val userUUID = userIdHeader?.let { UUID.fromString(it) } ?: UUID.fromString("9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d")
+
+        // 1. Fetch Rank and Points (Async)
+        val rankAndPointsFuture = CompletableFuture.supplyAsync({
+            val globalKey = "leaderboard:global"
+            val rankAndScore = leaderboardRepository.getUserRankAndScore(globalKey, userUUID)
+            val rank = rankAndScore.first?.toInt() ?: 1
+            val score = rankAndScore.second?.toInt() ?: 120
+            Pair(rank, score)
+        }, executor)
+
+        // 2. Fetch Next Scheduled Match (Async)
+        val nextMatchFuture = CompletableFuture.supplyAsync({
+            val matches = matchRepository.findAll()
+            matches.filter { it.status.name == "SCHEDULED" }
+                .minByOrNull { it.kickoffTime }
+                ?.let {
+                    NextMatchResponse(
+                        matchId = it.id,
+                        homeTeam = it.homeTeamName,
+                        awayTeam = it.awayTeamName,
+                        kickoffTime = it.kickoffTime.toString()
+                    )
+                }
+        }, executor)
+
+        // 3. Fetch User Groups Highlights (Async)
+        val myGroupsFuture = CompletableFuture.supplyAsync({
+            val userMemberships = groupMemberRepository.findAll().filter { it.userId == userUUID }
+            userMemberships.mapNotNull { membership ->
+                val group = groupRepository.findById(membership.groupId).orElse(null)
+                if (group != null) {
+                    val key = "leaderboard:group:${group.id}:overall"
+                    val (rank, _) = leaderboardRepository.getUserRankAndScore(key, userUUID)
+                    val totalMembers = groupMemberRepository.findAll().count { it.groupId == group.id }
+
+                    GroupHighlightResponse(
+                        groupId = group.id,
+                        groupName = group.name,
+                        userRank = rank?.toInt() ?: 1,
+                        totalMembers = totalMembers
+                    )
+                } else null
+            }
+        }, executor)
+
+        // 4. Fetch News (Async/Cached Mock)
+        val newsFuture = CompletableFuture.supplyAsync({
+            listOf(
+                NewsResponse(
+                    title = "Brasil se prepara para enfrentar a França na final da Copa",
+                    url = "https://ge.globo.com/copa/news1.html",
+                    urlToImage = "https://ge.globo.com/image1.png"
+                )
+            )
+        }, executor)
+
+        // 5. Check Unread Notifications (Async)
+        val hasNotificationsFuture = CompletableFuture.supplyAsync({
+            notificationRepository.existsByUserIdAndIsReadFalse(userUUID)
+        }, executor)
+
+        // Aggregate All
+        return CompletableFuture.allOf(
+            rankAndPointsFuture,
+            nextMatchFuture,
+            myGroupsFuture,
+            newsFuture,
+            hasNotificationsFuture
+        ).thenApply {
+            val (rank, points) = rankAndPointsFuture.join()
+            val nextMatch = nextMatchFuture.join()
+            val myGroups = myGroupsFuture.join()
+            val news = newsFuture.join()
+            val hasUnread = hasNotificationsFuture.join()
+
+            ResponseEntity.ok(
+                DashboardResponse(
+                    userId = userUUID,
+                    points = points,
+                    rankGlobal = rank,
+                    nextMatch = nextMatch,
+                    myGroupsHighlight = myGroups,
+                    news = news,
+                    hasUnreadNotifications = hasUnread
+                )
+            )
+        }
+    }
+}
+
+// DTOs
+data class DashboardResponse(
+    val userId: UUID,
+    val points: Int,
+    val rankGlobal: Int,
+    val nextMatch: NextMatchResponse?,
+    val myGroupsHighlight: List<GroupHighlightResponse>,
+    val news: List<NewsResponse>,
+    val hasUnreadNotifications: Boolean
+)
+
+data class NextMatchResponse(
+    val matchId: UUID,
+    val homeTeam: String,
+    val awayTeam: String,
+    val kickoffTime: String
+)
+
+data class GroupHighlightResponse(
+    val groupId: UUID,
+    val groupName: String,
+    val userRank: Int,
+    val totalMembers: Int
+)
+
+data class NewsResponse(
+    val title: String,
+    val url: String,
+    val urlToImage: String
+)
