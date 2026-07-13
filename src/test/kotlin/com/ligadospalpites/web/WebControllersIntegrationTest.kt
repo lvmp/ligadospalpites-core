@@ -232,7 +232,7 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
         mockMvc.perform(asyncDispatch(mvcResult))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.userId", equalTo(testUserId.toString())))
-            .andExpect(jsonPath("$.nextMatch.homeTeam", equalTo("Brasil")))
+            .andExpect(jsonPath("$.nextMatches[0].homeTeam", equalTo("Brasil")))
             .andExpect(jsonPath("$.myGroupsHighlight[0].groupName", equalTo("Turma do Futebol")))
             .andExpect(jsonPath("$.news[0].title", containsString("Brasil se prepara")))
     }

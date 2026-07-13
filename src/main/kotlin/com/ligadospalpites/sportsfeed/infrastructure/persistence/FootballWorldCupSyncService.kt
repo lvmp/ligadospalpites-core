@@ -88,8 +88,8 @@ class FootballWorldCupSyncService(
         logger.info("Trying primary provider: Football-Data API")
         val externalMatches = footballDataClient.fetchMatches("WC")
         return externalMatches.map { match ->
-            val homeTranslated = translateTeamName(match.homeTeam.shortName ?: match.homeTeam.name)
-            val awayTranslated = translateTeamName(match.awayTeam.shortName ?: match.awayTeam.name)
+            val homeTranslated = translateTeamName(match.homeTeam.shortName ?: match.homeTeam.name ?: "A definir")
+            val awayTranslated = translateTeamName(match.awayTeam.shortName ?: match.awayTeam.name ?: "A definir")
             MatchJpaEntity(
                 id = UUID.randomUUID(),
                 sportId = footballId,

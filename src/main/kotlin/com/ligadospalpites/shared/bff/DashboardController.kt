@@ -42,12 +42,13 @@ class DashboardController(
             Pair(rank, score)
         }, executor)
 
-        // 2. Fetch Next Scheduled Match (Async)
-        val nextMatchFuture = CompletableFuture.supplyAsync({
+        // 2. Fetch Next Scheduled Matches (Async)
+        val nextMatchesFuture = CompletableFuture.supplyAsync({
             val matches = matchRepository.findAll()
             matches.filter { it.status.name == "SCHEDULED" }
-                .minByOrNull { it.kickoffTime }
-                ?.let {
+                .sortedBy { it.kickoffTime }
+                .take(5)
+                .map {
                     NextMatchResponse(
                         matchId = it.id,
                         homeTeam = it.homeTeamName,
@@ -124,13 +125,13 @@ class DashboardController(
         // Aggregate All
         return CompletableFuture.allOf(
             rankAndPointsFuture,
-            nextMatchFuture,
+            nextMatchesFuture,
             myGroupsFuture,
             newsFuture,
             hasNotificationsFuture
         ).thenApply {
             val (rank, points) = rankAndPointsFuture.join()
-            val nextMatch = nextMatchFuture.join()
+            val nextMatches = nextMatchesFuture.join()
             val myGroups = myGroupsFuture.join()
             val news = newsFuture.join()
             val hasUnread = hasNotificationsFuture.join()
@@ -140,7 +141,7 @@ class DashboardController(
                     userId = userUUID,
                     points = points,
                     rankGlobal = rank,
-                    nextMatch = nextMatch,
+                    nextMatches = nextMatches,
                     myGroupsHighlight = myGroups,
                     news = news,
                     hasUnreadNotifications = hasUnread
@@ -155,7 +156,7 @@ data class DashboardResponse(
     val userId: UUID,
     val points: Int,
     val rankGlobal: Int,
-    val nextMatch: NextMatchResponse?,
+    val nextMatches: List<NextMatchResponse>,
     val myGroupsHighlight: List<GroupHighlightResponse>,
     val news: List<NewsResponse>,
     val hasUnreadNotifications: Boolean
