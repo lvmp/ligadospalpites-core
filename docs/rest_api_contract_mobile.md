@@ -29,12 +29,14 @@ Este endpoint consolida de maneira paralela e concorrente todas as informações
   "points": 120,
   "rankGlobal": 14,
   "hasUnreadNotifications": true,
-  "nextMatch": {
-    "matchId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
-    "homeTeam": "Brasil",
-    "awayTeam": "França",
-    "kickoffTime": "2026-07-13T19:00:00Z"
-  },
+  "nextMatches": [
+    {
+      "matchId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+      "homeTeam": "Brasil",
+      "awayTeam": "França",
+      "kickoffTime": "2026-07-13T19:00:00Z"
+    }
+  ],
   "myGroupsHighlight": [
     {
       "groupId": "7b0a8f9-4b2e-4b67-8890-a54b3d7c588e",
