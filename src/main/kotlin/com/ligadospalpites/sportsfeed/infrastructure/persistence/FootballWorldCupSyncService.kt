@@ -18,8 +18,12 @@ import java.util.UUID
 class FootballWorldCupSyncService(
     private val matchRepository: SpringDataMatchRepository,
     private val footballDataClient: FootballDataClient,
-    private val apiFootballClient: ApiFootballClient
+    private val apiFootballClient: ApiFootballClient,
+    private val newsApiClient: com.ligadospalpites.sportsfeed.infrastructure.client.NewsApiClient,
+    private val redisTemplate: org.springframework.data.redis.core.StringRedisTemplate
 ) : LeagueSyncService {
+
+    private val objectMapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
 
     private val logger = LoggerFactory.getLogger(FootballWorldCupSyncService::class.java)
 
@@ -59,7 +63,7 @@ class FootballWorldCupSyncService(
     )
 
     override fun supports(sportId: UUID, leagueId: UUID): Boolean {
-        return sportId == footballId && leagueId == worldCupLeagueId
+        return sportId == footballId
     }
 
     override fun syncMatches(sportId: UUID, leagueId: UUID) {
@@ -131,7 +135,45 @@ class FootballWorldCupSyncService(
     }
 
     override fun syncNews(sportId: UUID) {
-        // No-op
+        logger.info("Starting World Cup news sync.")
+        val incomingNews = try {
+            self.fetchNewsFromApi()
+        } catch (e: Exception) {
+            logger.error("Failed to sync news from NewsAPI: ${e.message}")
+            // Mantém o cache atual em vez de estourar erro ou limpar, mantendo resiliência total!
+            return
+        }
+
+        if (incomingNews.isNotEmpty()) {
+            cacheNewsInRedis(sportId, incomingNews)
+        } else {
+            logger.warn("No news articles retrieved from provider. Cache remains unchanged.")
+        }
+    }
+
+    @CircuitBreaker(name = "newsApi")
+    @Retry(name = "newsApi")
+    fun fetchNewsFromApi(): List<com.ligadospalpites.sportsfeed.infrastructure.client.NewsApiArticle> {
+        logger.info("Calling NewsAPI client...")
+        return newsApiClient.fetchNews()
+    }
+
+    private fun cacheNewsInRedis(sportId: UUID, articles: List<com.ligadospalpites.sportsfeed.infrastructure.client.NewsApiArticle>) {
+        try {
+            logger.info("Caching ${articles.size} news articles in Redis for sport: $sportId")
+            val topArticles = articles.take(10).map { art ->
+                mapOf(
+                    "title" to art.title,
+                    "url" to art.url,
+                    "urlToImage" to (art.urlToImage ?: "https://ge.globo.com/image_default.png")
+                )
+            }
+            val json = objectMapper.writeValueAsString(topArticles)
+            redisTemplate.opsForValue().set("news:$sportId", json)
+            logger.info("News cached in Redis successfully under key 'news:$sportId'.")
+        } catch (e: Exception) {
+            logger.error("Error caching news in Redis: ${e.message}", e)
+        }
     }
 
     private fun performUpsert(incoming: List<MatchJpaEntity>) {

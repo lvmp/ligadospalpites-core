@@ -27,6 +27,12 @@ class FootballWorldCupSyncServiceIntegrationTest : BaseIntegrationTest() {
     @MockitoBean
     private lateinit var apiFootballClient: ApiFootballClient
 
+    @MockitoBean
+    private lateinit var newsApiClient: NewsApiClient
+
+    @Autowired
+    private lateinit var dashboardController: com.ligadospalpites.shared.bff.DashboardController
+
     private val worldCupLeagueId = UUID.fromString("e7b0a8f9-4b2e-4b67-8890-a54b3d7c588e")
 
     @BeforeEach
@@ -122,5 +128,48 @@ class FootballWorldCupSyncServiceIntegrationTest : BaseIntegrationTest() {
         assertEquals(MatchStatus.FINISHED, saved[0].status)
         assertEquals(4, saved[0].homeScore)
         assertEquals(2, saved[0].awayScore)
+    }
+
+    @Test
+    fun `should sync news from NewsAPI and save to Redis under correct key and serve via BFF`() {
+        val sportId = UUID.fromString("f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c")
+        redisTemplate.delete("news:$sportId")
+
+        val article = NewsApiArticle(
+            title = "Seleção Brasileira inicia treinos na Copa",
+            url = "https://ge.globo.com/copa/treinos.html",
+            urlToImage = "https://ge.globo.com/treino.png"
+        )
+        `when`(newsApiClient.fetchNews()).thenReturn(listOf(article))
+
+        syncService.syncNews(sportId)
+
+        val cached = redisTemplate.opsForValue().get("news:$sportId")
+        assertNotNull(cached)
+        assertTrue(cached!!.contains("Seleção Brasileira inicia treinos na Copa"))
+
+        val dashboardResponse = dashboardController.getDashboard(null).join()
+        val news = dashboardResponse.body?.news
+        assertNotNull(news)
+        assertEquals(1, news!!.size)
+        assertEquals("Seleção Brasileira inicia treinos na Copa", news[0].title)
+    }
+
+    @Test
+    fun `should fallback to previous cache and avoid error when NewsAPI is down`() {
+        val sportId = UUID.fromString("f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c")
+        redisTemplate.delete("news:$sportId")
+
+        redisTemplate.opsForValue().set("news:$sportId", "[{\"title\":\"Cache Antigo\",\"url\":\"https://site.com\",\"urlToImage\":\"https://site.com/img.png\"}]")
+
+        `when`(newsApiClient.fetchNews()).thenThrow(RuntimeException("NewsAPI Limit Exceeded"))
+
+        assertDoesNotThrow {
+            syncService.syncNews(sportId)
+        }
+
+        val cached = redisTemplate.opsForValue().get("news:$sportId")
+        assertNotNull(cached)
+        assertTrue(cached!!.contains("Cache Antigo"))
     }
 }

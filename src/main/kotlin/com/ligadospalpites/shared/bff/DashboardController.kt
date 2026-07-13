@@ -19,8 +19,11 @@ class DashboardController(
     private val groupRepository: SpringDataGroupRepository,
     private val matchRepository: SpringDataMatchRepository,
     private val notificationRepository: SpringDataInAppNotificationRepository,
-    private val leaderboardRepository: RedisLeaderboardRepository
+    private val leaderboardRepository: RedisLeaderboardRepository,
+    private val redisTemplate: org.springframework.data.redis.core.StringRedisTemplate
 ) {
+
+    private val objectMapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
 
     private val executor: Executor = Executors.newFixedThreadPool(10)
 
@@ -74,15 +77,43 @@ class DashboardController(
             }
         }, executor)
 
-        // 4. Fetch News (Async/Cached Mock)
+        // 4. Fetch News (Async from Redis Cache with Fallback)
         val newsFuture = CompletableFuture.supplyAsync({
-            listOf(
-                NewsResponse(
-                    title = "Brasil se prepara para enfrentar a França na final da Copa",
-                    url = "https://ge.globo.com/copa/news1.html",
-                    urlToImage = "https://ge.globo.com/image1.png"
+            val sportId = "f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c"
+            try {
+                val cachedNewsJson = redisTemplate.opsForValue().get("news:$sportId")
+                if (!cachedNewsJson.isNullOrBlank()) {
+                    val articles: List<Map<String, String>> = objectMapper.readValue(
+                        cachedNewsJson,
+                        objectMapper.typeFactory.constructCollectionType(List::class.java, Map::class.java)
+                    )
+                    articles.map { art ->
+                        NewsResponse(
+                            title = art["title"] ?: "",
+                            url = art["url"] ?: "",
+                            urlToImage = art["urlToImage"] ?: ""
+                        )
+                    }
+                } else {
+                    // Fallback se o Redis estiver limpo ou recém-criado
+                    listOf(
+                        NewsResponse(
+                            title = "Brasil se prepara para enfrentar a França na final da Copa",
+                            url = "https://ge.globo.com/copa/news1.html",
+                            urlToImage = "https://ge.globo.com/image1.png"
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                // Em caso de falha de conexão do Redis, devolvemos o fallback amigável sem quebrar o BFF!
+                listOf(
+                    NewsResponse(
+                        title = "Brasil se prepara para enfrentar a França na final da Copa",
+                        url = "https://ge.globo.com/copa/news1.html",
+                        urlToImage = "https://ge.globo.com/image1.png"
+                    )
                 )
-            )
+            }
         }, executor)
 
         // 5. Check Unread Notifications (Async)

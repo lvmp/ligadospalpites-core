@@ -11,14 +11,17 @@ import java.util.UUID
 @Service
 @Profile("integration")
 class WorldCupMockSyncService(
-    private val matchRepository: SpringDataMatchRepository
+    private val matchRepository: SpringDataMatchRepository,
+    private val redisTemplate: org.springframework.data.redis.core.StringRedisTemplate
 ) : LeagueSyncService {
+
+    private val objectMapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
 
     private val footballId = UUID.fromString("f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c")
     private val worldCupLeagueId = UUID.fromString("e7b0a8f9-4b2e-4b67-8890-a54b3d7c588e")
 
     override fun supports(sportId: UUID, leagueId: UUID): Boolean {
-        return sportId == footballId && leagueId == worldCupLeagueId
+        return sportId == footballId
     }
 
     override fun syncMatches(sportId: UUID, leagueId: UUID) {
@@ -64,7 +67,19 @@ class WorldCupMockSyncService(
     }
 
     override fun syncNews(sportId: UUID) {
-        // No-op for this mock service
+        val mockArticles = listOf(
+            mapOf(
+                "title" to "Brasil se prepara para enfrentar a França na final da Copa",
+                "url" to "https://ge.globo.com/copa/news1.html",
+                "urlToImage" to "https://ge.globo.com/image1.png"
+            )
+        )
+        try {
+            val json = objectMapper.writeValueAsString(mockArticles)
+            redisTemplate.opsForValue().set("news:$sportId", json)
+        } catch (e: Exception) {
+            // Silently ignore during tests
+        }
     }
 
     private fun createMatch(
