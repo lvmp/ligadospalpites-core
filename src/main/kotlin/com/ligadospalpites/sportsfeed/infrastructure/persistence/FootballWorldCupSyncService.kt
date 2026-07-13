@@ -134,6 +134,11 @@ class FootballWorldCupSyncService(
         throw exception
     }
 
+    fun fetchMatchesLocalFallback(sportId: UUID, leagueId: UUID, exception: Throwable, fallbackException: Throwable): List<MatchJpaEntity> {
+        logger.error("Secondary provider (API-Football) also failed. Both APIs are unavailable. Errors: [Primary: ${exception.message}, Secondary: ${fallbackException.message}]", fallbackException)
+        throw fallbackException
+    }
+
     override fun syncNews(sportId: UUID) {
         logger.info("Starting World Cup news sync.")
         val incomingNews = try {
