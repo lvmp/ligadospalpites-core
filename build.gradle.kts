@@ -41,6 +41,10 @@ dependencies {
     implementation("org.flywaydb:flyway-core")
     implementation("org.flywaydb:flyway-database-postgresql")
 
+    // Resilience4j & Spring AOP
+    implementation("io.github.resilience4j:resilience4j-spring-boot3:2.2.0")
+    implementation("org.springframework.boot:spring-boot-starter-aop:3.4.1")
+
     // Development Tools
     developmentOnly("org.springframework.boot:spring-boot-docker-compose")
 

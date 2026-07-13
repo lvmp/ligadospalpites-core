@@ -22,6 +22,10 @@ spring:
       host: localhost
       port: 6379
 
+  mail:
+    host: localhost
+    port: 25
+
   flyway:
     enabled: true
     baseline-on-migrate: true
@@ -30,3 +34,46 @@ logging:
   level:
     org.springframework: INFO
     com.ligadospalpites: DEBUG
+
+app:
+  sportsfeed:
+    football-data:
+      url: "https://api.football-data.org"
+      api-key: "${FOOTBALL_DATA_API_KEY:mock-key-fd}"
+    api-football:
+      url: "https://v3.football.api-sports.io"
+      api-key: "${API_FOOTBALL_API_KEY:mock-key-af}"
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      footballDataApi:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 6
+        failureRateThreshold: 50
+        slowCallRateThreshold: 50
+        slowCallDurationThreshold: 5s
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 2
+      apiFootballApi:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 6
+        failureRateThreshold: 50
+        slowCallRateThreshold: 50
+        slowCallDurationThreshold: 5s
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 2
+  retry:
+    instances:
+      footballDataApi:
+        maxAttempts: 3
+        waitDuration: 1s
+        exponentialBackoff:
+          enabled: true
+          multiplier: 2
+      apiFootballApi:
+        maxAttempts: 3
+        waitDuration: 1s
+        exponentialBackoff:
+          enabled: true
+          multiplier: 2
