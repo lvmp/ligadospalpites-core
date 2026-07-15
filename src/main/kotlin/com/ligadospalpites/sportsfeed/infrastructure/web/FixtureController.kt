@@ -63,10 +63,15 @@ class FixtureController(
         // Validation B: Check MULTI_SPORT entitlement lock for non-default sports
         val footballId = UUID.fromString("f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c")
         if (sportId != null && sportId != footballId) {
+            val now = java.time.Instant.now()
             val entitlements = entitlementRepository.findByUserId(userUUID)
             val hasMultiSport = entitlements.any {
-                it.entitlementType == com.ligadospalpites.users.domain.models.EntitlementType.PREMIUM ||
-                (it.entitlementType == com.ligadospalpites.users.domain.models.EntitlementType.SPORT_PASS && it.sportId == sportId)
+                val expiresAt = it.expiresAt
+                val isNotExpired = expiresAt == null || expiresAt.isAfter(now)
+                isNotExpired && (
+                    it.entitlementType == com.ligadospalpites.users.domain.models.EntitlementType.PREMIUM ||
+                    (it.entitlementType == com.ligadospalpites.users.domain.models.EntitlementType.SPORT_PASS && it.sportId == sportId)
+                )
             }
             if (!hasMultiSport) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)

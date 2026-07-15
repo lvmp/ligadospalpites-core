@@ -20,6 +20,7 @@ class SecurityConfig {
                 auth
                     // Permit endpoints like internal synchronization endpoints, health, h2, etc.
                     .requestMatchers("/api/v1/internal/**").permitAll()
+                    .requestMatchers("/api/v1/payments/revenuecat/webhook").permitAll()
                     .requestMatchers("/api/v1/**").permitAll() // Permit for development/testing ease
                     .anyRequest().permitAll()
             }
