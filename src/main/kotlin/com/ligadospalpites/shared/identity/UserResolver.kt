@@ -21,4 +21,25 @@ class UserResolver(private val userRepository: UserRepository) {
                 )
             )
     }
+
+    @Transactional
+    fun resolveByUidOrUuid(headerValue: String?): UUID {
+        if (headerValue.isNullOrBlank()) {
+            return UUID.fromString("9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d")
+        }
+        try {
+            return UUID.fromString(headerValue)
+        } catch (e: IllegalArgumentException) {
+            val user = userRepository.findByFirebaseUid(headerValue)
+                ?: userRepository.save(
+                    User(
+                        id = UUID.randomUUID(),
+                        firebaseUid = headerValue,
+                        email = "user_${headerValue}@ligadospalpites.com",
+                        name = "Usuário ${headerValue.take(6)}"
+                    )
+                )
+            return user.id
+        }
+    }
 }

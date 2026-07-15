@@ -82,6 +82,19 @@ class FootballWorldCupSyncService(
         }
     }
 
+    private fun translateStage(stage: String?): String {
+        return when (stage?.uppercase()) {
+            "GROUP_STAGE" -> "Fase de Grupos"
+            "LAST_32", "ROUND_OF_32" -> "Dezesseis-avos de Final"
+            "LAST_16", "ROUND_OF_16" -> "Oitavas de Final"
+            "QUARTER_FINALS" -> "Quartas de Final"
+            "SEMI_FINALS" -> "Semifinal"
+            "THIRD_PLACE" -> "Disputa do 3º Lugar"
+            "FINAL" -> "Grande Final"
+            else -> stage ?: "Fase de Grupos"
+        }
+    }
+
     @CircuitBreaker(name = "footballDataApi", fallbackMethod = "fetchFromApiFootball")
     @Retry(name = "footballDataApi")
     fun fetchFromFootballData(sportId: UUID, leagueId: UUID): List<MatchJpaEntity> {
@@ -100,6 +113,7 @@ class FootballWorldCupSyncService(
                 status = mapFootballDataStatus(match.status),
                 homeScore = match.score?.fullTime?.home,
                 awayScore = match.score?.fullTime?.away,
+                phase = translateStage(match.stage),
                 updatedAt = Instant.now()
             )
         }
@@ -124,6 +138,7 @@ class FootballWorldCupSyncService(
                 status = mapApiFootballStatus(wrapper.fixture.status.short),
                 homeScore = wrapper.goals.home,
                 awayScore = wrapper.goals.away,
+                phase = "Fase de Grupos",
                 updatedAt = Instant.now()
             )
         }
@@ -166,13 +181,20 @@ class FootballWorldCupSyncService(
     private fun cacheNewsInRedis(sportId: UUID, articles: List<com.ligadospalpites.sportsfeed.infrastructure.client.NewsApiArticle>) {
         try {
             logger.info("Caching ${articles.size} news articles in Redis for sport: $sportId")
-            val topArticles = articles.take(10).map { art ->
-                mapOf(
-                    "title" to art.title,
-                    "url" to art.url,
-                    "urlToImage" to (art.urlToImage ?: "https://ge.globo.com/image_default.png")
-                )
-            }
+            val topArticles = articles
+                .filter { !it.title.isNullOrBlank() }
+                .distinctBy { it.title.lowercase().trim() }
+                .take(10)
+                .map { art ->
+                    mapOf(
+                        "title" to art.title,
+                        "url" to art.url,
+                        "urlToImage" to (art.urlToImage ?: "https://ge.globo.com/image_default.png"),
+                        "author" to (art.author ?: "Liga dos Palpites"),
+                        "description" to (art.description ?: art.content ?: "Matéria completa disponível no link abaixo."),
+                        "category" to "Copa do Mundo"
+                    )
+                }
             val json = objectMapper.writeValueAsString(topArticles)
             redisTemplate.opsForValue().set("news:$sportId", json)
             logger.info("News cached in Redis successfully under key 'news:$sportId'.")
@@ -202,6 +224,7 @@ class FootballWorldCupSyncService(
                     status = inc.status,
                     homeScore = inc.homeScore,
                     awayScore = inc.awayScore,
+                    phase = inc.phase,
                     updatedAt = Instant.now()
                 )
             } else {

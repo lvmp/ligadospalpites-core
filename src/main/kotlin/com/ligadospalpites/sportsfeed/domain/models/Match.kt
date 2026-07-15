@@ -20,5 +20,6 @@ data class Match(
     val status: MatchStatus,
     val homeScore: Int?,
     val awayScore: Int?,
+    val phase: String? = null,
     val updatedAt: Instant = Instant.now()
 )

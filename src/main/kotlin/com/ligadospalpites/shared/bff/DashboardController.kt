@@ -5,6 +5,7 @@ import com.ligadospalpites.groups.infrastructure.persistence.SpringDataGroupRepo
 import com.ligadospalpites.groups.infrastructure.persistence.RedisLeaderboardRepository
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataMatchRepository
 import com.ligadospalpites.notifications.infrastructure.persistence.SpringDataInAppNotificationRepository
+import com.ligadospalpites.shared.identity.UserResolver
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.util.UUID
@@ -20,7 +21,8 @@ class DashboardController(
     private val matchRepository: SpringDataMatchRepository,
     private val notificationRepository: SpringDataInAppNotificationRepository,
     private val leaderboardRepository: RedisLeaderboardRepository,
-    private val redisTemplate: org.springframework.data.redis.core.StringRedisTemplate
+    private val redisTemplate: org.springframework.data.redis.core.StringRedisTemplate,
+    private val userResolver: UserResolver
 ) {
 
     private val objectMapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
@@ -31,7 +33,7 @@ class DashboardController(
     fun getDashboard(
         @RequestHeader(value = "X-User-Id", required = false) userIdHeader: String?
     ): CompletableFuture<ResponseEntity<DashboardResponse>> {
-        val userUUID = userIdHeader?.let { UUID.fromString(it) } ?: UUID.fromString("9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d")
+        val userUUID = userResolver.resolveByUidOrUuid(userIdHeader)
 
         // 1. Fetch Rank and Points (Async)
         val rankAndPointsFuture = CompletableFuture.supplyAsync({
@@ -53,7 +55,8 @@ class DashboardController(
                         matchId = it.id,
                         homeTeam = it.homeTeamName,
                         awayTeam = it.awayTeamName,
-                        kickoffTime = it.kickoffTime.toString()
+                        kickoffTime = it.kickoffTime.toString(),
+                        phase = it.phase
                     )
                 }
         }, executor)
@@ -92,7 +95,10 @@ class DashboardController(
                         NewsResponse(
                             title = art["title"] ?: "",
                             url = art["url"] ?: "",
-                            urlToImage = art["urlToImage"] ?: ""
+                            urlToImage = art["urlToImage"] ?: "",
+                            author = art["author"] ?: "Liga dos Palpites",
+                            description = art["description"] ?: "Matéria completa disponível no link abaixo.",
+                            category = art["category"] ?: "Copa do Mundo"
                         )
                     }
                 } else {
@@ -101,7 +107,10 @@ class DashboardController(
                         NewsResponse(
                             title = "Brasil se prepara para enfrentar a França na final da Copa",
                             url = "https://ge.globo.com/copa/news1.html",
-                            urlToImage = "https://ge.globo.com/image1.png"
+                            urlToImage = "https://ge.globo.com/image1.png",
+                            author = "Liga dos Palpites",
+                            description = "Matéria completa disponível no link abaixo.",
+                            category = "Copa do Mundo"
                         )
                     )
                 }
@@ -111,7 +120,10 @@ class DashboardController(
                     NewsResponse(
                         title = "Brasil se prepara para enfrentar a França na final da Copa",
                         url = "https://ge.globo.com/copa/news1.html",
-                        urlToImage = "https://ge.globo.com/image1.png"
+                        urlToImage = "https://ge.globo.com/image1.png",
+                        author = "Liga dos Palpites",
+                        description = "Matéria completa disponível no link abaixo.",
+                        category = "Copa do Mundo"
                     )
                 )
             }
@@ -166,7 +178,8 @@ data class NextMatchResponse(
     val matchId: UUID,
     val homeTeam: String,
     val awayTeam: String,
-    val kickoffTime: String
+    val kickoffTime: String,
+    val phase: String? = null
 )
 
 data class GroupHighlightResponse(
@@ -179,5 +192,8 @@ data class GroupHighlightResponse(
 data class NewsResponse(
     val title: String,
     val url: String,
-    val urlToImage: String
+    val urlToImage: String,
+    val author: String,
+    val description: String,
+    val category: String
 )

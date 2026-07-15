@@ -37,6 +37,9 @@ class MatchJpaEntity(
     @Column(name = "away_score")
     val awayScore: Int? = null,
 
+    @Column(name = "phase", length = 100)
+    val phase: String? = null,
+
     @Column(name = "updated_at", nullable = false)
     val updatedAt: Instant = Instant.now()
 ) {
@@ -50,6 +53,7 @@ class MatchJpaEntity(
         status = status,
         homeScore = homeScore,
         awayScore = awayScore,
+        phase = phase,
         updatedAt = updatedAt
     )
 
@@ -64,6 +68,7 @@ class MatchJpaEntity(
             status = match.status,
             homeScore = match.homeScore,
             awayScore = match.awayScore,
+            phase = match.phase,
             updatedAt = match.updatedAt
         )
     }

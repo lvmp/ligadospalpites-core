@@ -1,0 +1,1 @@
+ALTER TABLE tbl_matches ADD COLUMN phase VARCHAR(100);

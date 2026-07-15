@@ -32,36 +32,40 @@ class WorldCupMockSyncService(
         val fixtures = mutableListOf<MatchJpaEntity>()
 
         // 1. Fase de Grupos - Concluídos (FINISHED)
-        fixtures.add(createMatch("México", "Suécia", -20, 2, 1, MatchStatus.FINISHED))
-        fixtures.add(createMatch("Estados Unidos", "Bolívia", -19, 3, 1, MatchStatus.FINISHED))
-        fixtures.add(createMatch("Canadá", "Camarões", -19, 1, 1, MatchStatus.FINISHED))
-        fixtures.add(createMatch("Argentina", "Japão", -18, 2, 0, MatchStatus.FINISHED))
-        fixtures.add(createMatch("França", "Austrália", -18, 4, 1, MatchStatus.FINISHED))
-        fixtures.add(createMatch("Brasil", "Coreia do Sul", -17, 3, 0, MatchStatus.FINISHED))
-        fixtures.add(createMatch("Portugal", "Gana", -17, 3, 2, MatchStatus.FINISHED))
+        fixtures.add(createMatch("México", "Suécia", -20, 2, 1, MatchStatus.FINISHED, "Fase de Grupos"))
+        fixtures.add(createMatch("Estados Unidos", "Bolívia", -19, 3, 1, MatchStatus.FINISHED, "Fase de Grupos"))
+        fixtures.add(createMatch("Canadá", "Camarões", -19, 1, 1, MatchStatus.FINISHED, "Fase de Grupos"))
+        fixtures.add(createMatch("Argentina", "Japão", -18, 2, 0, MatchStatus.FINISHED, "Fase de Grupos"))
+        fixtures.add(createMatch("França", "Austrália", -18, 4, 1, MatchStatus.FINISHED, "Fase de Grupos"))
+        fixtures.add(createMatch("Brasil", "Coreia do Sul", -17, 3, 0, MatchStatus.FINISHED, "Fase de Grupos"))
+        fixtures.add(createMatch("Portugal", "Gana", -17, 3, 2, MatchStatus.FINISHED, "Fase de Grupos"))
+
+        // 1.5. Dezesseis-avos de Final - Concluídos (FINISHED)
+        fixtures.add(createMatch("México", "Suécia", -15, 2, 1, MatchStatus.FINISHED, "Dezesseis-avos de Final"))
+        fixtures.add(createMatch("Estados Unidos", "Camarões", -14, 2, 0, MatchStatus.FINISHED, "Dezesseis-avos de Final"))
 
         // 2. Oitavas de Final - Concluídos (FINISHED)
-        fixtures.add(createMatch("Estados Unidos", "Itália", -12, 2, 1, MatchStatus.FINISHED))
-        fixtures.add(createMatch("Argentina", "Nigéria", -12, 2, 0, MatchStatus.FINISHED))
-        fixtures.add(createMatch("França", "Alemanha", -11, 3, 2, MatchStatus.FINISHED))
-        fixtures.add(createMatch("Inglaterra", "Senegal", -11, 3, 0, MatchStatus.FINISHED))
-        fixtures.add(createMatch("Brasil", "Colômbia", -10, 3, 1, MatchStatus.FINISHED))
+        fixtures.add(createMatch("Estados Unidos", "Itália", -12, 2, 1, MatchStatus.FINISHED, "Oitavas de Final"))
+        fixtures.add(createMatch("Argentina", "Nigéria", -12, 2, 0, MatchStatus.FINISHED, "Oitavas de Final"))
+        fixtures.add(createMatch("França", "Alemanha", -11, 3, 2, MatchStatus.FINISHED, "Oitavas de Final"))
+        fixtures.add(createMatch("Inglaterra", "Senegal", -11, 3, 0, MatchStatus.FINISHED, "Oitavas de Final"))
+        fixtures.add(createMatch("Brasil", "Colômbia", -10, 3, 1, MatchStatus.FINISHED, "Oitavas de Final"))
 
         // 3. Quartas de Final - Concluídos (FINISHED)
-        fixtures.add(createMatch("Brasil", "Holanda", -6, 2, 1, MatchStatus.FINISHED))
-        fixtures.add(createMatch("Argentina", "Inglaterra", -6, 1, 0, MatchStatus.FINISHED))
-        fixtures.add(createMatch("Marrocos", "Portugal", -5, 1, 0, MatchStatus.FINISHED))
-        fixtures.add(createMatch("Espanha", "França", -5, 1, 2, MatchStatus.FINISHED))
+        fixtures.add(createMatch("Brasil", "Holanda", -6, 2, 1, MatchStatus.FINISHED, "Quartas de Final"))
+        fixtures.add(createMatch("Argentina", "Inglaterra", -6, 1, 0, MatchStatus.FINISHED, "Quartas de Final"))
+        fixtures.add(createMatch("Marrocos", "Portugal", -5, 1, 0, MatchStatus.FINISHED, "Quartas de Final"))
+        fixtures.add(createMatch("Espanha", "França", -5, 1, 2, MatchStatus.FINISHED, "Quartas de Final"))
 
         // 4. Semifinais - Concluídos (FINISHED)
-        fixtures.add(createMatch("Brasil", "França", -2, 1, 2, MatchStatus.FINISHED))
-        fixtures.add(createMatch("Argentina", "Marrocos", -2, 2, 0, MatchStatus.FINISHED))
+        fixtures.add(createMatch("Brasil", "França", -2, 1, 2, MatchStatus.FINISHED, "Semifinal"))
+        fixtures.add(createMatch("Argentina", "Marrocos", -2, 2, 0, MatchStatus.FINISHED, "Semifinal"))
 
         // 5. Decisão de Terceiro Lugar e Grande Final - Futuros (SCHEDULED)
         // Decisão do Terceiro Lugar agendada para amanhã (Mantém "Brasil" para aprovação do teste integrado do Dashboard)
-        fixtures.add(createMatch("Brasil", "Marrocos", 1, null, null, MatchStatus.SCHEDULED))
+        fixtures.add(createMatch("Brasil", "Marrocos", 1, null, null, MatchStatus.SCHEDULED, "Disputa do 3º Lugar"))
         // Grande Final da Copa 2026 agendada para daqui a 2 dias (Com lock ativo para palpites)
-        fixtures.add(createMatch("Argentina", "França", 2, null, null, MatchStatus.SCHEDULED))
+        fixtures.add(createMatch("Argentina", "França", 2, null, null, MatchStatus.SCHEDULED, "Grande Final"))
 
         matchRepository.saveAll(fixtures)
     }
@@ -71,7 +75,10 @@ class WorldCupMockSyncService(
             mapOf(
                 "title" to "Brasil se prepara para enfrentar a França na final da Copa",
                 "url" to "https://ge.globo.com/copa/news1.html",
-                "urlToImage" to "https://ge.globo.com/image1.png"
+                "urlToImage" to "https://ge.globo.com/image1.png",
+                "author" to "Globo Esporte",
+                "description" to "A seleção brasileira realizou seu último treino tático antes da grande final contra a França.",
+                "category" to "Copa do Mundo"
             )
         )
         try {
@@ -88,7 +95,8 @@ class WorldCupMockSyncService(
         daysOffset: Long,
         homeScore: Int?,
         awayScore: Int?,
-        status: MatchStatus
+        status: MatchStatus,
+        phase: String? = null
     ): MatchJpaEntity {
         return MatchJpaEntity(
             id = UUID.randomUUID(),
@@ -99,7 +107,8 @@ class WorldCupMockSyncService(
             homeScore = homeScore,
             awayScore = awayScore,
             kickoffTime = Instant.now().plus(daysOffset, ChronoUnit.DAYS),
-            status = status
+            status = status,
+            phase = phase
         )
     }
 }

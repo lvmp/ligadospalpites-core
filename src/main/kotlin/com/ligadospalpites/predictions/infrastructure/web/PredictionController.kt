@@ -6,6 +6,7 @@ import com.ligadospalpites.predictions.infrastructure.persistence.PredictionJpaE
 import com.ligadospalpites.predictions.infrastructure.persistence.SpecialPredictionJpaEntity
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataMatchRepository
 import org.springframework.http.HttpStatus
+import com.ligadospalpites.shared.identity.UserResolver
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.time.Instant
@@ -16,7 +17,8 @@ import java.util.UUID
 class PredictionController(
     private val predictionRepository: SpringDataPredictionRepository,
     private val specialPredictionRepository: SpringDataSpecialPredictionRepository,
-    private val matchRepository: SpringDataMatchRepository
+    private val matchRepository: SpringDataMatchRepository,
+    private val userResolver: UserResolver
 ) {
 
     // 1. Submit match prediction
@@ -25,7 +27,7 @@ class PredictionController(
         @RequestBody request: MatchPredictionRequest,
         @RequestHeader(value = "X-User-Id", required = false) userIdHeader: String?
     ): ResponseEntity<Any> {
-        val userUUID = userIdHeader?.let { UUID.fromString(it) } ?: UUID.fromString("9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d")
+        val userUUID = userResolver.resolveByUidOrUuid(userIdHeader)
 
         val match = matchRepository.findById(request.matchId).orElse(null)
             ?: return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -76,7 +78,7 @@ class PredictionController(
         @RequestBody request: SpecialPredictionRequest,
         @RequestHeader(value = "X-User-Id", required = false) userIdHeader: String?
     ): ResponseEntity<Any> {
-        val userUUID = userIdHeader?.let { UUID.fromString(it) } ?: UUID.fromString("9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d")
+        val userUUID = userResolver.resolveByUidOrUuid(userIdHeader)
 
         // CRITICAL VALIDATION: Find first match in league to determine general lock
         val matches = matchRepository.findByLeagueId(request.leagueId)

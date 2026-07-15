@@ -50,7 +50,10 @@ data class NewsApiResponse(
 )
 
 data class NewsApiArticle(
+    val author: String? = null,
     val title: String,
+    val description: String? = null,
+    val content: String? = null,
     val url: String,
     val urlToImage: String? = null,
     val publishedAt: String? = null

@@ -4,6 +4,7 @@ import com.ligadospalpites.groups.infrastructure.persistence.SpringDataGroupRepo
 import com.ligadospalpites.groups.infrastructure.persistence.SpringDataGroupMemberRepository
 import com.ligadospalpites.groups.infrastructure.persistence.RedisLeaderboardRepository
 import com.ligadospalpites.groups.infrastructure.persistence.GroupMemberId
+import com.ligadospalpites.shared.identity.UserResolver
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -14,7 +15,8 @@ import java.util.UUID
 class GroupController(
     private val groupRepository: SpringDataGroupRepository,
     private val memberRepository: SpringDataGroupMemberRepository,
-    private val leaderboardRepository: RedisLeaderboardRepository
+    private val leaderboardRepository: RedisLeaderboardRepository,
+    private val userResolver: UserResolver
 ) {
 
     // 1. Kick/Remove member (Restricted to group creator)
@@ -24,7 +26,7 @@ class GroupController(
         @PathVariable memberUserId: UUID,
         @RequestHeader(value = "X-User-Id", required = false) userIdHeader: String?
     ): ResponseEntity<Any> {
-        val requesterUUID = userIdHeader?.let { UUID.fromString(it) } ?: UUID.fromString("9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d")
+        val requesterUUID = userResolver.resolveByUidOrUuid(userIdHeader)
 
         val group = groupRepository.findById(groupId).orElse(null)
             ?: return ResponseEntity.status(HttpStatus.NOT_FOUND)

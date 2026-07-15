@@ -62,6 +62,7 @@ class FootballWorldCupSyncServiceIntegrationTest : BaseIntegrationTest() {
         assertEquals(MatchStatus.FINISHED, saved[0].status)
         assertEquals(2, saved[0].homeScore)
         assertEquals(1, saved[0].awayScore)
+        assertEquals("Fase de Grupos", saved[0].phase)
 
         verify(footballDataClient, times(1)).fetchMatches("WC")
         verifyNoInteractions(apiFootballClient)
@@ -87,6 +88,7 @@ class FootballWorldCupSyncServiceIntegrationTest : BaseIntegrationTest() {
         assertEquals(MatchStatus.FINISHED, saved[0].status)
         assertEquals(3, saved[0].homeScore)
         assertEquals(2, saved[0].awayScore)
+        assertEquals("Fase de Grupos", saved[0].phase)
 
         verify(footballDataClient, times(1)).fetchMatches("WC")
         verify(apiFootballClient, times(1)).fetchMatches(1, 2026)
@@ -103,7 +105,8 @@ class FootballWorldCupSyncServiceIntegrationTest : BaseIntegrationTest() {
             awayTeamName = "França",
             status = MatchStatus.SCHEDULED,
             homeScore = null,
-            awayScore = null
+            awayScore = null,
+            phase = "Qualificação"
         )
         matchRepository.save(oldMatch)
 
@@ -128,6 +131,7 @@ class FootballWorldCupSyncServiceIntegrationTest : BaseIntegrationTest() {
         assertEquals(MatchStatus.FINISHED, saved[0].status)
         assertEquals(4, saved[0].homeScore)
         assertEquals(2, saved[0].awayScore)
+        assertEquals("Fase de Grupos", saved[0].phase)
     }
 
     @Test
@@ -136,7 +140,10 @@ class FootballWorldCupSyncServiceIntegrationTest : BaseIntegrationTest() {
         redisTemplate.delete("news:$sportId")
 
         val article = NewsApiArticle(
+            author = "Globo Esporte",
             title = "Seleção Brasileira inicia treinos na Copa",
+            description = "O técnico comandou um coletivo bastante intenso.",
+            content = "Conteúdo completo...",
             url = "https://ge.globo.com/copa/treinos.html",
             urlToImage = "https://ge.globo.com/treino.png"
         )
@@ -153,6 +160,9 @@ class FootballWorldCupSyncServiceIntegrationTest : BaseIntegrationTest() {
         assertNotNull(news)
         assertEquals(1, news!!.size)
         assertEquals("Seleção Brasileira inicia treinos na Copa", news[0].title)
+        assertEquals("Globo Esporte", news[0].author)
+        assertEquals("O técnico comandou um coletivo bastante intenso.", news[0].description)
+        assertEquals("Copa do Mundo", news[0].category)
     }
 
     @Test
@@ -171,5 +181,15 @@ class FootballWorldCupSyncServiceIntegrationTest : BaseIntegrationTest() {
         val cached = redisTemplate.opsForValue().get("news:$sportId")
         assertNotNull(cached)
         assertTrue(cached!!.contains("Cache Antigo"))
+
+        // Assert that BFF handles older cache gracefully with fallbacks
+        val dashboardResponse = dashboardController.getDashboard(null).join()
+        val news = dashboardResponse.body?.news
+        assertNotNull(news)
+        assertEquals(1, news!!.size)
+        assertEquals("Cache Antigo", news[0].title)
+        assertEquals("Liga dos Palpites", news[0].author)
+        assertEquals("Matéria completa disponível no link abaixo.", news[0].description)
+        assertEquals("Copa do Mundo", news[0].category)
     }
 }

@@ -5,6 +5,7 @@ import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataLeagu
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataMatchRepository
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.MatchJpaEntity
 import com.ligadospalpites.users.infrastructure.persistence.SpringDataUserEntitlementRepository
+import com.ligadospalpites.shared.identity.UserResolver
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -16,7 +17,8 @@ class FixtureController(
     private val sportRepository: SpringDataSportRepository,
     private val leagueRepository: SpringDataLeagueRepository,
     private val matchRepository: SpringDataMatchRepository,
-    private val entitlementRepository: SpringDataUserEntitlementRepository
+    private val entitlementRepository: SpringDataUserEntitlementRepository,
+    private val userResolver: UserResolver
 ) {
 
     // 1. Get leagues grouped by sport
@@ -47,7 +49,7 @@ class FixtureController(
         @RequestParam(required = false) leagueId: UUID?,
         @RequestHeader(value = "X-User-Id", required = false) userIdHeader: String?
     ): ResponseEntity<Any> {
-        val userUUID = userIdHeader?.let { UUID.fromString(it) } ?: UUID.fromString("9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d")
+        val userUUID = userResolver.resolveByUidOrUuid(userIdHeader)
 
         // Validation A: If leagueId is specified, check if it's active
         if (leagueId != null) {
@@ -102,10 +104,12 @@ class FixtureController(
         val matches = matchRepository.findByLeagueId(leagueId)
         // Group matches into phases for the Flutter BracketBloc
         val stages = mapOf(
-            "OITAVAS" to matches.filter { it.homeTeamName.contains("Oitavas") }.map { MatchResponse.fromEntity(it) },
-            "QUARTAS" to matches.filter { it.homeTeamName.contains("Quartas") }.map { MatchResponse.fromEntity(it) },
-            "SEMI" to matches.filter { it.homeTeamName.contains("Semi") }.map { MatchResponse.fromEntity(it) },
-            "FINAL" to matches.filter { it.homeTeamName.contains("Final") }.map { MatchResponse.fromEntity(it) }
+            "DECIMOSEXTO" to matches.filter { it.phase == "Dezesseis-avos de Final" || it.homeTeamName.contains("Dezesseis") || it.awayTeamName.contains("Dezesseis") }.map { MatchResponse.fromEntity(it) },
+            "ROUND_OF_32" to matches.filter { it.phase == "Dezesseis-avos de Final" || it.homeTeamName.contains("Dezesseis") || it.awayTeamName.contains("Dezesseis") }.map { MatchResponse.fromEntity(it) },
+            "OITAVAS" to matches.filter { it.phase == "Oitavas de Final" || it.homeTeamName.contains("Oitavas") || it.awayTeamName.contains("Oitavas") }.map { MatchResponse.fromEntity(it) },
+            "QUARTAS" to matches.filter { it.phase == "Quartas de Final" || it.homeTeamName.contains("Quartas") || it.awayTeamName.contains("Quartas") }.map { MatchResponse.fromEntity(it) },
+            "SEMI" to matches.filter { it.phase == "Semifinal" || it.homeTeamName.contains("Semi") || it.awayTeamName.contains("Semi") }.map { MatchResponse.fromEntity(it) },
+            "FINAL" to matches.filter { it.phase == "Grande Final" || it.homeTeamName.contains("Final") || it.awayTeamName.contains("Final") }.map { MatchResponse.fromEntity(it) }
         )
 
         return ResponseEntity.ok(BracketResponse(leagueId, stages))

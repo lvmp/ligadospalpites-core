@@ -233,7 +233,7 @@ Permite que o criador de um grupo remova/expulse um participante indesejado.
 
 Para que o backend possa enviar e-mails, SMS, ou Push Notifications baseadas em eventos de pontuação dos palpites, o aplicativo Flutter deve registrar o token do dispositivo e as preferências de notificação do usuário assim que o aplicativo inicia ou o usuário faz login.
 
-### `POST /api/v1/devices/register`
+### `POST /api/v1/notifications/devices/register`
 Registra ou transfere a propriedade do token FCM do usuário logado.
 
 * **Payload (JSON)**:
