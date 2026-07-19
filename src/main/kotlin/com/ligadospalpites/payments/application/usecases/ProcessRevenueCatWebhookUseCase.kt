@@ -57,20 +57,22 @@ class ProcessRevenueCatWebhookUseCase(
         )
         eventRepository.save(eventEntity)
 
-        // 3. Validar se o app_user_id é um UUID válido
-        val userId = try {
-            UUID.fromString(appUserIdStr)
-        } catch (e: IllegalArgumentException) {
-            log.warn("app_user_id inválido (não é um UUID): {}. Ignorando processamento de regras.", appUserIdStr)
+        // 3. Obter o User ID local (UUID) a partir do app_user_id (Firebase UID ou UUID)
+        val userEntity = userRepository.findByFirebaseUid(appUserIdStr)
+            ?: try {
+                val uuid = UUID.fromString(appUserIdStr)
+                userRepository.findById(uuid).orElse(null)
+            } catch (e: IllegalArgumentException) {
+                null
+            }
+
+        if (userEntity == null) {
+            log.warn("Usuário com Firebase UID ou UUID '{}' não encontrado localmente. Ignorando processamento de regras.", appUserIdStr)
             return true // Retorna true para evitar retries de id inválido do RevenueCat
         }
 
-        // 4. Validar se o usuário existe localmente no banco
-        val userExists = userRepository.existsById(userId)
-        if (!userExists) {
-            log.warn("Usuário com ID {} não encontrado localmente. Ignorando processamento de regras.", userId)
-            return true // Retorna true para evitar retries infinitos do RevenueCat
-        }
+        val userId = userEntity.id
+
 
         // 5. Mapear plataforma da loja
         val storeStr = event.store ?: ""
