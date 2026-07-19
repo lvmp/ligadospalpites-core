@@ -18,6 +18,10 @@ class JpaMatchRepositoryAdapter(
         return springDataMatchRepository.findByLeagueId(leagueId).map { it.toDomain() }
     }
 
+    override fun findBySeasonId(seasonId: UUID): List<Match> {
+        return springDataMatchRepository.findBySeasonId(seasonId).map { it.toDomain() }
+    }
+
     override fun save(match: Match): Match {
         val entity = MatchJpaEntity.fromDomain(match)
         return springDataMatchRepository.save(entity).toDomain()

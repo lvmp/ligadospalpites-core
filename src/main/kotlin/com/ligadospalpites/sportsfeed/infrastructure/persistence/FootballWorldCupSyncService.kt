@@ -20,7 +20,8 @@ class FootballWorldCupSyncService(
     private val footballDataClient: FootballDataClient,
     private val apiFootballClient: ApiFootballClient,
     private val newsApiClient: com.ligadospalpites.sportsfeed.infrastructure.client.NewsApiClient,
-    private val redisTemplate: org.springframework.data.redis.core.StringRedisTemplate
+    private val redisTemplate: org.springframework.data.redis.core.StringRedisTemplate,
+    private val seasonRepository: SpringDataSeasonRepository
 ) : LeagueSyncService {
 
     private val objectMapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
@@ -33,6 +34,7 @@ class FootballWorldCupSyncService(
 
     private val footballId = UUID.fromString("f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c")
     private val worldCupLeagueId = UUID.fromString("e7b0a8f9-4b2e-4b67-8890-a54b3d7c588e")
+    private val worldCupSeasonId = UUID.fromString("50c22998-33b2-4d9a-ba02-4be71a1be992")
 
     private val teamNameTranslations = mapOf(
         "mexico" to "México",
@@ -99,6 +101,8 @@ class FootballWorldCupSyncService(
     @Retry(name = "footballDataApi")
     fun fetchFromFootballData(sportId: UUID, leagueId: UUID): List<MatchJpaEntity> {
         logger.info("Trying primary provider: Football-Data API")
+        val activeSeason = seasonRepository.findByLeagueIdAndIsActiveTrue(worldCupLeagueId)
+        val targetSeasonId = activeSeason?.id ?: worldCupSeasonId
         val externalMatches = footballDataClient.fetchMatches("WC")
         return externalMatches.map { match ->
             val homeTranslated = translateTeamName(match.homeTeam.shortName ?: match.homeTeam.name ?: "A definir")
@@ -107,6 +111,7 @@ class FootballWorldCupSyncService(
                 id = UUID.randomUUID(),
                 sportId = footballId,
                 leagueId = worldCupLeagueId,
+                seasonId = targetSeasonId,
                 homeTeamName = homeTranslated,
                 awayTeamName = awayTranslated,
                 kickoffTime = Instant.parse(match.utcDate),
@@ -123,8 +128,11 @@ class FootballWorldCupSyncService(
     @Retry(name = "apiFootballApi")
     fun fetchFromApiFootball(sportId: UUID, leagueId: UUID, exception: Throwable): List<MatchJpaEntity> {
         logger.warn("Primary provider (Football-Data) failed. Error: ${exception.message}. Falling back to secondary provider: API-Football")
+        val activeSeason = seasonRepository.findByLeagueIdAndIsActiveTrue(worldCupLeagueId)
+        val targetSeasonId = activeSeason?.id ?: worldCupSeasonId
+        val seasonYear = activeSeason?.externalSeasonCode ?: 2026
         
-        val externalFixtures = apiFootballClient.fetchMatches(leagueId = 1, season = 2026)
+        val externalFixtures = apiFootballClient.fetchMatches(leagueId = 1, season = seasonYear)
         return externalFixtures.map { wrapper ->
             val homeTranslated = translateTeamName(wrapper.teams.home.name)
             val awayTranslated = translateTeamName(wrapper.teams.away.name)
@@ -132,6 +140,7 @@ class FootballWorldCupSyncService(
                 id = UUID.randomUUID(),
                 sportId = footballId,
                 leagueId = worldCupLeagueId,
+                seasonId = targetSeasonId,
                 homeTeamName = homeTranslated,
                 awayTeamName = awayTranslated,
                 kickoffTime = Instant.parse(wrapper.fixture.date),
@@ -218,6 +227,7 @@ class FootballWorldCupSyncService(
                     id = matchMatch.id,
                     sportId = inc.sportId,
                     leagueId = inc.leagueId,
+                    seasonId = matchMatch.seasonId,
                     homeTeamName = matchMatch.homeTeamName,
                     awayTeamName = matchMatch.awayTeamName,
                     kickoffTime = inc.kickoffTime,

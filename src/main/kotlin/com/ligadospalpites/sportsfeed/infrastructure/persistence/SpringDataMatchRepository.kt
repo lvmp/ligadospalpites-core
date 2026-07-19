@@ -5,4 +5,5 @@ import java.util.UUID
 
 interface SpringDataMatchRepository : JpaRepository<MatchJpaEntity, UUID> {
     fun findByLeagueId(leagueId: UUID): List<MatchJpaEntity>
+    fun findBySeasonId(seasonId: UUID): List<MatchJpaEntity>
 }

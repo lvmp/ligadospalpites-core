@@ -3,6 +3,7 @@ package com.ligadospalpites.sportsfeed.infrastructure.web
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataSportRepository
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataLeagueRepository
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataMatchRepository
+import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataSeasonRepository
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.MatchJpaEntity
 import com.ligadospalpites.users.infrastructure.persistence.SpringDataUserEntitlementRepository
 import com.ligadospalpites.shared.identity.UserResolver
@@ -17,6 +18,7 @@ class FixtureController(
     private val sportRepository: SpringDataSportRepository,
     private val leagueRepository: SpringDataLeagueRepository,
     private val matchRepository: SpringDataMatchRepository,
+    private val seasonRepository: SpringDataSeasonRepository,
     private val entitlementRepository: SpringDataUserEntitlementRepository,
     private val userResolver: UserResolver
 ) {
@@ -30,7 +32,23 @@ class FixtureController(
         val grouped = sports.map { sport ->
             val leaguesForSport = activeLeagues
                 .filter { it.sportId == sport.id }
-                .map { LeagueResponse(it.id, it.name, it.isActive) }
+                .map { league ->
+                    val activeSeason = seasonRepository.findByLeagueIdAndIsActiveTrue(league.id)
+                    val currentSeasonRes = activeSeason?.let {
+                        SeasonResponse(
+                            seasonId = it.id,
+                            name = it.name,
+                            isActive = it.isActive,
+                            displayLabel = "Temporada ${it.name}"
+                        )
+                    }
+                    LeagueResponse(
+                        leagueId = league.id,
+                        name = league.name,
+                        isActive = league.isActive,
+                        currentSeason = currentSeasonRes
+                    )
+                }
 
             SportWithLeaguesResponse(
                 sportId = sport.id,
@@ -47,6 +65,7 @@ class FixtureController(
     fun getFixtures(
         @RequestParam(required = false) sportId: UUID?,
         @RequestParam(required = false) leagueId: UUID?,
+        @RequestParam(required = false) seasonId: UUID?,
         @RequestHeader(value = "X-User-Id", required = false) userIdHeader: String?
     ): ResponseEntity<Any> {
         val userUUID = userResolver.resolveByUidOrUuid(userIdHeader)
@@ -79,10 +98,23 @@ class FixtureController(
             }
         }
 
-        val allMatches = if (leagueId != null) {
-            matchRepository.findByLeagueId(leagueId)
-        } else {
-            matchRepository.findAll()
+        // Resolve seasonId dynamically for backwards compatibility if leagueId is provided but seasonId is not
+        val targetSeasonId = when {
+            seasonId != null -> seasonId
+            leagueId != null -> seasonRepository.findByLeagueIdAndIsActiveTrue(leagueId)?.id
+            else -> null
+        }
+
+        val allMatches = when {
+            targetSeasonId != null -> {
+                matchRepository.findBySeasonId(targetSeasonId)
+            }
+            leagueId != null -> {
+                matchRepository.findByLeagueId(leagueId)
+            }
+            else -> {
+                matchRepository.findAll()
+            }
         }
 
         val filtered = allMatches.filter { match ->
@@ -122,8 +154,20 @@ class FixtureController(
 }
 
 // DTOs
+data class SeasonResponse(
+    val seasonId: UUID,
+    val name: String,
+    val isActive: Boolean,
+    val displayLabel: String
+)
+
 data class SportWithLeaguesResponse(val sportId: UUID, val sportName: String, val leagues: List<LeagueResponse>)
-data class LeagueResponse(val leagueId: UUID, val name: String, val isActive: Boolean)
+data class LeagueResponse(
+    val leagueId: UUID,
+    val name: String,
+    val isActive: Boolean,
+    val currentSeason: SeasonResponse? = null
+)
 
 data class MatchResponse(
     val matchId: UUID,

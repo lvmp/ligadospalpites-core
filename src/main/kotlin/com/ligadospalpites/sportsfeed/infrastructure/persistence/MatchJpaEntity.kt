@@ -18,6 +18,9 @@ class MatchJpaEntity(
     @Column(name = "league_id", nullable = false)
     val leagueId: UUID = UUID.randomUUID(),
 
+    @Column(name = "season_id", nullable = false)
+    val seasonId: UUID = UUID.randomUUID(),
+
     @Column(name = "home_team_name", nullable = false, length = 150)
     val homeTeamName: String = "",
 
@@ -47,6 +50,7 @@ class MatchJpaEntity(
         id = id,
         sportId = sportId,
         leagueId = leagueId,
+        seasonId = seasonId,
         homeTeamName = homeTeamName,
         awayTeamName = awayTeamName,
         kickoffTime = kickoffTime,
@@ -62,6 +66,7 @@ class MatchJpaEntity(
             id = match.id,
             sportId = match.sportId,
             leagueId = match.leagueId,
+            seasonId = match.seasonId,
             homeTeamName = match.homeTeamName,
             awayTeamName = match.awayTeamName,
             kickoffTime = match.kickoffTime,

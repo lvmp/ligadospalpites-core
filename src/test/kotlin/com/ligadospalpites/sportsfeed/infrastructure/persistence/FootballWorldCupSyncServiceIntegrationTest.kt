@@ -34,6 +34,7 @@ class FootballWorldCupSyncServiceIntegrationTest : BaseIntegrationTest() {
     private lateinit var dashboardController: com.ligadospalpites.shared.bff.DashboardController
 
     private val worldCupLeagueId = UUID.fromString("e7b0a8f9-4b2e-4b67-8890-a54b3d7c588e")
+    private val worldCupSeasonId = UUID.fromString("50c22998-33b2-4d9a-ba02-4be71a1be992")
 
     @BeforeEach
     fun setUp() {
@@ -101,6 +102,7 @@ class FootballWorldCupSyncServiceIntegrationTest : BaseIntegrationTest() {
             id = matchId,
             sportId = UUID.fromString("f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c"),
             leagueId = worldCupLeagueId,
+            seasonId = worldCupSeasonId,
             homeTeamName = "Brasil",
             awayTeamName = "França",
             status = MatchStatus.SCHEDULED,

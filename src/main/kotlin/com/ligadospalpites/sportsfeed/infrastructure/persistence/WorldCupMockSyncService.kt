@@ -19,6 +19,7 @@ class WorldCupMockSyncService(
 
     private val footballId = UUID.fromString("f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c")
     private val worldCupLeagueId = UUID.fromString("e7b0a8f9-4b2e-4b67-8890-a54b3d7c588e")
+    private val worldCupSeasonId = UUID.fromString("50c22998-33b2-4d9a-ba02-4be71a1be992")
 
     override fun supports(sportId: UUID, leagueId: UUID): Boolean {
         return sportId == footballId
@@ -102,6 +103,7 @@ class WorldCupMockSyncService(
             id = UUID.randomUUID(),
             sportId = footballId,
             leagueId = worldCupLeagueId,
+            seasonId = worldCupSeasonId,
             homeTeamName = home,
             awayTeamName = away,
             homeScore = homeScore,

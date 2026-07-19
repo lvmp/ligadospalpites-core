@@ -365,3 +365,41 @@ To reduce heavy PostgreSQL write throughput and utilize Firebase's native synchr
   - `group-stage`
   - `knockout`
 - **Data Aggregation**: When querying leaderboards or profile endpoints, the backend BFF retrieves Postgres data and combines it in parallel with metadata fetched from Firebase Firestore.
+
+---
+
+## 9. Seasons and Historical Archiving Strategy
+
+To keep the game fresh and maintain seasonal transitions while preserving historical achievements, the platform employs a structured multi-season domain pattern.
+
+### 9.1. Multi-Season Domain Model
+
+Leagues are segmented into distinct chronological cycles called **Seasons** (e.g., Copa do Mundo 2026, Premier League 25/26).
+- **Season Metadata**: Defined by starting/ending dates, an active toggle (`is_active`), and a search-code identifier used for third-party ingestion (`external_season_code`).
+- **Fixture Linking**: Every match in the database (`tbl_matches`) is explicitly linked to a `season_id`. This prevents collision of matches, teams, and scores across distinct years/iterations of the same competition.
+
+```text
+┌──────────────┐          1:N         ┌──────────────┐          1:N         ┌──────────────┐
+│  tbl_sports  │ ────────────────────>│ tbl_leagues  │ ────────────────────>│ tbl_seasons  │
+└──────────────┘                      └──────────────┘                      └──────────────┘
+                                                                                    │
+                                                                                    │ 1:N
+                                                                                    ▼
+                                                                            ┌──────────────┐
+                                                                            │ tbl_matches  │
+                                                                            └──────────────┘
+```
+
+### 9.2. Prediction and Leaderboard Reset Logic
+
+When a new season starts for a particular league:
+1. **Resetting Scores**: Accumulated points within social groups (`tbl_group_members.accumulated_points`) and leaderboard positions cached in Redis ZSETs are calculated and reset to zero for the upcoming season.
+2. **Archiving History**: Previous predictions and finished standings are persisted under the old `season_id`. They remain queryable via historical endpoints so that users can always consult their past performance records.
+3. **Locking Predictions**: Predictions can only be registered or modified if the target match belongs to a season that is currently active (`is_active = true`).
+
+### 9.3. Backwards Compatibility and Client Integration
+
+To support legacy mobile clients (V1) without requiring immediate UI updates, the backend enforces smart defaults:
+- **Implicit Season Resolution**: When a client requests fixtures or standings for a league but does not specify a `seasonId`, the API gateway and controllers resolve the request by querying the database for the unique season of that league where `is_active = true`.
+- **Enriched Client Payloads**: For V2 mobile clients, the Catalog API lists leagues enriched with `currentSeason` objects. These contain display metadata like `displayLabel: "Temporada 2026"`, allowing the Flutter application to dynamically render seasonal headers without complex local logic.
+

@@ -14,6 +14,7 @@ data class Match(
     val id: UUID,
     val sportId: UUID,
     val leagueId: UUID,
+    val seasonId: UUID,
     val homeTeamName: String,
     val awayTeamName: String,
     val kickoffTime: Instant,

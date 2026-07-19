@@ -47,6 +47,9 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
     private lateinit var matchRepository: SpringDataMatchRepository
 
     @Autowired
+    private lateinit var seasonRepository: SpringDataSeasonRepository
+
+    @Autowired
     private lateinit var groupRepository: SpringDataGroupRepository
 
     @Autowired
@@ -61,6 +64,7 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
     private val testUserId = UUID.fromString("9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d")
     private val footballId = UUID.fromString("f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c")
     private val worldCupLeagueId = UUID.fromString("e7b0a8f9-4b2e-4b67-8890-a54b3d7c588e")
+    private val testSeasonId = UUID.fromString("50c22998-33b2-4d9a-ba02-4be71a1be992")
 
     @BeforeEach
     fun setUpData() {
@@ -69,6 +73,7 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
         groupMemberRepository.deleteAll()
         groupRepository.deleteAll()
         matchRepository.deleteAll()
+        seasonRepository.deleteAll()
         leagueRepository.deleteAll()
         sportRepository.deleteAll()
         entitlementRepository.deleteAll()
@@ -80,6 +85,19 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
         // Create Sport and Leagues
         sportRepository.save(SportJpaEntity(id = footballId, name = "Futebol"))
         leagueRepository.save(LeagueJpaEntity(id = worldCupLeagueId, name = "Copa do Mundo", sportId = footballId, isActive = true))
+        
+        // Create Active Season
+        seasonRepository.save(
+            SeasonJpaEntity(
+                id = testSeasonId,
+                leagueId = worldCupLeagueId,
+                name = "2026",
+                startDate = Instant.now().minus(30, ChronoUnit.DAYS),
+                endDate = Instant.now().plus(30, ChronoUnit.DAYS),
+                isActive = true,
+                externalSeasonCode = 2026
+            )
+        )
     }
 
     @Test
@@ -130,6 +148,7 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
                 id = pastMatchId,
                 sportId = footballId,
                 leagueId = worldCupLeagueId,
+                seasonId = testSeasonId,
                 homeTeamName = "Brasil",
                 awayTeamName = "França",
                 kickoffTime = Instant.now().minus(10, ChronoUnit.MINUTES),
@@ -161,6 +180,7 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
                 id = futureMatchId,
                 sportId = footballId,
                 leagueId = worldCupLeagueId,
+                seasonId = testSeasonId,
                 homeTeamName = "Brasil",
                 awayTeamName = "Alemanha",
                 kickoffTime = Instant.now().plus(2, ChronoUnit.HOURS),
@@ -222,6 +242,7 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
                 id = UUID.randomUUID(),
                 sportId = footballId,
                 leagueId = worldCupLeagueId,
+                seasonId = testSeasonId,
                 homeTeamName = "Brasil",
                 awayTeamName = "Argentina",
                 kickoffTime = Instant.now().plus(1, ChronoUnit.DAYS),
@@ -254,6 +275,7 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
                 id = UUID.randomUUID(),
                 sportId = footballId,
                 leagueId = worldCupLeagueId,
+                seasonId = testSeasonId,
                 homeTeamName = "Brasil",
                 awayTeamName = "Argentina",
                 kickoffTime = Instant.now().plus(1, ChronoUnit.DAYS),
@@ -359,6 +381,7 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
                 id = UUID.randomUUID(),
                 sportId = footballId,
                 leagueId = worldCupLeagueId,
+                seasonId = testSeasonId,
                 homeTeamName = "México (Dezesseis)",
                 awayTeamName = "Suécia (Dezesseis)",
                 kickoffTime = Instant.now().plus(5, ChronoUnit.DAYS),
