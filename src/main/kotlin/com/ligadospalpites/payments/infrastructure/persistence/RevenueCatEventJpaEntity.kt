@@ -21,6 +21,12 @@ class RevenueCatEventJpaEntity(
     @Column(nullable = false, columnDefinition = "TEXT")
     val payload: String = "",
 
+    @Column(nullable = false, length = 50)
+    var status: String = "RECEIVED",
+
+    @Column(name = "failure_reason", length = 255)
+    var failureReason: String? = null,
+
     @Column(name = "created_at", nullable = false, updatable = false)
     val createdAt: Instant = Instant.now()
 )

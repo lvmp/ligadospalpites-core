@@ -68,11 +68,13 @@ class ProcessRevenueCatWebhookUseCase(
 
         if (userEntity == null) {
             log.warn("Usuário com Firebase UID ou UUID '{}' não encontrado localmente. Ignorando processamento de regras.", appUserIdStr)
+            eventEntity.status = "DISCARDED"
+            eventEntity.failureReason = "User with UID/UUID '$appUserIdStr' not found locally."
+            eventRepository.save(eventEntity)
             return true // Retorna true para evitar retries de id inválido do RevenueCat
         }
 
         val userId = userEntity.id
-
 
         // 5. Mapear plataforma da loja
         val storeStr = event.store ?: ""
@@ -82,21 +84,35 @@ class ProcessRevenueCatWebhookUseCase(
             else -> StorePlatform.STRIPE
         }
 
-        // 6. Processar de acordo com o tipo de evento
-        when (eventType) {
-            "INITIAL_PURCHASE", "RENEWAL", "UNCANCELLATION" -> {
-                processActiveAccess(userId, eventId, event, storePlatform)
+        // 6. Processar de acordo com o tipo de evento com auditoria detalhada
+        var processStatus = "PROCESSED"
+        var failureMsg: String? = null
+
+        try {
+            when (eventType) {
+                "INITIAL_PURCHASE", "RENEWAL", "UNCANCELLATION" -> {
+                    processActiveAccess(userId, eventId, event, storePlatform)
+                }
+                "EXPIRATION" -> {
+                    processExpiredAccess(userId, eventId, event)
+                }
+                "CANCELLATION" -> {
+                    processCancelledSubscription(userId, eventId, event)
+                }
+                else -> {
+                    log.info("Evento do tipo {} recebido mas não necessita de tratamento adicional.", eventType)
+                    processStatus = "IGNORED"
+                }
             }
-            "EXPIRATION" -> {
-                processExpiredAccess(userId, eventId, event)
-            }
-            "CANCELLATION" -> {
-                processCancelledSubscription(userId, eventId, event)
-            }
-            else -> {
-                log.info("Evento do tipo {} recebido mas não necessita de tratamento adicional.", eventType)
-            }
+        } catch (e: Exception) {
+            log.error("Erro ao processar evento do RevenueCat {}: {}", eventId, e.message, e)
+            processStatus = "FAILED"
+            failureMsg = e.message?.take(255)
         }
+
+        eventEntity.status = processStatus
+        eventEntity.failureReason = failureMsg
+        eventRepository.save(eventEntity)
 
         return true
     }
@@ -104,8 +120,7 @@ class ProcessRevenueCatWebhookUseCase(
     private fun processActiveAccess(userId: UUID, eventId: String, event: com.ligadospalpites.payments.infrastructure.web.RevenueCatEventDto, store: StorePlatform) {
         val entitlementId = event.entitlementId ?: event.entitlementIds?.firstOrNull()
         if (entitlementId == null) {
-            log.warn("Nenhum entitlement_id encontrado no evento do RevenueCat: {}. Ignorando.", eventId)
-            return
+            throw IllegalArgumentException("Nenhum entitlement_id encontrado no evento do RevenueCat: $eventId")
         }
 
         val expirationInstant = event.expirationAtMs?.let { Instant.ofEpochMilli(it) }
