@@ -56,7 +56,77 @@ class FirebaseUserMigrationUseCase(
         }
 
         log.info("Iniciando migração de usuários e palpites em MODO REAL (Firebase Firestore conectado).")
+        val fs = firestore
         try {
+            val footballId = UUID.fromString("f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c")
+            val worldCupLeagueId = UUID.fromString("e7b0a8f9-4b2e-4b67-8890-a54b3d7c588e")
+            val worldCupSeasonId = UUID.fromString("50c22998-33b2-4d9a-ba02-4be71a1be992")
+
+            // FASE 0: Migrar Partidas do Firestore para o PostgreSQL (tbl_matches) se estiver vazio ou para atualizar
+            log.info("FASE 0: Verificando/Migrando partidas do Firestore para o PostgreSQL...")
+            var matchesCollection = fs.collection("matches")
+            var documents = matchesCollection.get().get().documents
+            if (documents.isEmpty()) {
+                matchesCollection = fs.collection("fixtures")
+                documents = matchesCollection.get().get().documents
+            }
+            if (documents.isEmpty()) {
+                matchesCollection = fs.collection("partidas")
+                documents = matchesCollection.get().get().documents
+            }
+
+            if (documents.isNotEmpty()) {
+                log.info("Encontradas {} partidas no Firestore. Sincronizando com tbl_matches...", documents.size)
+                for (doc in documents) {
+                    val docId = doc.id // Ex: "match_102"
+                    // Gera um UUID determinístico a partir do ID do documento do Firestore
+                    val matchUuid = UUID.nameUUIDFromBytes(docId.toByteArray())
+                    
+                    val home = doc.getString("homeTeam") ?: doc.getString("homeTeamName") ?: doc.getString("home_team") ?: doc.getString("home") ?: "Time A"
+                    val away = doc.getString("awayTeam") ?: doc.getString("awayTeamName") ?: doc.getString("away_team") ?: doc.getString("away") ?: "Time B"
+                    
+                    val kickoffVal = doc.get("kickoffTime") ?: doc.get("date") ?: doc.get("kickoff")
+                    val kickoffTime = try {
+                        parseTimestamp(kickoffVal)
+                    } catch (e: Exception) {
+                        Instant.now()
+                    }
+
+                    val statusStr = doc.getString("status") ?: "SCHEDULED"
+                    val status = when (statusStr.uppercase()) {
+                        "FINISHED", "CONCLUIDO" -> com.ligadospalpites.sportsfeed.domain.models.MatchStatus.FINISHED
+                        "LIVE", "AO_VIVO", "IN_PLAY" -> com.ligadospalpites.sportsfeed.domain.models.MatchStatus.LIVE
+                        "CANCELLED" -> com.ligadospalpites.sportsfeed.domain.models.MatchStatus.CANCELLED
+                        else -> com.ligadospalpites.sportsfeed.domain.models.MatchStatus.SCHEDULED
+                    }
+
+                    val homeScore = doc.getLong("homeScore")?.toInt() ?: doc.getLong("home_score")?.toInt()
+                    val awayScore = doc.getLong("awayScore")?.toInt() ?: doc.getLong("away_score")?.toInt()
+                    val phase = doc.getString("phase") ?: doc.getString("stage") ?: "Fase de Grupos"
+
+                    if (!matchRepository.existsById(matchUuid)) {
+                        val newMatch = MatchJpaEntity(
+                            id = matchUuid,
+                            sportId = footballId,
+                            leagueId = worldCupLeagueId,
+                            seasonId = worldCupSeasonId,
+                            homeTeamName = home,
+                            awayTeamName = away,
+                            kickoffTime = kickoffTime,
+                            status = status,
+                            homeScore = homeScore,
+                            awayScore = awayScore,
+                            phase = phase,
+                            updatedAt = Instant.now()
+                        )
+                        matchRepository.save(newMatch)
+                    }
+                }
+                log.info("Sincronização de partidas da FASE 0 concluída.")
+            } else {
+                log.warn("Nenhuma partida encontrada nas coleções do Firestore ('matches', 'fixtures', 'partidas').")
+            }
+
             // 1. Carregar partidas e preparar mapa de confrontos do Firestore
             val sortedMatches = matchRepository.findAll()
             if (sortedMatches.isEmpty()) {
@@ -68,7 +138,7 @@ class FirebaseUserMigrationUseCase(
             val matchLookup = buildMatchLookup(warnings)
 
             // 2. FASE 1: Migrar Usuários ('users')
-            val usersCollection = firestore!!.collection("users")
+            val usersCollection = fs.collection("users")
             val usersDocs = usersCollection.get().get().documents
             var usersProcessedCount = 0
             var usersCreatedCount = 0
@@ -96,7 +166,7 @@ class FirebaseUserMigrationUseCase(
             }
 
             // 3. FASE 2: Migrar Ligas ('groups')
-            val groupsCollection = firestore.collection("groups")
+            val groupsCollection = fs.collection("groups")
             val groupsDocs = groupsCollection.get().get().documents
             var groupsMigratedCount = 0
 
@@ -130,12 +200,30 @@ class FirebaseUserMigrationUseCase(
                 groupsMigratedCount++
             }
 
-            // 4. FASE 3: Migrar Membros ('groupMember') e Inicializar Redis
-            val membersCollection = firestore.collection("groupMember")
-            val membersDocs = membersCollection.get().get().documents
-            var groupMembersMigratedCount = 0
+            // 4. FASE 3: Migrar Membros (Estratégia de busca resiliente e exaustiva em múltiplas coleções possíveis)
+            val possibleMembersCollections = listOf(
+                "groupmembers",
+                "groupMembers",
+                "groupMember",
+                "groupmember",
+                "group_members",
+                "group_member"
+            )
+            
+            var membersDocs = emptyList<com.google.cloud.firestore.QueryDocumentSnapshot>()
+            var resolvedCollectionName = "groupmembers"
+            
+            for (colName in possibleMembersCollections) {
+                val docs = fs.collection(colName).get().get().documents
+                if (docs.isNotEmpty()) {
+                    membersDocs = docs
+                    resolvedCollectionName = colName
+                    break
+                }
+            }
 
-            log.info("Buscados {} membros da coleção 'groupMember' no Firestore.", membersDocs.size)
+            var groupMembersMigratedCount = 0
+            log.info("Buscados {} membros da coleção de associados '{}' no Firestore.", membersDocs.size, resolvedCollectionName)
             for (memberDoc in membersDocs) {
                 val firestoreGroupId = memberDoc.getString("groupId") ?: ""
                 val firebaseUid = memberDoc.getString("userId") ?: ""
@@ -184,10 +272,10 @@ class FirebaseUserMigrationUseCase(
                 val localUserId = localUser.id
 
                 // Tenta consultar coleção "prediction" e se vazia tenta "predictions"
-                var predictionsCollection = firestore.collection("users").document(firebaseUid).collection("prediction")
+                var predictionsCollection = fs.collection("users").document(firebaseUid).collection("prediction")
                 var predictionDocs = predictionsCollection.get().get().documents
                 if (predictionDocs.isEmpty()) {
-                    predictionsCollection = firestore.collection("users").document(firebaseUid).collection("predictions")
+                    predictionsCollection = fs.collection("users").document(firebaseUid).collection("predictions")
                     predictionDocs = predictionsCollection.get().get().documents
                 }
 
@@ -324,6 +412,16 @@ class FirebaseUserMigrationUseCase(
         } catch (e: IllegalArgumentException) {
             // Ignora e continua
         }
+
+        // Caso 1.5: Se matchId for um ID de texto do Firestore (ex: "match_102" ou "match_013"), gera o UUID determinístico
+        val docUuid = UUID.nameUUIDFromBytes(matchIdStr.toByteArray())
+        val docMatch = sortedMatches.find { it.id == docUuid }
+        if (docMatch != null) return docMatch
+
+        val numericStr = matchIdStr.replace("match_", "").trim()
+        val numericUuid = UUID.nameUUIDFromBytes(numericStr.toByteArray())
+        val numericMatch = sortedMatches.find { it.id == numericUuid }
+        if (numericMatch != null) return numericMatch
 
         // Caso 2: Mapeamento baseado no mapa de confrontos (evitando fragilidade de kickoffTime FIFO)
         val canonicalTeams = matchLookup[matchIdStr] ?: matchLookup[matchIdStr.replace("match_", "").trim()]
@@ -498,7 +596,7 @@ class FirebaseUserMigrationUseCase(
                     seasonId = seasonId,
                     homeTeamName = fallbackMatchups[i].first,
                     awayTeamName = fallbackMatchups[i].second,
-                    kickoffTime = Instant.now().minusSeconds((3600 * 24 * (22 - i))),
+                    kickoffTime = Instant.now().minusSeconds((3600L * 24 * (22 - i))),
                     status = if (i < 20) com.ligadospalpites.sportsfeed.domain.models.MatchStatus.FINISHED else com.ligadospalpites.sportsfeed.domain.models.MatchStatus.SCHEDULED,
                     homeScore = if (i < 20) 2 else null,
                     awayScore = if (i < 20) 1 else null,

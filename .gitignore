@@ -34,3 +34,7 @@ Desktop.ini
 
 # Docker
 docker/data/
+
+# Credentials
+service-account.json
+
