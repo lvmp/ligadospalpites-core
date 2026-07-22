@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <property name="CONSOLE_LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - [traceId=%X{traceId:-}] - %msg%n"/>
+
+    <!-- Console Appender para Desenvolvimento -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <!-- JSON Appender para Produção (LogstashEncoder) -->
+    <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+            <providers>
+                <timestamp/>
+                <logLevel/>
+                <threadName/>
+                <loggerName/>
+                <message/>
+                <mdc/> <!-- Propaga chaves do MDC como o traceId -->
+                <stackTrace/> <!-- Formata stacktraces para caberem em uma única entrada JSON -->
+            </providers>
+        </encoder>
+    </appender>
+
+    <!-- Profile Padrão/Dev -->
+    <springProfile name="!prod">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE" />
+        </root>
+        <logger name="org.zalando.logbook" level="TRACE"/>
+    </springProfile>
+
+    <!-- Profile Prod -->
+    <springProfile name="prod">
+        <root level="INFO">
+            <appender-ref ref="JSON" />
+        </root>
+        <logger name="org.zalando.logbook" level="TRACE"/>
+    </springProfile>
+
+</configuration>

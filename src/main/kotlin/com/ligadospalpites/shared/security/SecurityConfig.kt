@@ -7,13 +7,19 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.web.SecurityFilterChain
 
+import com.ligadospalpites.shared.config.TraceIdFilter
+import org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter
+
 @Configuration
 @EnableWebSecurity
-class SecurityConfig {
+class SecurityConfig(
+    private val traceIdFilter: TraceIdFilter
+) {
 
     @Bean
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
         http
+            .addFilterBefore(traceIdFilter, WebAsyncManagerIntegrationFilter::class.java)
             .csrf { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { auth ->

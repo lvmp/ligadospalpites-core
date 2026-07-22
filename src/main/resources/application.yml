@@ -35,6 +35,20 @@ logging:
     org.springframework: INFO
     com.ligadospalpites: DEBUG
 
+logbook:
+  exclude:
+    - /actuator/**
+  filter:
+    enabled: true
+  secure: true
+  obfuscate:
+    headers:
+      - "Authorization"
+      - "Cookie"
+    parameters:
+      - "password"
+      - "client_secret"
+
 app:
   sportsfeed:
     football-data:

@@ -45,6 +45,11 @@ dependencies {
     implementation("io.github.resilience4j:resilience4j-spring-boot3:2.2.0")
     implementation("org.springframework.boot:spring-boot-starter-aop:3.4.1")
 
+    // Logging (Logbook, Logstash JSON Encoder, Kotlin Logging)
+    implementation("org.zalando:logbook-spring-boot-starter:3.7.2")
+    implementation("net.logstash.logback:logstash-logback-encoder:7.4")
+    implementation("io.github.oshai:kotlin-logging-jvm:5.1.0")
+
     // Development Tools
     developmentOnly("org.springframework.boot:spring-boot-docker-compose")
 
