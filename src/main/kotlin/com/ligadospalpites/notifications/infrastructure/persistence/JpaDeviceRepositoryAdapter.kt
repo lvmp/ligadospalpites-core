@@ -34,4 +34,17 @@ class JpaDeviceRepositoryAdapter(
         val entity = DeviceJpaEntity.fromDomain(device)
         return springDataRepository.save(entity).toDomain()
     }
+
+    override fun findAllByUserId(userId: UUID): List<Device> {
+        return springDataRepository.findAllByUserId(userId).map { it.toDomain() }
+    }
+
+    override fun findAllByUserIds(userIds: List<UUID>): List<Device> {
+        if (userIds.isEmpty()) return emptyList()
+        return springDataRepository.findByUserIdIn(userIds).map { it.toDomain() }
+    }
+
+    override fun findAll(): List<Device> {
+        return springDataRepository.findAll().map { it.toDomain() }
+    }
 }

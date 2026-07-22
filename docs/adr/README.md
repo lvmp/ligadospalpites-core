@@ -19,6 +19,7 @@ Antes de propor alterações de banco de dados, infraestrutura ou padrões de c�
 | **[ADR-0007: App Dashboard and Modular BFF Gateway Architecture](0007-app-dashboard-bff-gateway.md)** | `Accepted` | Cria um agregador estilo BFF (Backend for Frontend) para consolidar a Home do aplicativo móvel em uma única requisição paralela, desacoplando DTOs externos para manter a compatibilidade do Flutter V1. |
 | **[ADR-0008: REST Controller Layer & Web API Mapping](0008-controller-layer-and-web-api-integration.md)** | `Accepted` | Descentraliza controllers HTTP por submódulo em arquitetura limpa, definindo regras rígidas de trancamento de palpites, segregação de leaderboards por fase de torneio no Redis, e agregação assíncrona paralela do BFF Dashboard. |
 | **[ADR-0009: RevenueCat Webhook Integration](0009-revenuecat-webhook-integration.md)** | `Accepted` | Consolida e simplifica a monetização da plataforma delegando a validação de compras nativas ao RevenueCat e recebendo eventos assíncronos protegidos via Webhook para atualizar direitos de acesso. |
+| **[ADR-0010: Extensible Notification Dispatching and Targeting Engine](0010-notification-dispatching-and-targeting.md)** | `Accepted` | Define a arquitetura do motor de despacho e segmentação (targeting) de notificações de push em lote ou individuais (usuário, liga, esporte e broadcast geral). |
 
 
 ---

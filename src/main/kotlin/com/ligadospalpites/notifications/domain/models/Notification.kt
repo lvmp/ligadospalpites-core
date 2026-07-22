@@ -8,6 +8,13 @@ enum class NotificationChannel {
     EMAIL
 }
 
+enum class NotificationTarget {
+    USER,
+    LEAGUE,
+    SPORT,
+    ALL
+}
+
 data class Notification(
     val id: UUID,
     val recipientUserId: UUID,

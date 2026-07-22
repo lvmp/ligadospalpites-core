@@ -1,0 +1,10 @@
+.gradle
+.idea
+.git
+.kotlin
+build
+out
+Dockerfile
+.dockerignore
+**/build
+**/out

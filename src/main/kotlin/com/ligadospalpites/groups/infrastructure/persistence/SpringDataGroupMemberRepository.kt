@@ -19,4 +19,7 @@ interface SpringDataGroupMemberRepository : JpaRepository<GroupMemberJpaEntity, 
         @Param("userId") userId: UUID,
         @Param("points") points: Int
     ): Int
+
+    @Query("SELECT DISTINCT g.userId FROM GroupMemberJpaEntity g WHERE g.groupId = :groupId")
+    fun findUserIdsByGroupId(@Param("groupId") groupId: UUID): List<UUID>
 }
