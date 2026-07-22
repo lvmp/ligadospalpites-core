@@ -254,9 +254,9 @@ class FirebaseUserMigrationUseCase(
                     redisTemplate.opsForZSet().add(groupStageKey, localUserId.toString(), groupStageScore.toDouble())
                     redisTemplate.opsForZSet().add(knockoutKey, localUserId.toString(), knockoutScore.toDouble())
 
-                    // Incrementar no Ranking Global
+                    // Definir no Ranking Global (usando add para ser idempotente e não somar em duplicidade por grupo)
                     val globalKey = "leaderboard:global"
-                    redisTemplate.opsForZSet().incrementScore(globalKey, localUserId.toString(), totalScore.toDouble())
+                    redisTemplate.opsForZSet().add(globalKey, localUserId.toString(), totalScore.toDouble())
 
                     groupMembersMigratedCount++
                 } else {
