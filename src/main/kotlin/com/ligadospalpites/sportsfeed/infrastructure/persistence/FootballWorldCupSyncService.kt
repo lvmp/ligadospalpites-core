@@ -2,12 +2,16 @@ package com.ligadospalpites.sportsfeed.infrastructure.persistence
 
 import com.ligadospalpites.sportsfeed.application.usecases.LeagueSyncService
 import com.ligadospalpites.sportsfeed.domain.models.MatchStatus
+import com.ligadospalpites.sportsfeed.domain.events.MatchStartedEvent
+import com.ligadospalpites.sportsfeed.domain.events.MatchGoalEvent
+import com.ligadospalpites.sportsfeed.domain.events.MatchFinishedEvent
 import com.ligadospalpites.sportsfeed.infrastructure.client.ApiFootballClient
 import com.ligadospalpites.sportsfeed.infrastructure.client.FootballDataClient
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
 import io.github.resilience4j.retry.annotation.Retry
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Service
 import java.time.Instant
@@ -21,7 +25,8 @@ class FootballWorldCupSyncService(
     private val apiFootballClient: ApiFootballClient,
     private val newsApiClient: com.ligadospalpites.sportsfeed.infrastructure.client.NewsApiClient,
     private val redisTemplate: org.springframework.data.redis.core.StringRedisTemplate,
-    private val seasonRepository: SpringDataSeasonRepository
+    private val seasonRepository: SpringDataSeasonRepository,
+    private val eventPublisher: ApplicationEventPublisher
 ) : LeagueSyncService {
 
     private val objectMapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
@@ -212,7 +217,7 @@ class FootballWorldCupSyncService(
         }
     }
 
-    private fun performUpsert(incoming: List<MatchJpaEntity>) {
+    internal fun performUpsert(incoming: List<MatchJpaEntity>) {
         logger.info("Performing intelligent upsert on ${incoming.size} matches to protect user predictions.")
         val existing = matchRepository.findByLeagueId(worldCupLeagueId)
 
@@ -223,6 +228,31 @@ class FootballWorldCupSyncService(
             }
 
             if (matchMatch != null) {
+                // Publish events based on state transition
+                if (matchMatch.status == MatchStatus.SCHEDULED && inc.status == MatchStatus.LIVE) {
+                    logger.info("Match started event published for match ${matchMatch.id}: ${inc.homeTeamName} x ${inc.awayTeamName}")
+                    eventPublisher.publishEvent(MatchStartedEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, inc.sportId, inc.leagueId))
+                }
+
+                if (matchMatch.status == MatchStatus.LIVE && inc.status == MatchStatus.LIVE) {
+                    val oldHome = matchMatch.homeScore ?: 0
+                    val oldAway = matchMatch.awayScore ?: 0
+                    val newHome = inc.homeScore ?: 0
+                    val newAway = inc.awayScore ?: 0
+                    if (newHome > oldHome) {
+                        logger.info("Match goal event published (Home team scored) for match ${matchMatch.id}")
+                        eventPublisher.publishEvent(MatchGoalEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, newHome, newAway, "HOME", inc.sportId, inc.leagueId))
+                    } else if (newAway > oldAway) {
+                        logger.info("Match goal event published (Away team scored) for match ${matchMatch.id}")
+                        eventPublisher.publishEvent(MatchGoalEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, newHome, newAway, "AWAY", inc.sportId, inc.leagueId))
+                    }
+                }
+
+                if (matchMatch.status != MatchStatus.FINISHED && inc.status == MatchStatus.FINISHED) {
+                    logger.info("Match finished event published for match ${matchMatch.id}: ${inc.homeTeamName} x ${inc.awayTeamName}")
+                    eventPublisher.publishEvent(MatchFinishedEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, inc.homeScore ?: 0, inc.awayScore ?: 0, inc.sportId, inc.leagueId))
+                }
+
                 MatchJpaEntity(
                     id = matchMatch.id,
                     sportId = inc.sportId,

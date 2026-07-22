@@ -36,7 +36,10 @@ class PredictionJpaEntity(
     val isProcessed: Boolean = false,
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    val createdAt: Instant = Instant.now()
+    val createdAt: Instant = Instant.now(),
+
+    @Column(name = "updated_at", nullable = false)
+    val updatedAt: Instant = Instant.now()
 ) {
     fun toDomain(): Prediction = Prediction(
         id = id,
@@ -48,7 +51,8 @@ class PredictionJpaEntity(
         pointsAwarded = pointsAwarded,
         calculatedAt = calculatedAt,
         isProcessed = isProcessed,
-        createdAt = createdAt
+        createdAt = createdAt,
+        updatedAt = updatedAt
     )
 
     companion object {
@@ -62,7 +66,9 @@ class PredictionJpaEntity(
             pointsAwarded = domain.pointsAwarded,
             calculatedAt = domain.calculatedAt,
             isProcessed = domain.isProcessed,
-            createdAt = domain.createdAt
+            createdAt = domain.createdAt,
+            updatedAt = domain.updatedAt
         )
     }
 }
+

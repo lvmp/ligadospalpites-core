@@ -4,6 +4,8 @@ import com.google.auth.oauth2.GoogleCredentials
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.messaging.FirebaseMessaging
+import com.google.cloud.firestore.Firestore
+import com.google.firebase.cloud.FirestoreClient
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -31,4 +33,22 @@ class FirebaseConfig {
             null
         }
     }
+
+    @Bean
+    fun firestore(): Firestore? {
+        return try {
+            if (FirebaseApp.getApps().isEmpty()) {
+                val options = FirebaseOptions.builder()
+                    .setCredentials(GoogleCredentials.getApplicationDefault())
+                    .build()
+                FirebaseApp.initializeApp(options)
+                log.info("Firebase initialized successfully using default credentials.")
+            }
+            FirestoreClient.getFirestore()
+        } catch (ex: Exception) {
+            log.warn("Firestore credentials are not configured or failed to initialize: {}. Firestore operations will be simulated/logged.", ex.message)
+            null
+        }
+    }
 }
+

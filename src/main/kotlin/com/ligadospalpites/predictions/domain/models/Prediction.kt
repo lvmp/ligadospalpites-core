@@ -13,5 +13,7 @@ data class Prediction(
     val pointsAwarded: Int = 0,
     val calculatedAt: Instant? = null,
     val isProcessed: Boolean = false,
-    val createdAt: Instant = Instant.now()
+    val createdAt: Instant = Instant.now(),
+    val updatedAt: Instant = Instant.now()
 )
+
