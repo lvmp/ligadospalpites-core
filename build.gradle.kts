@@ -50,6 +50,9 @@ dependencies {
     implementation("net.logstash.logback:logstash-logback-encoder:7.4")
     implementation("io.github.oshai:kotlin-logging-jvm:5.1.0")
 
+    // Swagger / OpenAPI documentation
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0")
+
     // Development Tools
     developmentOnly("org.springframework.boot:spring-boot-docker-compose")
 

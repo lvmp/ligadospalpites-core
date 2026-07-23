@@ -61,6 +61,12 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
     @Autowired
     private lateinit var deviceRepository: SpringDataDeviceRepository
 
+    @Autowired
+    private lateinit var predictionRepository: com.ligadospalpites.predictions.infrastructure.persistence.SpringDataPredictionRepository
+
+    @Autowired
+    private lateinit var specialPredictionRepository: com.ligadospalpites.predictions.infrastructure.persistence.SpringDataSpecialPredictionRepository
+
     private val testUserId = UUID.fromString("9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d")
     private val footballId = UUID.fromString("f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c")
     private val worldCupLeagueId = UUID.fromString("e7b0a8f9-4b2e-4b67-8890-a54b3d7c588e")
@@ -70,6 +76,8 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
     fun setUpData() {
         mockMvc = MockMvcBuilders.webAppContextSetup(wac).build()
         // Clear old database records
+        predictionRepository.deleteAll()
+        specialPredictionRepository.deleteAll()
         groupMemberRepository.deleteAll()
         groupRepository.deleteAll()
         matchRepository.deleteAll()
@@ -396,5 +404,122 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.phases.DECIMOSEXTO[0].homeTeam", equalTo("México (Dezesseis)")))
             .andExpect(jsonPath("$.phases.ROUND_OF_32[0].homeTeam", equalTo("México (Dezesseis)")))
+    }
+
+    @Test
+    fun `should get normal and special predictions of the user via GET endpoints`() {
+        // Arrange: save some match predictions
+        val matchId = UUID.randomUUID()
+        matchRepository.save(
+            MatchJpaEntity(
+                id = matchId,
+                sportId = footballId,
+                leagueId = worldCupLeagueId,
+                seasonId = testSeasonId,
+                homeTeamName = "Brasil",
+                awayTeamName = "Gana",
+                kickoffTime = Instant.now().plus(1, java.time.temporal.ChronoUnit.DAYS),
+                status = MatchStatus.SCHEDULED
+            )
+        )
+
+        predictionRepository.save(
+            com.ligadospalpites.predictions.infrastructure.persistence.PredictionJpaEntity(
+                id = UUID.randomUUID(),
+                userId = testUserId,
+                matchId = matchId,
+                leagueId = worldCupLeagueId,
+                predictedHomeScore = 2,
+                predictedAwayScore = 0,
+                pointsAwarded = 0,
+                calculatedAt = null,
+                isProcessed = false,
+                createdAt = Instant.now()
+            )
+        )
+
+        // Arrange: save some special predictions
+        specialPredictionRepository.save(
+            com.ligadospalpites.predictions.infrastructure.persistence.SpecialPredictionJpaEntity(
+                id = UUID.randomUUID(),
+                userId = testUserId,
+                leagueId = worldCupLeagueId,
+                type = "CHAMPION",
+                predictionValue = "BRA",
+                pointsAwarded = 0,
+                isProcessed = false,
+                createdAt = Instant.now()
+            )
+        )
+
+        // Act & Assert: Match Predictions GET
+        mockMvc.perform(get("/api/v1/predictions")
+            .header("X-User-Id", testUserId.toString())
+            .param("leagueId", worldCupLeagueId.toString()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$", hasSize<Int>(1)))
+            .andExpect(jsonPath("$[0].predictedHomeScore", equalTo(2)))
+
+        // Act & Assert: Special Predictions GET
+        mockMvc.perform(get("/api/v1/special-predictions")
+            .header("X-User-Id", testUserId.toString())
+            .param("leagueId", worldCupLeagueId.toString()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$", hasSize<Int>(1)))
+            .andExpect(jsonPath("$[0].predictionValue", equalTo("BRA")))
+    }
+
+    @Test
+    fun `should allow administrators to evaluate special predictions and update rankings`() {
+        // Arrange: save a special prediction for user
+        specialPredictionRepository.save(
+            com.ligadospalpites.predictions.infrastructure.persistence.SpecialPredictionJpaEntity(
+                id = UUID.randomUUID(),
+                userId = testUserId,
+                leagueId = worldCupLeagueId,
+                type = "CHAMPION",
+                predictionValue = "BRA",
+                pointsAwarded = 0,
+                isProcessed = false,
+                createdAt = Instant.now()
+            )
+        )
+
+        // Register user in a group to verify propagation
+        val groupId = UUID.randomUUID()
+        groupRepository.save(GroupJpaEntity(id = groupId, name = "Bolão de Copa", creatorId = testUserId, scoringRulesJson = "{}"))
+        groupMemberRepository.save(GroupMemberJpaEntity(groupId = groupId, userId = testUserId, joinedAt = Instant.now(), accumulatedPoints = 0))
+
+        val evaluationPayload = """
+            {
+                "leagueId": "$worldCupLeagueId",
+                "championTeamId": "BRA",
+                "secondPlaceTeamId": "FRA",
+                "thirdPlaceTeamId": "ARG",
+                "fourthPlaceTeamId": "MAR"
+            }
+        """.trimIndent()
+
+        // Act: Evaluate Special Predictions
+        mockMvc.perform(post("/api/v1/internal/special-predictions/evaluate")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(evaluationPayload))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.status", equalTo("SUCCESS")))
+            .andExpect(jsonPath("$.predictionsProcessed", equalTo(1)))
+
+        // Verify points awarded
+        val updatedPredictions = specialPredictionRepository.findByUserId(testUserId)
+        assertEquals(1, updatedPredictions.size)
+        val pred = updatedPredictions[0]
+        assertTrue(pred.isProcessed)
+        assertEquals(50, pred.pointsAwarded)
+
+        // Wait brief moments for asynchronous event listener to update SQL groups
+        Thread.sleep(1000)
+
+        val updatedMember = groupMemberRepository.findById(com.ligadospalpites.groups.infrastructure.persistence.GroupMemberId(groupId, testUserId)).orElse(null)
+        assertNotNull(updatedMember)
+        assertEquals(50, updatedMember.accumulatedPoints)
     }
 }

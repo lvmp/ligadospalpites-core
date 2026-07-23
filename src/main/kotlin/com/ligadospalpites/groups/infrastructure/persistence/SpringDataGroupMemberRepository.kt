@@ -22,4 +22,6 @@ interface SpringDataGroupMemberRepository : JpaRepository<GroupMemberJpaEntity, 
 
     @Query("SELECT DISTINCT g.userId FROM GroupMemberJpaEntity g WHERE g.groupId = :groupId")
     fun findUserIdsByGroupId(@Param("groupId") groupId: UUID): List<UUID>
+
+    fun findByUserId(userId: UUID): List<GroupMemberJpaEntity>
 }
