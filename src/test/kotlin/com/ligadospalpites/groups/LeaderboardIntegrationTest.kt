@@ -85,7 +85,7 @@ class LeaderboardIntegrationTest : BaseIntegrationTest() {
         assertEquals(125, memberInDb.accumulatedPoints)
 
         // Assert Redis rankings updated
-        val (groupRank, groupScore) = redisLeaderboardRepository.getUserRankAndScore("leaderboard:group:$groupId", user.id)
+        val (groupRank, groupScore) = redisLeaderboardRepository.getUserRankAndScore("leaderboard:group:$groupId:overall", user.id)
         assertNotNull(groupScore)
         assertEquals(25.0, groupScore)
         assertEquals(1L, groupRank)

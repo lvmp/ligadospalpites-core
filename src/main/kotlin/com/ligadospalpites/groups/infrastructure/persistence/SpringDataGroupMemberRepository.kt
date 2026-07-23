@@ -8,6 +8,7 @@ import java.util.UUID
 
 interface SpringDataGroupMemberRepository : JpaRepository<GroupMemberJpaEntity, GroupMemberId> {
 
+    @org.springframework.transaction.annotation.Transactional
     @Modifying
     @Query("""
         UPDATE GroupMemberJpaEntity g 
