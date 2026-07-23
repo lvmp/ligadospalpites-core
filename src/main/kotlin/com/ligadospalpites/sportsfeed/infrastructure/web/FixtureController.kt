@@ -141,12 +141,12 @@ class FixtureController(
         val matches = matchRepository.findByLeagueId(leagueId)
         // Group matches into phases for the Flutter BracketBloc
         val stages = mapOf(
-            "DECIMOSEXTO" to matches.filter { it.phase == "Dezesseis-avos de Final" || it.homeTeamName.contains("Dezesseis") || it.awayTeamName.contains("Dezesseis") }.map { MatchResponse.fromEntity(it) },
-            "ROUND_OF_32" to matches.filter { it.phase == "Dezesseis-avos de Final" || it.homeTeamName.contains("Dezesseis") || it.awayTeamName.contains("Dezesseis") }.map { MatchResponse.fromEntity(it) },
-            "OITAVAS" to matches.filter { it.phase == "Oitavas de Final" || it.homeTeamName.contains("Oitavas") || it.awayTeamName.contains("Oitavas") }.map { MatchResponse.fromEntity(it) },
-            "QUARTAS" to matches.filter { it.phase == "Quartas de Final" || it.homeTeamName.contains("Quartas") || it.awayTeamName.contains("Quartas") }.map { MatchResponse.fromEntity(it) },
-            "SEMI" to matches.filter { it.phase == "Semifinal" || it.homeTeamName.contains("Semi") || it.awayTeamName.contains("Semi") }.map { MatchResponse.fromEntity(it) },
-            "FINAL" to matches.filter { it.phase == "Grande Final" || it.homeTeamName.contains("Final") || it.awayTeamName.contains("Final") }.map { MatchResponse.fromEntity(it) }
+            "DECIMOSEXTO" to matches.filter { it.phase == "roundOf32" || it.phase == "Dezesseis-avos de Final" || it.homeTeamName.contains("Dezesseis") || it.awayTeamName.contains("Dezesseis") }.map { MatchResponse.fromEntity(it) },
+            "ROUND_OF_32" to matches.filter { it.phase == "roundOf32" || it.phase == "Dezesseis-avos de Final" || it.homeTeamName.contains("Dezesseis") || it.awayTeamName.contains("Dezesseis") }.map { MatchResponse.fromEntity(it) },
+            "OITAVAS" to matches.filter { it.phase == "roundOf16" || it.phase == "Oitavas de Final" || it.homeTeamName.contains("Oitavas") || it.awayTeamName.contains("Oitavas") }.map { MatchResponse.fromEntity(it) },
+            "QUARTAS" to matches.filter { it.phase == "quarterFinals" || it.phase == "Quartas de Final" || it.homeTeamName.contains("Quartas") || it.awayTeamName.contains("Quartas") }.map { MatchResponse.fromEntity(it) },
+            "SEMI" to matches.filter { it.phase == "semiFinals" || it.phase == "Semifinal" || it.homeTeamName.contains("Semi") || it.awayTeamName.contains("Semi") }.map { MatchResponse.fromEntity(it) },
+            "FINAL" to matches.filter { it.phase == "finalMatch" || it.phase == "thirdPlace" || it.phase == "Grande Final" || it.homeTeamName.contains("Final") || it.awayTeamName.contains("Final") }.map { MatchResponse.fromEntity(it) }
         )
 
         return ResponseEntity.ok(BracketResponse(leagueId, stages))
