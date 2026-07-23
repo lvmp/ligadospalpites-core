@@ -16,20 +16,51 @@ class FirebaseConfig {
 
     private val log = LoggerFactory.getLogger(FirebaseConfig::class.java)
 
+    private fun initializeFirebase() {
+        if (FirebaseApp.getApps().isEmpty()) {
+            try {
+                // Support both custom FIREBASE_CREDENTIALS env variable (JSON string) and App Default Credentials
+                val firebaseCredentialsJson = System.getenv("FIREBASE_CREDENTIALS") 
+                    ?: System.getenv("FIREBASE_CREDENTIALS_JSON")
+
+                val credentials = if (!firebaseCredentialsJson.isNullOrBlank()) {
+                    log.info("Carregando credenciais do Firebase a partir da variável de ambiente.")
+                    GoogleCredentials.fromStream(ByteArrayInputStream(firebaseCredentialsJson.toByteArray()))
+                } else {
+                    log.info("Carregando credenciais padrão do Google Cloud Application Default.")
+                    GoogleCredentials.getApplicationDefault()
+                }
+
+                val projectId = System.getenv("FIREBASE_PROJECT_ID")
+                    ?: System.getenv("GOOGLE_CLOUD_PROJECT")
+                    ?: System.getenv("GCP_PROJECT")
+
+                val optionsBuilder = FirebaseOptions.builder()
+                    .setCredentials(credentials)
+
+                if (!projectId.isNullOrBlank()) {
+                    log.info("Configurando ID do projeto Firebase: {}", projectId)
+                    optionsBuilder.setProjectId(projectId)
+                    optionsBuilder.setDatabaseUrl("https://$projectId.firebaseio.com")
+                }
+
+                val options = optionsBuilder.build()
+                FirebaseApp.initializeApp(options)
+                log.info("Firebase inicializado com sucesso.")
+            } catch (ex: Exception) {
+                log.error("Erro crítico ao tentar inicializar o FirebaseApp: ${ex.message}", ex)
+                throw ex
+            }
+        }
+    }
+
     @Bean
     fun firebaseMessaging(): FirebaseMessaging? {
         return try {
-            if (FirebaseApp.getApps().isEmpty()) {
-                // Try initializing with environment variables or default credentials
-                val options = FirebaseOptions.builder()
-                    .setCredentials(GoogleCredentials.getApplicationDefault())
-                    .build()
-                FirebaseApp.initializeApp(options)
-                log.info("Firebase initialized successfully using default credentials.")
-            }
+            initializeFirebase()
             FirebaseMessaging.getInstance()
         } catch (ex: Exception) {
-            log.warn("FCM Firebase credentials are not configured or failed to initialize: {}. FCM pushes will be simulated/logged.", ex.message)
+            log.warn("O serviço de mensagens Firebase (FCM) não pôde ser inicializado: {}. Pushes serão simulados.", ex.message)
             null
         }
     }
@@ -37,18 +68,11 @@ class FirebaseConfig {
     @Bean
     fun firestore(): Firestore? {
         return try {
-            if (FirebaseApp.getApps().isEmpty()) {
-                val options = FirebaseOptions.builder()
-                    .setCredentials(GoogleCredentials.getApplicationDefault())
-                    .build()
-                FirebaseApp.initializeApp(options)
-                log.info("Firebase initialized successfully using default credentials.")
-            }
+            initializeFirebase()
             FirestoreClient.getFirestore()
         } catch (ex: Exception) {
-            log.warn("Firestore credentials are not configured or failed to initialize: {}. Firestore operations will be simulated/logged.", ex.message)
+            log.error("O serviço de banco de dados Firestore não pôde ser inicializado: {}. Consultas reais do Firestore serão simuladas.", ex.message, ex)
             null
         }
     }
 }
-
