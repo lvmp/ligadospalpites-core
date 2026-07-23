@@ -8,6 +8,8 @@ import com.ligadospalpites.groups.infrastructure.persistence.SpringDataGroupMemb
 import com.ligadospalpites.groups.infrastructure.persistence.SpringDataGroupRepository
 import com.ligadospalpites.predictions.infrastructure.persistence.PredictionJpaEntity
 import com.ligadospalpites.predictions.infrastructure.persistence.SpringDataPredictionRepository
+import com.ligadospalpites.predictions.infrastructure.persistence.SpecialPredictionJpaEntity
+import com.ligadospalpites.predictions.infrastructure.persistence.SpringDataSpecialPredictionRepository
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.MatchJpaEntity
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataMatchRepository
 import com.ligadospalpites.users.infrastructure.persistence.SpringDataUserRepository
@@ -28,6 +30,7 @@ data class MigrationSummaryDto(
     val groupsMigrated: Int,
     val groupMembersMigrated: Int,
     val predictionsMigrated: Int,
+    val specialPredictionsMigrated: Int = 0,
     val executionTimeMs: Long,
     val warnings: List<String>
 )
@@ -38,6 +41,7 @@ class FirebaseUserMigrationUseCase(
     private val groupRepository: SpringDataGroupRepository,
     private val groupMemberRepository: SpringDataGroupMemberRepository,
     private val predictionRepository: SpringDataPredictionRepository,
+    private val specialPredictionRepository: SpringDataSpecialPredictionRepository,
     private val matchRepository: SpringDataMatchRepository,
     private val redisTemplate: StringRedisTemplate,
     private val firestore: Firestore?
@@ -310,6 +314,75 @@ class FirebaseUserMigrationUseCase(
                 }
             }
 
+            // 6. FASE 5: Migrar Palpites Especiais ('specialPredictions')
+            val possibleSpecialCollections = listOf(
+                "specialPredictions",
+                "special_predictions",
+                "specialPrediction",
+                "special_prediction"
+            )
+            
+            var specialDocs = emptyList<com.google.cloud.firestore.QueryDocumentSnapshot>()
+            for (colName in possibleSpecialCollections) {
+                val docs = fs.collection(colName).get().get().documents
+                if (docs.isNotEmpty()) {
+                    specialDocs = docs
+                    break
+                }
+            }
+
+            var specialPredictionsMigratedCount = 0
+            if (specialDocs.isNotEmpty()) {
+                log.info("FASE 5: Sincronizando {} palpites especiais com tbl_special_predictions...", specialDocs.size)
+                for (specialDoc in specialDocs) {
+                    val docData = specialDoc.data
+                    val firebaseUid = docData["userId"]?.toString() ?: ""
+                    val localUser = userRepository.findByFirebaseUid(firebaseUid)
+                    if (localUser != null) {
+                        val localUserId = localUser.id
+                        val createdAtVal = docData["createdAt"] ?: docData["updatedAt"]
+                        val createdAt = try {
+                            parseTimestamp(createdAtVal)
+                        } catch (e: Exception) {
+                            Instant.now()
+                        }
+
+                        // Mapeia os quatro primeiros colocados para as chaves correspondentes
+                        val places = mapOf(
+                            "CHAMPION" to (docData["teamId"]?.toString() ?: docData["championTeamId"]?.toString()),
+                            "SECOND_PLACE" to docData["secondPlaceTeamId"]?.toString(),
+                            "THIRD_PLACE" to docData["thirdPlaceTeamId"]?.toString(),
+                            "FOURTH_PLACE" to docData["fourthPlaceTeamId"]?.toString()
+                        )
+
+                        for ((type, teamId) in places) {
+                            if (!teamId.isNullOrBlank()) {
+                                val exists = specialPredictionRepository.findByUserIdAndLeagueIdAndType(
+                                    localUserId,
+                                    worldCupLeagueId,
+                                    type
+                                ) != null
+                                
+                                if (!exists) {
+                                    val entity = SpecialPredictionJpaEntity(
+                                        id = UUID.randomUUID(),
+                                        userId = localUserId,
+                                        leagueId = worldCupLeagueId,
+                                        type = type,
+                                        predictionValue = teamId,
+                                        pointsAwarded = 0,
+                                        isProcessed = false,
+                                        createdAt = createdAt
+                                    )
+                                    specialPredictionRepository.save(entity)
+                                    specialPredictionsMigratedCount++
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             val executionTime = System.currentTimeMillis() - startTime
             return MigrationSummaryDto(
                 status = "COMPLETED",
@@ -319,6 +392,7 @@ class FirebaseUserMigrationUseCase(
                 groupsMigrated = groupsMigratedCount,
                 groupMembersMigrated = groupMembersMigratedCount,
                 predictionsMigrated = predictionsMigratedCount,
+                specialPredictionsMigrated = specialPredictionsMigratedCount,
                 executionTimeMs = executionTime,
                 warnings = warnings
             )

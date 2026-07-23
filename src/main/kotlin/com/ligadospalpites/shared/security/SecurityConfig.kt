@@ -27,6 +27,10 @@ class SecurityConfig(
                     // Permit endpoints like internal synchronization endpoints, health, h2, etc.
                     .requestMatchers("/api/v1/internal/**").permitAll()
                     .requestMatchers("/api/v1/payments/revenuecat/webhook").permitAll()
+                    
+                    // Swagger UI and OpenAPI docs
+                    .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+
                     .requestMatchers("/api/v1/**").permitAll() // Permit for development/testing ease
                     .anyRequest().permitAll()
             }
