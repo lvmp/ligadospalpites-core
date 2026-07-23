@@ -20,4 +20,9 @@ class OpenApiConfig {
                     .contact(Contact().name("Ligados Palpites Team"))
             )
     }
+
+    @Bean
+    fun objectMapper(): com.fasterxml.jackson.databind.ObjectMapper {
+        return com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
+    }
 }

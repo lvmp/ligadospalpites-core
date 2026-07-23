@@ -10,6 +10,7 @@ import com.ligadospalpites.predictions.infrastructure.persistence.PredictionJpaE
 import com.ligadospalpites.predictions.infrastructure.persistence.SpringDataPredictionRepository
 import com.ligadospalpites.predictions.infrastructure.persistence.SpecialPredictionJpaEntity
 import com.ligadospalpites.predictions.infrastructure.persistence.SpringDataSpecialPredictionRepository
+import com.ligadospalpites.predictions.domain.services.ScoringEngine
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.MatchJpaEntity
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataMatchRepository
 import com.ligadospalpites.users.infrastructure.persistence.SpringDataUserRepository
@@ -86,8 +87,8 @@ class FirebaseUserMigrationUseCase(
                     // Gera um UUID determinístico a partir do ID do documento do Firestore
                     val matchUuid = UUID.nameUUIDFromBytes(docId.toByteArray())
                     
-                    val home = doc.getString("homeTeam") ?: doc.getString("homeTeamName") ?: doc.getString("home_team") ?: doc.getString("home") ?: "Time A"
-                    val away = doc.getString("awayTeam") ?: doc.getString("awayTeamName") ?: doc.getString("away_team") ?: doc.getString("away") ?: "Time B"
+                    val home = doc.getString("teamA") ?: doc.getString("team_a") ?: doc.getString("homeTeam") ?: doc.getString("homeTeamName") ?: doc.getString("home_team") ?: doc.getString("home") ?: "Time A"
+                    val away = doc.getString("teamB") ?: doc.getString("team_b") ?: doc.getString("awayTeam") ?: doc.getString("awayTeamName") ?: doc.getString("away_team") ?: doc.getString("away") ?: "Time B"
                     
                     val kickoffVal = doc.get("kickoffTime") ?: doc.get("date") ?: doc.get("kickoff")
                     val kickoffTime = try {
@@ -104,11 +105,12 @@ class FirebaseUserMigrationUseCase(
                         else -> com.ligadospalpites.sportsfeed.domain.models.MatchStatus.SCHEDULED
                     }
 
-                    val homeScore = doc.getLong("homeScore")?.toInt() ?: doc.getLong("home_score")?.toInt()
-                    val awayScore = doc.getLong("awayScore")?.toInt() ?: doc.getLong("away_score")?.toInt()
+                    val homeScore = doc.getLong("scoreA")?.toInt() ?: doc.getLong("score_a")?.toInt() ?: doc.getLong("homeScore")?.toInt() ?: doc.getLong("home_score")?.toInt()
+                    val awayScore = doc.getLong("scoreB")?.toInt() ?: doc.getLong("score_b")?.toInt() ?: doc.getLong("awayScore")?.toInt() ?: doc.getLong("away_score")?.toInt()
                     val phase = doc.getString("phase") ?: doc.getString("stage") ?: "Fase de Grupos"
 
-                    if (!matchRepository.existsById(matchUuid)) {
+                    val existingMatch = matchRepository.findById(matchUuid).orElse(null)
+                    if (existingMatch == null) {
                         val newMatch = MatchJpaEntity(
                             id = matchUuid,
                             sportId = footballId,
@@ -124,6 +126,25 @@ class FirebaseUserMigrationUseCase(
                             updatedAt = Instant.now()
                         )
                         matchRepository.save(newMatch)
+                    } else {
+                        // Se o time estiver genérico ou sem placar, atualiza
+                        if (existingMatch.homeTeamName == "Time A" || existingMatch.homeScore == null) {
+                            val updatedMatch = MatchJpaEntity(
+                                id = existingMatch.id,
+                                sportId = existingMatch.sportId,
+                                leagueId = existingMatch.leagueId,
+                                seasonId = existingMatch.seasonId,
+                                homeTeamName = home,
+                                awayTeamName = away,
+                                kickoffTime = kickoffTime,
+                                status = status,
+                                homeScore = homeScore,
+                                awayScore = awayScore,
+                                phase = phase,
+                                updatedAt = Instant.now()
+                            )
+                            matchRepository.save(updatedMatch)
+                        }
                     }
                 }
                 log.info("Sincronização de partidas da FASE 0 concluída.")
@@ -226,6 +247,55 @@ class FirebaseUserMigrationUseCase(
                 }
             }
 
+            // Pre-calcular pontos dos superpalpites (Special Predictions) para somar aos membros em FASE 3
+            val userSpecialPointsMap = mutableMapOf<UUID, Int>()
+            val correctSpecialValues = mapOf(
+                "CHAMPION" to "spain",
+                "SECOND_PLACE" to "argentina",
+                "THIRD_PLACE" to "england",
+                "FOURTH_PLACE" to "france"
+            )
+
+            val possiblePreSpecialCollections = listOf(
+                "specialPredictions",
+                "special_predictions",
+                "specialPrediction",
+                "special_prediction"
+            )
+            var preSpecialDocs = emptyList<com.google.cloud.firestore.QueryDocumentSnapshot>()
+            for (colName in possiblePreSpecialCollections) {
+                val docs = fs.collection(colName).get().get().documents
+                if (docs.isNotEmpty()) {
+                    preSpecialDocs = docs
+                    break
+                }
+            }
+
+            for (specialDoc in preSpecialDocs) {
+                val docData = specialDoc.data
+                val firebaseUid = docData["userId"]?.toString() ?: ""
+                val localUser = userRepository.findByFirebaseUid(firebaseUid) ?: continue
+                val localUserId = localUser.id
+
+                val places = mapOf(
+                    "CHAMPION" to (docData["teamId"]?.toString() ?: docData["championTeamId"]?.toString()),
+                    "SECOND_PLACE" to docData["secondPlaceTeamId"]?.toString(),
+                    "THIRD_PLACE" to docData["thirdPlaceTeamId"]?.toString(),
+                    "FOURTH_PLACE" to docData["fourthPlaceTeamId"]?.toString()
+                )
+
+                val earnedPoints = places.entries.sumOf { (type, teamId) ->
+                    if (!teamId.isNullOrBlank() && teamId.equals(correctSpecialValues[type], ignoreCase = true)) {
+                        50
+                    } else {
+                        0
+                    }
+                }
+                if (earnedPoints > 0) {
+                    userSpecialPointsMap[localUserId] = earnedPoints
+                }
+            }
+
             var groupMembersMigratedCount = 0
             log.info("Buscados {} membros da coleção de associados '{}' no Firestore.", membersDocs.size, resolvedCollectionName)
             for (memberDoc in membersDocs) {
@@ -241,11 +311,14 @@ class FirebaseUserMigrationUseCase(
 
                 if (localUser != null && groupRepository.existsById(postgresGroupId)) {
                     val localUserId = localUser.id
+                    val extraPoints = userSpecialPointsMap[localUserId] ?: 0
+                    val finalTotalScore = totalScore + extraPoints
+
                     val memberEntity = GroupMemberJpaEntity(
                         groupId = postgresGroupId,
                         userId = localUserId,
                         joinedAt = joinedAt,
-                        accumulatedPoints = totalScore
+                        accumulatedPoints = finalTotalScore
                     )
                     groupMemberRepository.save(memberEntity)
 
@@ -254,13 +327,13 @@ class FirebaseUserMigrationUseCase(
                     val groupStageKey = "leaderboard:group:$postgresGroupId:group-stage"
                     val knockoutKey = "leaderboard:group:$postgresGroupId:knockout"
 
-                    redisTemplate.opsForZSet().add(overallKey, localUserId.toString(), totalScore.toDouble())
+                    redisTemplate.opsForZSet().add(overallKey, localUserId.toString(), finalTotalScore.toDouble())
                     redisTemplate.opsForZSet().add(groupStageKey, localUserId.toString(), groupStageScore.toDouble())
                     redisTemplate.opsForZSet().add(knockoutKey, localUserId.toString(), knockoutScore.toDouble())
 
                     // Definir no Ranking Global (usando add para ser idempotente e não somar em duplicidade por grupo)
                     val globalKey = "leaderboard:global"
-                    redisTemplate.opsForZSet().add(globalKey, localUserId.toString(), totalScore.toDouble())
+                    redisTemplate.opsForZSet().add(globalKey, localUserId.toString(), finalTotalScore.toDouble())
 
                     groupMembersMigratedCount++
                 } else {
@@ -357,24 +430,31 @@ class FirebaseUserMigrationUseCase(
 
                         for ((type, teamId) in places) {
                             if (!teamId.isNullOrBlank()) {
-                                val exists = specialPredictionRepository.findByUserIdAndLeagueIdAndType(
+                                val correctTeamId = correctSpecialValues[type]
+                                val earnedPoints = if (correctTeamId != null && teamId.equals(correctTeamId, ignoreCase = true)) {
+                                    50
+                                } else {
+                                    0
+                                }
+
+                                val existingSpecial = specialPredictionRepository.findByUserIdAndLeagueIdAndType(
                                     localUserId,
                                     worldCupLeagueId,
                                     type
-                                ) != null
+                                )
                                 
-                                if (!exists) {
-                                    val entity = SpecialPredictionJpaEntity(
-                                        id = UUID.randomUUID(),
-                                        userId = localUserId,
-                                        leagueId = worldCupLeagueId,
-                                        type = type,
-                                        predictionValue = teamId,
-                                        pointsAwarded = 0,
-                                        isProcessed = false,
-                                        createdAt = createdAt
-                                    )
-                                    specialPredictionRepository.save(entity)
+                                val entity = SpecialPredictionJpaEntity(
+                                    id = existingSpecial?.id ?: UUID.randomUUID(),
+                                    userId = localUserId,
+                                    leagueId = worldCupLeagueId,
+                                    type = type,
+                                    predictionValue = teamId,
+                                    pointsAwarded = earnedPoints,
+                                    isProcessed = true,
+                                    createdAt = existingSpecial?.createdAt ?: createdAt
+                                )
+                                specialPredictionRepository.save(entity)
+                                if (existingSpecial == null) {
                                     specialPredictionsMigratedCount++
                                 }
                             }
@@ -423,7 +503,7 @@ class FirebaseUserMigrationUseCase(
         val matchIdStr = map["matchId"]?.toString() ?: return false
         val scoreA = (map["scoreA"] as? Number)?.toInt() ?: 0
         val scoreB = (map["scoreB"] as? Number)?.toInt() ?: 0
-        val pointsAwarded = (map["pointsAwarded"] as? Number)?.toInt() ?: 0
+        val pointsAwarded = (map["points"] as? Number)?.toInt() ?: (map["pointsAwarded"] as? Number)?.toInt() ?: 0
         val isProcessed = map["isProcessed"] as? Boolean ?: (pointsAwarded > 0)
         val updatedAt = parseTimestamp(map["updatedAt"] ?: map["createdAt"])
 
@@ -437,6 +517,21 @@ class FirebaseUserMigrationUseCase(
         val matchId = resolvedMatch.id
         val leagueId = resolvedMatch.leagueId
 
+        val calculatedPoints = if (resolvedMatch.homeScore != null && resolvedMatch.awayScore != null) {
+            ScoringEngine.calculateMatchPoints(
+                predHome = scoreA,
+                predAway = scoreB,
+                realHome = resolvedMatch.homeScore!!,
+                realAway = resolvedMatch.awayScore!!,
+                isFinal = resolvedMatch.phase.equals("FINAL", ignoreCase = true) || resolvedMatch.phase.equals("finalMatch", ignoreCase = true)
+            )
+        } else {
+            0
+        }
+
+        val finalPoints = if (calculatedPoints > pointsAwarded) calculatedPoints else pointsAwarded
+        val finalProcessed = isProcessed || (finalPoints > 0)
+
         val existingPred = predictionRepository.findByUserIdAndMatchId(localUserId, matchId)
         if (existingPred == null) {
             val newPrediction = PredictionJpaEntity(
@@ -446,9 +541,9 @@ class FirebaseUserMigrationUseCase(
                 leagueId = leagueId,
                 predictedHomeScore = scoreA,
                 predictedAwayScore = scoreB,
-                pointsAwarded = pointsAwarded,
-                calculatedAt = if (isProcessed) updatedAt else null,
-                isProcessed = isProcessed,
+                pointsAwarded = finalPoints,
+                calculatedAt = if (finalProcessed) updatedAt else null,
+                isProcessed = finalProcessed,
                 createdAt = updatedAt,
                 updatedAt = updatedAt
             )
@@ -462,9 +557,9 @@ class FirebaseUserMigrationUseCase(
                 leagueId = leagueId,
                 predictedHomeScore = scoreA,
                 predictedAwayScore = scoreB,
-                pointsAwarded = pointsAwarded,
-                calculatedAt = if (isProcessed) updatedAt else null,
-                isProcessed = isProcessed,
+                pointsAwarded = finalPoints,
+                calculatedAt = if (finalProcessed) updatedAt else null,
+                isProcessed = finalProcessed,
                 createdAt = existingPred.createdAt,
                 updatedAt = updatedAt
             )

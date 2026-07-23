@@ -192,9 +192,9 @@ class PredictionController(
 
         val pointsPerType = mapOf(
             "CHAMPION" to 50,
-            "SECOND_PLACE" to 30,
-            "THIRD_PLACE" to 20,
-            "FOURTH_PLACE" to 10
+            "SECOND_PLACE" to 50,
+            "THIRD_PLACE" to 50,
+            "FOURTH_PLACE" to 50
         )
 
         val scoreUpdates = mutableListOf<UserScoreUpdateDto>()
