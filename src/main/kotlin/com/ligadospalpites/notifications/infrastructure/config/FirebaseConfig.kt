@@ -25,17 +25,16 @@ class FirebaseConfig {
 
                 val credentials = if (!firebaseCredentialsJson.isNullOrBlank()) {
                     val trimmed = firebaseCredentialsJson.trim()
-                    // Safe detection: Base64 strings representing JSON won't start with '{'
-                    val isBase64 = (trimmed.length % 4 == 0) && 
-                                   trimmed.matches(Regex("^[A-Za-z0-9+/]*={0,2}$")) && 
-                                   !trimmed.startsWith("{")
+                    
+                    // Remove all white spaces and line breaks that command line encoders generate (e.g. wrapping every 76 chars)
+                    val cleaned = trimmed.replace(Regex("\\s+"), "")
 
-                    val jsonBytes = if (isBase64) {
-                        log.info("Carregando credenciais do Firebase decodificando do formato Base64.")
+                    val jsonBytes = if (!trimmed.startsWith("{")) {
+                        log.info("Detectada credencial criptografada/Base64. Decodificando...")
                         try {
-                            java.util.Base64.getDecoder().decode(trimmed)
+                            java.util.Base64.getDecoder().decode(cleaned)
                         } catch (e: Exception) {
-                            log.warn("Falha ao decodificar Base64, tentando usar string original como bytes JSON: {}", e.message)
+                            log.warn("A string não inicia com '{' mas falhou ao decodificar Base64. Usando dados originais: {}", e.message)
                             firebaseCredentialsJson.toByteArray()
                         }
                     } else {
