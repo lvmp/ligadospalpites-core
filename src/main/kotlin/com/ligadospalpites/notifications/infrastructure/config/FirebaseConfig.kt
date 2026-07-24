@@ -19,13 +19,30 @@ class FirebaseConfig {
     private fun initializeFirebase() {
         if (FirebaseApp.getApps().isEmpty()) {
             try {
-                // Support both custom FIREBASE_CREDENTIALS env variable (JSON string) and App Default Credentials
+                // Support both custom FIREBASE_CREDENTIALS env variable (JSON string or Base64 encoded JSON) and App Default Credentials
                 val firebaseCredentialsJson = System.getenv("FIREBASE_CREDENTIALS") 
                     ?: System.getenv("FIREBASE_CREDENTIALS_JSON")
 
                 val credentials = if (!firebaseCredentialsJson.isNullOrBlank()) {
-                    log.info("Carregando credenciais do Firebase a partir da variável de ambiente.")
-                    GoogleCredentials.fromStream(ByteArrayInputStream(firebaseCredentialsJson.toByteArray()))
+                    val trimmed = firebaseCredentialsJson.trim()
+                    // Safe detection: Base64 strings representing JSON won't start with '{'
+                    val isBase64 = (trimmed.length % 4 == 0) && 
+                                   trimmed.matches(Regex("^[A-Za-z0-9+/]*={0,2}$")) && 
+                                   !trimmed.startsWith("{")
+
+                    val jsonBytes = if (isBase64) {
+                        log.info("Carregando credenciais do Firebase decodificando do formato Base64.")
+                        try {
+                            java.util.Base64.getDecoder().decode(trimmed)
+                        } catch (e: Exception) {
+                            log.warn("Falha ao decodificar Base64, tentando usar string original como bytes JSON: {}", e.message)
+                            firebaseCredentialsJson.toByteArray()
+                        }
+                    } else {
+                        log.info("Carregando credenciais do Firebase a partir de texto JSON bruto.")
+                        firebaseCredentialsJson.toByteArray()
+                    }
+                    GoogleCredentials.fromStream(ByteArrayInputStream(jsonBytes))
                 } else {
                     log.info("Carregando credenciais padrão do Google Cloud Application Default.")
                     GoogleCredentials.getApplicationDefault()
