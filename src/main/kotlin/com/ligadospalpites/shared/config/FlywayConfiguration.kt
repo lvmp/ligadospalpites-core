@@ -4,14 +4,17 @@ import org.flywaydb.core.Flyway
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Lazy
 import javax.sql.DataSource
 
 @Configuration
+@Lazy(false)
 class FlywayConfiguration {
 
     private val log = LoggerFactory.getLogger(FlywayConfiguration::class.java)
 
     @Bean(initMethod = "migrate")
+    @Lazy(false)
     fun flyway(dataSource: DataSource): Flyway {
         log.info("Inicializando e executando migrações do Flyway de forma programática...")
         return Flyway.configure()
@@ -22,3 +25,4 @@ class FlywayConfiguration {
             .load()
     }
 }
+
