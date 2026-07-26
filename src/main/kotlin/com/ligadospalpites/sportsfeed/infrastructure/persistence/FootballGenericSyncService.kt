@@ -72,6 +72,49 @@ class FootballGenericSyncService(
             footballDataCode = "CL",
             apiFootballId = 2,
             defaultName = "UEFA Champions League"
+        ),
+        // Additional free tier football-data.org leagues pre-mapped for seamless scalability
+        UUID.fromString("5acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
+            id = UUID.fromString("5acdf011-fbde-4122-83bc-c46b1ba847de"),
+            footballDataCode = "ELC",
+            apiFootballId = 40,
+            defaultName = "Championship"
+        ),
+        UUID.fromString("6acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
+            id = UUID.fromString("6acdf011-fbde-4122-83bc-c46b1ba847de"),
+            footballDataCode = "EC",
+            apiFootballId = 4,
+            defaultName = "European Championship"
+        ),
+        UUID.fromString("7acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
+            id = UUID.fromString("7acdf011-fbde-4122-83bc-c46b1ba847de"),
+            footballDataCode = "FL1",
+            apiFootballId = 61,
+            defaultName = "Ligue 1"
+        ),
+        UUID.fromString("8acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
+            id = UUID.fromString("8acdf011-fbde-4122-83bc-c46b1ba847de"),
+            footballDataCode = "BL1",
+            apiFootballId = 78,
+            defaultName = "Bundesliga"
+        ),
+        UUID.fromString("9acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
+            id = UUID.fromString("9acdf011-fbde-4122-83bc-c46b1ba847de"),
+            footballDataCode = "SA",
+            apiFootballId = 135,
+            defaultName = "Serie A"
+        ),
+        UUID.fromString("aacdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
+            id = UUID.fromString("aacdf011-fbde-4122-83bc-c46b1ba847de"),
+            footballDataCode = "DED",
+            apiFootballId = 88,
+            defaultName = "Eredivisie"
+        ),
+        UUID.fromString("bacdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
+            id = UUID.fromString("bacdf011-fbde-4122-83bc-c46b1ba847de"),
+            footballDataCode = "PPL",
+            apiFootballId = 94,
+            defaultName = "Primeira Liga"
         )
     )
 
