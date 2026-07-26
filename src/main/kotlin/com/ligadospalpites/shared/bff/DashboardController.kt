@@ -33,7 +33,9 @@ class DashboardController(
 
     @GetMapping("/dashboard")
     fun getDashboard(
-        @RequestHeader(value = "X-User-Id", required = false) userIdHeader: String?
+        @RequestHeader(value = "X-User-Id", required = false) userIdHeader: String?,
+        @RequestParam(required = false) sportId: UUID? = null,
+        @RequestParam(required = false) leagueId: UUID? = null
     ): CompletableFuture<ResponseEntity<DashboardResponse>> {
         val userUUID = userResolver.resolveByUidOrUuid(userIdHeader)
 
@@ -86,9 +88,10 @@ class DashboardController(
 
         // 4. Fetch News (Async from Redis Cache with Fallback)
         val newsFuture = CompletableFuture.supplyAsync({
-            val sportId = "f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c"
+            val targetSportId = sportId ?: UUID.fromString("f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c")
+            val cacheKey = if (leagueId != null) "news:$targetSportId:$leagueId" else "news:$targetSportId"
             try {
-                val cachedNewsJson = redisTemplate.opsForValue().get("news:$sportId")
+                val cachedNewsJson = redisTemplate.opsForValue().get(cacheKey)
                 if (!cachedNewsJson.isNullOrBlank()) {
                     val articles: List<Map<String, String>> = objectMapper.readValue(
                         cachedNewsJson,

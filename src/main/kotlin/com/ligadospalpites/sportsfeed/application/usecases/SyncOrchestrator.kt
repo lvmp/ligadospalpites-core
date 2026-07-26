@@ -19,7 +19,9 @@ interface LeagueSyncService {
 class SyncOrchestrator(
     private val syncServices: List<LeagueSyncService>,
     private val leagueRepository: SpringDataLeagueRepository,
-    private val matchRepository: SpringDataMatchRepository
+    private val matchRepository: SpringDataMatchRepository,
+    private val newsApiClient: com.ligadospalpites.sportsfeed.infrastructure.client.NewsApiClient,
+    private val redisTemplate: org.springframework.data.redis.core.StringRedisTemplate
 ) {
     private val logger = LoggerFactory.getLogger(SyncOrchestrator::class.java)
 
@@ -104,6 +106,65 @@ class SyncOrchestrator(
         }
 
         logger.info("Completed sync process for all active leagues. Results: $results")
+        return results
+    }
+
+    fun syncAllActiveLeaguesNews(): List<Map<String, Any>> {
+        logger.info("Starting automated sync process for news of all active leagues.")
+        val activeLeagues = leagueRepository.findByIsActiveTrue()
+        val results = mutableListOf<Map<String, Any>>()
+        val objectMapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
+
+        for (league in activeLeagues) {
+            val sportId = league.sportId
+            val leagueId = league.id
+            val leagueName = league.name
+
+            try {
+                // Monta a query inteligente com base no esporte
+                val query = if (sportId == UUID.fromString("e5284bf1-d576-4740-97cc-f06bca181cb2")) {
+                    "\"$leagueName\" AND (basquete OR basketball)"
+                } else {
+                    "\"$leagueName\" AND (futebol OR soccer OR football)"
+                }
+
+                logger.info("Sincronizando notícias da liga '$leagueName' ($leagueId) usando query: '$query'")
+                val articles = newsApiClient.fetchNews(query = query, language = "pt")
+
+                // Seleciona os top 10 artigos (conforme feedback do usuário) e os mapeia para JSON
+                val topArticles = articles.take(10).map { art ->
+                    mapOf(
+                        "title" to art.title,
+                        "url" to art.url,
+                        "urlToImage" to (art.urlToImage ?: "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=600"),
+                        "author" to (art.author ?: "Liga dos Palpites"),
+                        "description" to (art.description ?: "Matéria completa disponível no link abaixo."),
+                        "category" to leagueName
+                    )
+                }
+
+                val json = objectMapper.writeValueAsString(topArticles)
+                
+                // Salva no Redis com as duas chaves (específica por liga e genérica por esporte para manter compatibilidade)
+                redisTemplate.opsForValue().set("news:$sportId:$leagueId", json)
+                redisTemplate.opsForValue().set("news:$sportId", json) // Fallback compatível
+
+                results.add(mapOf(
+                    "leagueId" to leagueId,
+                    "leagueName" to leagueName,
+                    "status" to "SUCCESS",
+                    "articlesSynced" to topArticles.size
+                ))
+            } catch (e: Exception) {
+                logger.error("Failed to sync news for league $leagueName ($leagueId): ${e.message}", e)
+                results.add(mapOf(
+                    "leagueId" to leagueId,
+                    "leagueName" to leagueName,
+                    "status" to "FAILED",
+                    "error" to (e.message ?: "Unknown error")
+                ))
+            }
+        }
         return results
     }
 }

@@ -33,5 +33,15 @@ class InternalSyncController(private val syncOrchestrator: SyncOrchestrator) {
             ))
         }
     }
+
+    @PostMapping("/scheduler/news/process")
+    fun processNewsScheduler(): ResponseEntity<Map<String, Any>> {
+        val results = syncOrchestrator.syncAllActiveLeaguesNews()
+        return ResponseEntity.ok(mapOf(
+            "status" to "SUCCESS",
+            "message" to "All active leagues news sync completed",
+            "results" to results
+        ))
+    }
 }
 

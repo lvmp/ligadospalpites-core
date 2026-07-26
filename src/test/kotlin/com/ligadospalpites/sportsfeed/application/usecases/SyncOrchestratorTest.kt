@@ -19,6 +19,8 @@ class SyncOrchestratorTest {
     private lateinit var matchRepository: SpringDataMatchRepository
     private lateinit var leagueSyncService1: LeagueSyncService
     private lateinit var leagueSyncService2: LeagueSyncService
+    private lateinit var newsApiClient: com.ligadospalpites.sportsfeed.infrastructure.client.NewsApiClient
+    private lateinit var redisTemplate: org.springframework.data.redis.core.StringRedisTemplate
     private lateinit var orchestrator: SyncOrchestrator
 
     private val sportId = UUID.randomUUID()
@@ -31,11 +33,19 @@ class SyncOrchestratorTest {
         matchRepository = mock(SpringDataMatchRepository::class.java)
         leagueSyncService1 = mock(LeagueSyncService::class.java)
         leagueSyncService2 = mock(LeagueSyncService::class.java)
+        newsApiClient = mock(com.ligadospalpites.sportsfeed.infrastructure.client.NewsApiClient::class.java)
+        redisTemplate = mock(org.springframework.data.redis.core.StringRedisTemplate::class.java)
+
+        @Suppress("UNCHECKED_CAST")
+        val valueOps = mock(org.springframework.data.redis.core.ValueOperations::class.java) as org.springframework.data.redis.core.ValueOperations<String, String>
+        `when`(redisTemplate.opsForValue()).thenReturn(valueOps)
 
         orchestrator = SyncOrchestrator(
             syncServices = listOf(leagueSyncService1, leagueSyncService2),
             leagueRepository = leagueRepository,
-            matchRepository = matchRepository
+            matchRepository = matchRepository,
+            newsApiClient = newsApiClient,
+            redisTemplate = redisTemplate
         )
     }
 
@@ -150,5 +160,33 @@ class SyncOrchestratorTest {
 
         verify(leagueSyncService1).syncMatches(sportId, leagueId1)
         verify(leagueSyncService2).syncMatches(sportId, leagueId2)
+    }
+
+    @Test
+    fun `should sync news for all active leagues and save to redis with custom queries`() {
+        val activeLeagues = listOf(
+            LeagueJpaEntity(id = leagueId1, name = "Brasileirão", sportId = UUID.fromString("f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c"), isActive = true),
+            LeagueJpaEntity(id = leagueId2, name = "NBA", sportId = UUID.fromString("e5284bf1-d576-4740-97cc-f06bca181cb2"), isActive = true)
+        )
+        `when`(leagueRepository.findByIsActiveTrue()).thenReturn(activeLeagues)
+
+        val article = com.ligadospalpites.sportsfeed.infrastructure.client.NewsApiArticle(
+            title = "Test Article",
+            url = "https://test.com",
+            description = "Desc",
+            urlToImage = "img"
+        )
+        `when`(newsApiClient.fetchNews(query = "\"Brasileirão\" AND (futebol OR soccer OR football)", language = "pt")).thenReturn(listOf(article))
+        `when`(newsApiClient.fetchNews(query = "\"NBA\" AND (basquete OR basketball)", language = "pt")).thenReturn(listOf(article))
+
+        val results = orchestrator.syncAllActiveLeaguesNews()
+
+        assertEquals(2, results.size)
+        assertEquals("SUCCESS", results[0]["status"])
+        assertEquals("SUCCESS", results[1]["status"])
+
+        val valueOps = redisTemplate.opsForValue()
+        verify(valueOps).set(eq("news:f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c:$leagueId1"), anyString())
+        verify(valueOps).set(eq("news:e5284bf1-d576-4740-97cc-f06bca181cb2:$leagueId2"), anyString())
     }
 }
