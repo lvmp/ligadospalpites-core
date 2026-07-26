@@ -26,7 +26,7 @@ class ApiFootballClient(
         logger.info("Fetching matches from API-Football for league: $leagueId, season: $season")
         return try {
             val response = restClient.get()
-                .uri("/v3/fixtures?league=$leagueId&season=$season")
+                .uri("/fixtures?league=$leagueId&season=$season")
                 .retrieve()
                 .body(ApiFootballResponse::class.java)
             response?.response ?: emptyList()
