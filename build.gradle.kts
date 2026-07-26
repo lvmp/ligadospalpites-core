@@ -46,7 +46,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-aop:3.4.1")
 
     // Logging (Logbook, Logstash JSON Encoder, Kotlin Logging)
-    implementation("org.zalando:logbook-spring-boot-starter:3.7.2")
+    implementation("org.zalando:logbook-spring-boot-starter:4.0.4")
     implementation("net.logstash.logback:logstash-logback-encoder:7.4")
     implementation("io.github.oshai:kotlin-logging-jvm:5.1.0")
 
