@@ -24,8 +24,10 @@ EXPOSE 8080
 ENTRYPOINT ["java", \
             "-XX:+UseSerialGC", \
             "-Xms128m", \
-            "-Xmx192m", \
-            "-XX:MaxMetaspaceSize=192m", \
+            "-Xmx160m", \
+            "-XX:MaxMetaspaceSize=160m", \
+            "-XX:ReservedCodeCacheSize=64m", \
+            "-XX:MaxDirectMemorySize=32m", \
             "-Xss256k", \
             "-XX:TieredStopAtLevel=1", \
             "-Dspring.backgroundpreinitializer=false", \
