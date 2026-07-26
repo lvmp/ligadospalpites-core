@@ -6,6 +6,7 @@ import com.ligadospalpites.groups.infrastructure.persistence.RedisLeaderboardRep
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataMatchRepository
 import com.ligadospalpites.notifications.infrastructure.persistence.SpringDataInAppNotificationRepository
 import com.ligadospalpites.shared.identity.UserResolver
+import org.springframework.core.env.Environment
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.util.UUID
@@ -22,7 +23,8 @@ class DashboardController(
     private val notificationRepository: SpringDataInAppNotificationRepository,
     private val leaderboardRepository: RedisLeaderboardRepository,
     private val redisTemplate: org.springframework.data.redis.core.StringRedisTemplate,
-    private val userResolver: UserResolver
+    private val userResolver: UserResolver,
+    private val environment: Environment
 ) {
 
     private val objectMapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
@@ -103,6 +105,26 @@ class DashboardController(
                     }
                 } else {
                     // Fallback se o Redis estiver limpo ou recém-criado
+                    if (environment.activeProfiles.contains("prod")) {
+                        emptyList()
+                    } else {
+                        listOf(
+                            NewsResponse(
+                                title = "Brasil se prepara para enfrentar a França na final da Copa",
+                                url = "https://ge.globo.com/copa/news1.html",
+                                urlToImage = "https://ge.globo.com/image1.png",
+                                author = "Liga dos Palpites",
+                                description = "Matéria completa disponível no link abaixo.",
+                                category = "Copa do Mundo"
+                            )
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                // Em caso de falha de conexão do Redis, devolvemos o fallback amigável sem quebrar o BFF!
+                if (environment.activeProfiles.contains("prod")) {
+                    emptyList()
+                } else {
                     listOf(
                         NewsResponse(
                             title = "Brasil se prepara para enfrentar a França na final da Copa",
@@ -114,18 +136,6 @@ class DashboardController(
                         )
                     )
                 }
-            } catch (e: Exception) {
-                // Em caso de falha de conexão do Redis, devolvemos o fallback amigável sem quebrar o BFF!
-                listOf(
-                    NewsResponse(
-                        title = "Brasil se prepara para enfrentar a França na final da Copa",
-                        url = "https://ge.globo.com/copa/news1.html",
-                        urlToImage = "https://ge.globo.com/image1.png",
-                        author = "Liga dos Palpites",
-                        description = "Matéria completa disponível no link abaixo.",
-                        category = "Copa do Mundo"
-                    )
-                )
             }
         }, executor)
 

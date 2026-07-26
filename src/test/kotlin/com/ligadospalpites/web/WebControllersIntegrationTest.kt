@@ -67,6 +67,8 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
     @Autowired
     private lateinit var specialPredictionRepository: com.ligadospalpites.predictions.infrastructure.persistence.SpringDataSpecialPredictionRepository
 
+
+
     private val testUserId = UUID.fromString("9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d")
     private val footballId = UUID.fromString("f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c")
     private val worldCupLeagueId = UUID.fromString("e7b0a8f9-4b2e-4b67-8890-a54b3d7c588e")
@@ -236,6 +238,55 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.status", equalTo("SUCCESS")))
     }
+
+    @Test
+    fun `should return real user names and avatar urls from database in leaderboard rows`() {
+        val groupId = UUID.randomUUID()
+        val user1Id = UUID.randomUUID()
+        val user2Id = UUID.randomUUID()
+
+        // 1. Save users in database with custom names and avatar URLs
+        userRepository.save(
+            UserJpaEntity(
+                id = user1Id,
+                firebaseUid = "firebase-uid-1",
+                email = "user1@test.com",
+                name = "Vitor Palpiteiro",
+                avatarUrl = "https://example.com/vitor.png"
+            )
+        )
+        userRepository.save(
+            UserJpaEntity(
+                id = user2Id,
+                firebaseUid = "firebase-uid-2",
+                email = "user2@test.com",
+                name = "Juliana Pontas",
+                avatarUrl = "https://example.com/juliana.png"
+            )
+        )
+
+        // 2. Add users to the group and populate score in Redis sorted set
+        val leaderboardKey = "leaderboard:group:$groupId:overall"
+        redisTemplate.opsForZSet().add(leaderboardKey, user1Id.toString(), 250.0)
+        redisTemplate.opsForZSet().add(leaderboardKey, user2Id.toString(), 180.0)
+
+        // 3. Perform GET request and assert real database details are returned
+        mockMvc.perform(get("/api/v1/groups/$groupId/leaderboard")
+            .param("phase", "overall"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$", hasSize<Int>(2)))
+            .andExpect(jsonPath("$[0].userId", equalTo(user1Id.toString())))
+            .andExpect(jsonPath("$[0].displayName", equalTo("Vitor Palpiteiro")))
+            .andExpect(jsonPath("$[0].avatarUrl", equalTo("https://example.com/vitor.png")))
+            .andExpect(jsonPath("$[0].score", equalTo(250)))
+            .andExpect(jsonPath("$[0].position", equalTo(1)))
+            .andExpect(jsonPath("$[1].userId", equalTo(user2Id.toString())))
+            .andExpect(jsonPath("$[1].displayName", equalTo("Juliana Pontas")))
+            .andExpect(jsonPath("$[1].avatarUrl", equalTo("https://example.com/juliana.png")))
+            .andExpect(jsonPath("$[1].score", equalTo(180)))
+            .andExpect(jsonPath("$[1].position", equalTo(2)))
+    }
+
 
     @Test
     fun `should aggregate dashboard items correctly`() {
