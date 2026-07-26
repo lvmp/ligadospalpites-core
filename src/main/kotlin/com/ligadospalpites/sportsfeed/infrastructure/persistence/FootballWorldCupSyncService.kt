@@ -197,12 +197,12 @@ class FootballWorldCupSyncService(
             logger.info("Caching ${articles.size} news articles in Redis for sport: $sportId")
             val topArticles = articles
                 .filter { !it.title.isNullOrBlank() }
-                .distinctBy { it.title.lowercase().trim() }
+                .distinctBy { it.title!!.lowercase().trim() }
                 .take(10)
                 .map { art ->
                     mapOf(
-                        "title" to art.title,
-                        "url" to art.url,
+                        "title" to art.title!!,
+                        "url" to art.url!!,
                         "urlToImage" to (art.urlToImage ?: "https://ge.globo.com/image_default.png"),
                         "author" to (art.author ?: "Liga dos Palpites"),
                         "description" to (art.description ?: art.content ?: "Matéria completa disponível no link abaixo."),

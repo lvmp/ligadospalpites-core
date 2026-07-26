@@ -134,8 +134,8 @@ class SyncOrchestrator(
                 // Seleciona os top 10 artigos (conforme feedback do usuário) e os mapeia para JSON
                 val topArticles = articles.take(10).map { art ->
                     mapOf(
-                        "title" to art.title,
-                        "url" to art.url,
+                        "title" to art.title!!,
+                        "url" to art.url!!,
                         "urlToImage" to (art.urlToImage ?: "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=600"),
                         "author" to (art.author ?: "Liga dos Palpites"),
                         "description" to (art.description ?: "Matéria completa disponível no link abaixo."),

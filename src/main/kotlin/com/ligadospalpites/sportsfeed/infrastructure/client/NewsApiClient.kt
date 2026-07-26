@@ -35,7 +35,8 @@ class NewsApiClient(
                 }
                 .retrieve()
                 .body(NewsApiResponse::class.java)
-            response?.articles ?: emptyList()
+            val articles = response?.articles ?: emptyList()
+            articles.filter { !it.title.isNullOrBlank() && !it.url.isNullOrBlank() }
         } catch (e: Exception) {
             logger.error("Error communicating with NewsAPI: ${e.message}", e)
             throw e
@@ -51,10 +52,10 @@ data class NewsApiResponse(
 
 data class NewsApiArticle(
     val author: String? = null,
-    val title: String,
+    val title: String? = null,
     val description: String? = null,
     val content: String? = null,
-    val url: String,
+    val url: String? = null,
     val urlToImage: String? = null,
     val publishedAt: String? = null
 )
