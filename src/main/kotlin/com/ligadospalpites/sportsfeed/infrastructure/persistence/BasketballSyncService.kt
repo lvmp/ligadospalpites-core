@@ -189,8 +189,8 @@ class BasketballSyncService(
         return when (shortStatus.uppercase()) {
             "NS", "TBD" -> MatchStatus.SCHEDULED
             "Q1", "Q2", "Q3", "Q4", "OT", "BT", "HT", "LIVE" -> MatchStatus.LIVE
-            "FT", "AOT", "POST" -> MatchStatus.FINISHED
-            "CAN", "PST", "ABD" -> MatchStatus.CANCELLED
+            "FT", "AOT" -> MatchStatus.FINISHED
+            "CAN", "CANC", "PST", "POST", "ABD" -> MatchStatus.CANCELLED
             else -> MatchStatus.SCHEDULED
         }
     }
