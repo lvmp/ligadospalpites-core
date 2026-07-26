@@ -38,7 +38,7 @@
         <root level="INFO">
             <appender-ref ref="JSON" />
         </root>
-        <logger name="org.zalando.logbook" level="TRACE"/>
+        <logger name="org.zalando.logbook" level="WARN"/>
     </springProfile>
 
 </configuration>

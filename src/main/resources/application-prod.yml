@@ -3,6 +3,11 @@ spring:
     activate:
       on-profile: prod
 
+  main:
+    lazy-initialization: true
+  jmx:
+    enabled: false
+
   datasource:
     url: ${DATABASE_URL}
     username: ${DATABASE_USERNAME}
@@ -10,12 +15,13 @@ spring:
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 4
-      minimum-idle: 1
+      minimum-idle: 2
       idle-timeout: 30000
       connection-timeout: 20000
       max-lifetime: 1800000
 
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: none
     properties:
@@ -36,3 +42,8 @@ spring:
 server:
   port: 8080
   shutdown: graceful
+  tomcat:
+    threads:
+      max: 35
+      min-spare: 5
+    accept-count: 50

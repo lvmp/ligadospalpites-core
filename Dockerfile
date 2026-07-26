@@ -23,6 +23,9 @@ EXPOSE 8080
 # Inicialização altamente otimizada para recursos severamente limitados (GCP Free-Tier 512MB)
 ENTRYPOINT ["java", \
             "-XX:+UseSerialGC", \
+            "-Xms128m", \
+            "-Xmx200m", \
+            "-XX:MaxMetaspaceSize=128m", \
             "-Xss256k", \
             "-XX:TieredStopAtLevel=1", \
             "-Dspring.backgroundpreinitializer=false", \
