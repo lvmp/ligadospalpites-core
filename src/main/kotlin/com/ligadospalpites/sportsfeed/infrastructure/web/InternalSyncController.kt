@@ -17,10 +17,21 @@ class InternalSyncController(private val syncOrchestrator: SyncOrchestrator) {
 
     @PostMapping("/scheduler/process")
     fun processScheduler(
-        @RequestParam sportId: UUID,
-        @RequestParam leagueId: UUID
-    ): ResponseEntity<Map<String, String>> {
-        syncOrchestrator.syncMatches(sportId, leagueId)
-        return ResponseEntity.ok(mapOf("status" to "SUCCESS", "message" to "Matches synced for league $leagueId"))
+        @RequestParam(required = false) sportId: UUID?,
+        @RequestParam(required = false) leagueId: UUID?,
+        @RequestParam(required = false, defaultValue = "false") force: Boolean
+    ): ResponseEntity<Map<String, Any>> {
+        return if (sportId != null && leagueId != null) {
+            syncOrchestrator.syncMatches(sportId, leagueId)
+            ResponseEntity.ok(mapOf("status" to "SUCCESS", "message" to "Matches synced for league $leagueId"))
+        } else {
+            val results = syncOrchestrator.syncAllActiveLeagues(force)
+            ResponseEntity.ok(mapOf(
+                "status" to "SUCCESS",
+                "message" to "All active leagues sync completed",
+                "results" to results
+            ))
+        }
     }
 }
+
