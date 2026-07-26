@@ -1,0 +1,2 @@
+ALTER TABLE tbl_groups ADD COLUMN logo_url VARCHAR(512);
+ALTER TABLE tbl_leagues ADD COLUMN logo_url VARCHAR(512);

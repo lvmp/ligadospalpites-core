@@ -20,6 +20,9 @@ class UserJpaEntity(
     @Column(nullable = false, length = 255)
     val name: String = "",
 
+    @Column(name = "avatar_url", nullable = true, length = 512)
+    val avatarUrl: String? = null,
+
     @Column(name = "created_at", nullable = false, updatable = false)
     val createdAt: Instant = Instant.now()
 ) {
@@ -28,6 +31,7 @@ class UserJpaEntity(
         firebaseUid = firebaseUid,
         email = email,
         name = name,
+        avatarUrl = avatarUrl,
         createdAt = createdAt
     )
 
@@ -37,6 +41,7 @@ class UserJpaEntity(
             firebaseUid = user.firebaseUid,
             email = user.email,
             name = user.name,
+            avatarUrl = user.avatarUrl,
             createdAt = user.createdAt
         )
     }

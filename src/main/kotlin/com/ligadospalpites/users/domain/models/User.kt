@@ -8,5 +8,6 @@ data class User(
     val firebaseUid: String,
     val email: String,
     val name: String,
+    val avatarUrl: String? = null,
     val createdAt: Instant = Instant.now()
 )

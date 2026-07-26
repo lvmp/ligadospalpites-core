@@ -77,7 +77,8 @@ class DashboardController(
                         groupId = group.id,
                         groupName = group.name,
                         userRank = rank?.toInt() ?: 1,
-                        totalMembers = totalMembers
+                        totalMembers = totalMembers,
+                        logoUrl = group.logoUrl ?: "https://api.dicebear.com/7.x/initials/svg?seed=${group.name}"
                     )
                 } else null
             }
@@ -196,7 +197,8 @@ data class GroupHighlightResponse(
     val groupId: UUID,
     val groupName: String,
     val userRank: Int,
-    val totalMembers: Int
+    val totalMembers: Int,
+    val logoUrl: String? = null
 )
 
 data class NewsResponse(

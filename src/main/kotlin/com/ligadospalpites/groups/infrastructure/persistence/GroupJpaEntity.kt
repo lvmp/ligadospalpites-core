@@ -19,6 +19,9 @@ class GroupJpaEntity(
     @Column(name = "scoring_rules_json", nullable = false, length = 1000)
     val scoringRulesJson: String = "",
 
+    @Column(name = "logo_url", nullable = true, length = 512)
+    val logoUrl: String? = null,
+
     @Column(name = "created_at", nullable = false)
     val createdAt: Instant = Instant.now()
 )

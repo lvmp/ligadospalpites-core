@@ -172,6 +172,10 @@ class FirebaseUserMigrationUseCase(
                 val firebaseUid = userDoc.id
                 val email = userDoc.getString("email") ?: "${firebaseUid}@migrated.com"
                 val name = userDoc.getString("name") ?: userDoc.getString("displayName") ?: "Usuário Migrado"
+                val avatarUrl = userDoc.getString("photoUrl")
+                    ?: userDoc.getString("photo_url")
+                    ?: userDoc.getString("avatarUrl")
+                    ?: userDoc.getString("avatar_url")
                 val createdAt = parseTimestamp(userDoc.get("createdAt"))
 
                 val existing = userRepository.findByFirebaseUid(firebaseUid)
@@ -181,6 +185,7 @@ class FirebaseUserMigrationUseCase(
                         firebaseUid = firebaseUid,
                         email = email,
                         name = name,
+                        avatarUrl = avatarUrl,
                         createdAt = createdAt
                     )
                     userRepository.save(newUser)
@@ -201,6 +206,12 @@ class FirebaseUserMigrationUseCase(
                 val postgresGroupId = UUID.nameUUIDFromBytes(firestoreGroupId.toByteArray())
                 val nameLiga = groupDoc.getString("nameLiga") ?: groupDoc.getString("name") ?: "Liga $firestoreGroupId"
                 val createdBy = groupDoc.getString("createdBy") ?: ""
+                val logoUrl = groupDoc.getString("logoUrl")
+                    ?: groupDoc.getString("logo_url")
+                    ?: groupDoc.getString("photoUrl")
+                    ?: groupDoc.getString("photo_url")
+                    ?: groupDoc.getString("imageUrl")
+                    ?: groupDoc.getString("image_url")
                 val createdAt = parseTimestamp(groupDoc.get("createdAt"))
 
                 // Resolve o criador no banco Postgres
@@ -217,6 +228,7 @@ class FirebaseUserMigrationUseCase(
                         name = nameLiga,
                         creatorId = creatorId,
                         scoringRulesJson = "{\"pointsExactScore\":10,\"pointsCorrectWinner\":5,\"pointsGoalDifference\":3}",
+                        logoUrl = logoUrl,
                         createdAt = createdAt
                     )
                     groupRepository.save(newGroup)
@@ -796,6 +808,7 @@ class FirebaseUserMigrationUseCase(
                     firebaseUid = uid,
                     email = mockEmails[i],
                     name = mockNames[i],
+                    avatarUrl = "https://api.dicebear.com/7.x/bottts/svg?seed=$uid",
                     createdAt = Instant.now().minusSeconds(3600 * 48)
                 )
                 val saved = userRepository.save(newUser)

@@ -5,6 +5,7 @@ import com.ligadospalpites.groups.infrastructure.persistence.SpringDataGroupMemb
 import com.ligadospalpites.groups.infrastructure.persistence.RedisLeaderboardRepository
 import com.ligadospalpites.groups.infrastructure.persistence.GroupMemberId
 import com.ligadospalpites.shared.identity.UserResolver
+import com.ligadospalpites.users.infrastructure.persistence.SpringDataUserRepository
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -16,7 +17,8 @@ class GroupController(
     private val groupRepository: SpringDataGroupRepository,
     private val memberRepository: SpringDataGroupMemberRepository,
     private val leaderboardRepository: RedisLeaderboardRepository,
-    private val userResolver: UserResolver
+    private val userResolver: UserResolver,
+    private val userRepository: SpringDataUserRepository
 ) {
 
     // 1. Kick/Remove member (Restricted to group creator)
@@ -66,21 +68,34 @@ class GroupController(
         val key = "leaderboard:group:$groupId:$selectedPhase"
         val topUsers = leaderboardRepository.getTopUsers(key, 50)
 
-        var position = 1
-        val rows = topUsers.map { tuple ->
-            val userIdStr = tuple.value ?: ""
-            val score = tuple.score ?: 0.0
-
-            // Simulate profile lookup (Firebase Auth/Firestore resolution)
-            val displayName = when (userIdStr) {
-                "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" -> "Você"
-                else -> "Usuário ${userIdStr.take(5)}"
+        // Fetch user profiles in batch from database
+        val userIds = topUsers.mapNotNull { tuple ->
+            try {
+                UUID.fromString(tuple.value ?: "")
+            } catch (e: Exception) {
+                null
             }
-            val avatarUrl = "https://api.dicebear.com/7.x/bottts/svg?seed=$userIdStr"
+        }
+        val users = userRepository.findAllById(userIds)
+        val userMap = users.associateBy { it.id }
+
+        var position = 1
+        val rows = topUsers.mapNotNull { tuple ->
+            val userIdStr = tuple.value ?: return@mapNotNull null
+            val score = tuple.score ?: 0.0
+            val userId = try {
+                UUID.fromString(userIdStr)
+            } catch (e: Exception) {
+                return@mapNotNull null
+            }
+
+            val user = userMap[userId]
+            val displayName = user?.name ?: "Usuário ${userIdStr.take(5)}"
+            val avatarUrl = user?.avatarUrl ?: "https://api.dicebear.com/7.x/bottts/svg?seed=$userIdStr"
 
             LeaderboardRow(
                 position = position++,
-                userId = UUID.fromString(userIdStr),
+                userId = userId,
                 displayName = displayName,
                 avatarUrl = avatarUrl,
                 score = score.toInt()
