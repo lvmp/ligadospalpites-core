@@ -1,7 +1,6 @@
 package com.ligadospalpites.users.application.usecases
 
 import com.google.cloud.firestore.Firestore
-import com.google.cloud.firestore.QueryDocumentSnapshot
 import com.ligadospalpites.groups.infrastructure.persistence.GroupJpaEntity
 import com.ligadospalpites.groups.infrastructure.persistence.GroupMemberJpaEntity
 import com.ligadospalpites.groups.infrastructure.persistence.SpringDataGroupMemberRepository
