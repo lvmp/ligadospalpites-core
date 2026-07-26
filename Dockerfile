@@ -25,10 +25,9 @@ ENTRYPOINT ["java", \
             "-XX:+UseSerialGC", \
             "-Xms128m", \
             "-Xmx140m", \
-            "-XX:MaxMetaspaceSize=140m", \
+            "-XX:MaxMetaspaceSize=160m", \
             "-XX:ReservedCodeCacheSize=48m", \
             "-XX:MaxDirectMemorySize=16m", \
-            "-XX:CompressedClassSpaceSize=16m", \
             "-Dio.netty.allocator.numDirectArenas=1", \
             "-Dio.netty.allocator.numHeapArenas=1", \
             "-Dio.netty.allocator.maxOrder=3", \
