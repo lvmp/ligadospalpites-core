@@ -22,7 +22,7 @@ class WorldCupMockSyncService(
     private val worldCupSeasonId = UUID.fromString("50c22998-33b2-4d9a-ba02-4be71a1be992")
 
     override fun supports(sportId: UUID, leagueId: UUID): Boolean {
-        return sportId == footballId
+        return sportId == footballId && leagueId == worldCupLeagueId
     }
 
     override fun syncMatches(sportId: UUID, leagueId: UUID) {
