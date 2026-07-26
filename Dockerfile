@@ -24,10 +24,15 @@ EXPOSE 8080
 ENTRYPOINT ["java", \
             "-XX:+UseSerialGC", \
             "-Xms128m", \
-            "-Xmx160m", \
-            "-XX:MaxMetaspaceSize=160m", \
-            "-XX:ReservedCodeCacheSize=64m", \
-            "-XX:MaxDirectMemorySize=32m", \
+            "-Xmx140m", \
+            "-XX:MaxMetaspaceSize=140m", \
+            "-XX:ReservedCodeCacheSize=48m", \
+            "-XX:MaxDirectMemorySize=16m", \
+            "-XX:CompressedClassSpaceSize=16m", \
+            "-Dio.netty.allocator.numDirectArenas=1", \
+            "-Dio.netty.allocator.numHeapArenas=1", \
+            "-Dio.netty.allocator.maxOrder=3", \
+            "-Dio.netty.noPreferDirect=true", \
             "-Xss256k", \
             "-XX:TieredStopAtLevel=1", \
             "-Dspring.backgroundpreinitializer=false", \
