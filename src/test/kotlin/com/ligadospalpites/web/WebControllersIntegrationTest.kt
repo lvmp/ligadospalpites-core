@@ -354,6 +354,129 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `should filter dashboard next matches by sportId when sportId parameter is provided`() {
+        val otherSportId = UUID.randomUUID()
+        sportRepository.save(SportJpaEntity(id = otherSportId, name = "Basquete"))
+
+        // Save a Football Match
+        matchRepository.save(
+            MatchJpaEntity(
+                id = UUID.randomUUID(),
+                sportId = footballId,
+                leagueId = worldCupLeagueId,
+                seasonId = testSeasonId,
+                homeTeamName = "Brasil",
+                awayTeamName = "Argentina",
+                kickoffTime = Instant.now().plus(1, ChronoUnit.DAYS),
+                status = MatchStatus.SCHEDULED,
+                phase = "Fase de Grupos"
+            )
+        )
+
+        // Save a Basketball Match
+        matchRepository.save(
+            MatchJpaEntity(
+                id = UUID.randomUUID(),
+                sportId = otherSportId,
+                leagueId = worldCupLeagueId,
+                seasonId = testSeasonId,
+                homeTeamName = "Lakers",
+                awayTeamName = "Celtics",
+                kickoffTime = Instant.now().plus(2, ChronoUnit.DAYS),
+                status = MatchStatus.SCHEDULED,
+                phase = "Temporada Regular"
+            )
+        )
+
+        // Query only Basketball (otherSportId)
+        val mvcResult = mockMvc.perform(get("/api/v1/home/dashboard")
+            .header("X-User-Id", testUserId.toString())
+            .param("sportId", otherSportId.toString()))
+            .andExpect(request().asyncStarted())
+            .andReturn()
+
+        mockMvc.perform(asyncDispatch(mvcResult))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.nextMatches", hasSize<Int>(1)))
+            .andExpect(jsonPath("$.nextMatches[0].homeTeam", equalTo("Lakers")))
+    }
+
+    @Test
+    fun `should filter dashboard next matches by leagueId when leagueId represents a real league`() {
+        val otherLeagueId = UUID.randomUUID()
+        leagueRepository.save(LeagueJpaEntity(id = otherLeagueId, name = "Brasileirão", sportId = footballId, isActive = true))
+
+        // Save a World Cup Match
+        matchRepository.save(
+            MatchJpaEntity(
+                id = UUID.randomUUID(),
+                sportId = footballId,
+                leagueId = worldCupLeagueId,
+                seasonId = testSeasonId,
+                homeTeamName = "Brasil",
+                awayTeamName = "Argentina",
+                kickoffTime = Instant.now().plus(1, ChronoUnit.DAYS),
+                status = MatchStatus.SCHEDULED,
+                phase = "Fase de Grupos"
+            )
+        )
+
+        // Save a Brasileirao Match
+        matchRepository.save(
+            MatchJpaEntity(
+                id = UUID.randomUUID(),
+                sportId = footballId,
+                leagueId = otherLeagueId,
+                seasonId = testSeasonId,
+                homeTeamName = "Flamengo",
+                awayTeamName = "Palmeiras",
+                kickoffTime = Instant.now().plus(2, ChronoUnit.DAYS),
+                status = MatchStatus.SCHEDULED,
+                phase = "Rodada 1"
+            )
+        )
+
+        // Query only Brasileirao (otherLeagueId)
+        val mvcResult = mockMvc.perform(get("/api/v1/home/dashboard")
+            .header("X-User-Id", testUserId.toString())
+            .param("leagueId", otherLeagueId.toString()))
+            .andExpect(request().asyncStarted())
+            .andReturn()
+
+        mockMvc.perform(asyncDispatch(mvcResult))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.nextMatches", hasSize<Int>(1)))
+            .andExpect(jsonPath("$.nextMatches[0].homeTeam", equalTo("Flamengo")))
+    }
+
+    @Test
+    fun `should return group ranking and points when leagueId represents a group`() {
+        val groupId = UUID.randomUUID()
+        groupRepository.save(GroupJpaEntity(id = groupId, name = "Grupo dos Amigos", creatorId = testUserId, scoringRulesJson = "{}"))
+        groupMemberRepository.save(GroupMemberJpaEntity(groupId = groupId, userId = testUserId, accumulatedPoints = 450))
+
+        // Setup Redis Leaderboard for Group
+        val groupLeaderboardKey = "leaderboard:group:$groupId:overall"
+        redisTemplate.opsForZSet().add(groupLeaderboardKey, testUserId.toString(), 450.0)
+
+        // Setup Redis Leaderboard for Global
+        val globalLeaderboardKey = "leaderboard:global"
+        redisTemplate.opsForZSet().add(globalLeaderboardKey, testUserId.toString(), 250.0)
+
+        // Perform GET request with group as leagueId
+        val mvcResult = mockMvc.perform(get("/api/v1/home/dashboard")
+            .header("X-User-Id", testUserId.toString())
+            .param("leagueId", groupId.toString()))
+            .andExpect(request().asyncStarted())
+            .andReturn()
+
+        mockMvc.perform(asyncDispatch(mvcResult))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.points", equalTo(450)))
+            .andExpect(jsonPath("$.rankGlobal", equalTo(1)))
+    }
+
+    @Test
     fun `should register and update device fcm token successfully`() {
         val deviceId = UUID.randomUUID().toString()
         val fcmToken = "test-fcm-token-12345"

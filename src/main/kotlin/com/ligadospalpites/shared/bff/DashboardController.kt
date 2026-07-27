@@ -41,18 +41,31 @@ class DashboardController(
 
         // 1. Fetch Rank and Points (Async)
         val rankAndPointsFuture = CompletableFuture.supplyAsync({
-            val globalKey = "leaderboard:global"
-            val rankAndScore = leaderboardRepository.getUserRankAndScore(globalKey, userUUID)
+            val isGroup = leagueId != null && groupRepository.existsById(leagueId)
+            val key = if (isGroup) "leaderboard:group:$leagueId:overall" else "leaderboard:global"
+            val rankAndScore = leaderboardRepository.getUserRankAndScore(key, userUUID)
             val rank = rankAndScore.first?.toInt() ?: 1
-            val score = rankAndScore.second?.toInt() ?: 120
+            val score = rankAndScore.second?.toInt() ?: (if (isGroup) 0 else 120)
             Pair(rank, score)
         }, executor)
 
         // 2. Fetch Next Scheduled Matches (Async)
         val nextMatchesFuture = CompletableFuture.supplyAsync({
-            val matches = matchRepository.findAll()
-            matches.filter { it.status.name == "SCHEDULED" }
-                .sortedBy { it.kickoffTime }
+            var matches = matchRepository.findAll()
+            matches = matches.filter { it.status.name == "SCHEDULED" }
+
+            if (sportId != null) {
+                matches = matches.filter { it.sportId == sportId }
+            }
+
+            if (leagueId != null) {
+                val isGroup = groupRepository.existsById(leagueId)
+                if (!isGroup) {
+                    matches = matches.filter { it.leagueId == leagueId }
+                }
+            }
+
+            matches.sortedBy { it.kickoffTime }
                 .take(5)
                 .map {
                     NextMatchResponse(
@@ -89,7 +102,8 @@ class DashboardController(
         // 4. Fetch News (Async from Redis Cache with Fallback)
         val newsFuture = CompletableFuture.supplyAsync({
             val targetSportId = sportId ?: UUID.fromString("f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c")
-            val cacheKey = if (leagueId != null) "news:$targetSportId:$leagueId" else "news:$targetSportId"
+            val isGroup = leagueId != null && groupRepository.existsById(leagueId)
+            val cacheKey = if (leagueId != null && !isGroup) "news:$targetSportId:$leagueId" else "news:$targetSportId"
             try {
                 val cachedNewsJson = redisTemplate.opsForValue().get(cacheKey)
                 if (!cachedNewsJson.isNullOrBlank()) {
