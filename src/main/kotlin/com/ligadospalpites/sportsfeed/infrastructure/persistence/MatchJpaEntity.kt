@@ -43,6 +43,12 @@ class MatchJpaEntity(
     @Column(name = "phase", length = 100)
     val phase: String? = null,
 
+    @Column(name = "home_team_logo_url", length = 512)
+    val homeTeamLogoUrl: String? = null,
+
+    @Column(name = "away_team_logo_url", length = 512)
+    val awayTeamLogoUrl: String? = null,
+
     @Column(name = "updated_at", nullable = false)
     val updatedAt: Instant = Instant.now()
 ) {
@@ -58,6 +64,8 @@ class MatchJpaEntity(
         homeScore = homeScore,
         awayScore = awayScore,
         phase = phase,
+        homeTeamLogoUrl = homeTeamLogoUrl,
+        awayTeamLogoUrl = awayTeamLogoUrl,
         updatedAt = updatedAt
     )
 
@@ -74,6 +82,8 @@ class MatchJpaEntity(
             homeScore = match.homeScore,
             awayScore = match.awayScore,
             phase = match.phase,
+            homeTeamLogoUrl = match.homeTeamLogoUrl,
+            awayTeamLogoUrl = match.awayTeamLogoUrl,
             updatedAt = match.updatedAt
         )
     }

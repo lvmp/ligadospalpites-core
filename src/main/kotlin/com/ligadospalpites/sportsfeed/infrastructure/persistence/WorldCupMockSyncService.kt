@@ -106,6 +106,8 @@ class WorldCupMockSyncService(
             seasonId = worldCupSeasonId,
             homeTeamName = home,
             awayTeamName = away,
+            homeTeamLogoUrl = "https://api.dicebear.com/7.x/initials/svg?seed=$home&radius=50",
+            awayTeamLogoUrl = "https://api.dicebear.com/7.x/initials/svg?seed=$away&radius=50",
             homeScore = homeScore,
             awayScore = awayScore,
             kickoffTime = Instant.now().plus(daysOffset, ChronoUnit.DAYS),

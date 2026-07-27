@@ -22,5 +22,7 @@ data class Match(
     val homeScore: Int?,
     val awayScore: Int?,
     val phase: String? = null,
+    val homeTeamLogoUrl: String? = null,
+    val awayTeamLogoUrl: String? = null,
     val updatedAt: Instant = Instant.now()
 )

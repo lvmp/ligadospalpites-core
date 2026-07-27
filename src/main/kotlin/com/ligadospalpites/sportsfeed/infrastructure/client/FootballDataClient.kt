@@ -55,7 +55,8 @@ data class FootballDataMatch(
 data class FootballDataTeam(
     val id: Long? = null,
     val name: String? = null,
-    val shortName: String? = null
+    val shortName: String? = null,
+    val crest: String? = null
 )
 
 data class FootballDataScore(

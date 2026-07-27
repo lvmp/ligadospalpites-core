@@ -59,7 +59,8 @@ data class ApiBasketballTeams(
 )
 
 data class ApiBasketballTeam(
-    val name: String
+    val name: String,
+    val logo: String? = null
 )
 
 data class ApiBasketballScores(

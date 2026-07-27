@@ -179,7 +179,9 @@ data class MatchResponse(
     val status: String,
     val scoreHome: Int?,
     val scoreAway: Int?,
-    val phase: String? = null
+    val phase: String? = null,
+    val homeTeamLogoUrl: String? = null,
+    val awayTeamLogoUrl: String? = null
 ) {
     companion object {
         fun fromEntity(entity: MatchJpaEntity) = MatchResponse(
@@ -192,7 +194,9 @@ data class MatchResponse(
             status = entity.status.name,
             scoreHome = entity.homeScore,
             scoreAway = entity.awayScore,
-            phase = entity.phase
+            phase = entity.phase,
+            homeTeamLogoUrl = entity.homeTeamLogoUrl,
+            awayTeamLogoUrl = entity.awayTeamLogoUrl
         )
     }
 }

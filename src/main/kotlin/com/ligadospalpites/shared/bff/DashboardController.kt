@@ -73,7 +73,9 @@ class DashboardController(
                         homeTeam = it.homeTeamName,
                         awayTeam = it.awayTeamName,
                         kickoffTime = it.kickoffTime.toString(),
-                        phase = it.phase
+                        phase = it.phase,
+                        homeTeamLogoUrl = it.homeTeamLogoUrl,
+                        awayTeamLogoUrl = it.awayTeamLogoUrl
                     )
                 }
         }, executor)
@@ -207,7 +209,9 @@ data class NextMatchResponse(
     val homeTeam: String,
     val awayTeam: String,
     val kickoffTime: String,
-    val phase: String? = null
+    val phase: String? = null,
+    val homeTeamLogoUrl: String? = null,
+    val awayTeamLogoUrl: String? = null
 )
 
 data class GroupHighlightResponse(
