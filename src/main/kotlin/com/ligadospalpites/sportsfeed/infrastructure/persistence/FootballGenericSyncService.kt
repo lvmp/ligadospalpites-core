@@ -200,7 +200,7 @@ class FootballGenericSyncService(
                 status = mapFootballDataStatus(match.status),
                 homeScore = match.score?.fullTime?.home,
                 awayScore = match.score?.fullTime?.away,
-                phase = translateStage(match.stage),
+                phase = translateStage(match.stage, match.matchday),
                 updatedAt = Instant.now()
             )
         }
@@ -233,7 +233,7 @@ class FootballGenericSyncService(
                 status = mapApiFootballStatus(wrapper.fixture.status.short),
                 homeScore = wrapper.goals.home,
                 awayScore = wrapper.goals.away,
-                phase = "Rodada Regular",
+                phase = translateStage(wrapper.league?.round, null),
                 updatedAt = Instant.now()
             )
         }
@@ -327,17 +327,47 @@ class FootballGenericSyncService(
             .trim()
     }
 
-    private fun translateStage(stage: String?): String {
-        return when (stage?.uppercase()) {
-            "GROUP_STAGE", "GROUPS" -> "Fase de Grupos"
-            "LAST_32", "ROUND_OF_32" -> "Dezesseis-avos de Final"
-            "LAST_16", "ROUND_OF_16" -> "Oitavas de Final"
-            "QUARTER_FINALS" -> "Quartas de Final"
-            "SEMI_FINALS" -> "Semifinal"
-            "THIRD_PLACE" -> "Disputa do 3º Lugar"
-            "FINAL", "GRANDE FINAL" -> "Grande Final"
-            else -> stage ?: "Fase Regular"
+    private fun translateStage(stage: String?, matchday: Int? = null): String {
+        val stageUpper = stage?.uppercase()?.trim() ?: ""
+        return when {
+            stageUpper == "GROUP_STAGE" || stageUpper == "GROUPS" -> "Fase de Grupos"
+            stageUpper == "LAST_32" || stageUpper == "ROUND_OF_32" -> "Dezesseis-avos de Final"
+            stageUpper == "LAST_16" || stageUpper == "ROUND_OF_16" -> "Oitavas de Final"
+            stageUpper == "QUARTER_FINALS" -> "Quartas de Final"
+            stageUpper == "SEMI_FINALS" -> "Semifinal"
+            stageUpper == "THIRD_PLACE" -> "Disputa do 3º Lugar"
+            stageUpper == "FINAL" || stageUpper == "GRANDE FINAL" -> "Grande Final"
+            stageUpper.contains("REGULAR") || stageUpper.contains("TURNO") || stageUpper.contains("RODADA") -> {
+                determineTurno(stage, matchday)
+            }
+            else -> {
+                if (matchday != null || stageUpper.isNotBlank()) {
+                    determineTurno(stage, matchday)
+                } else {
+                    "1º Turno"
+                }
+            }
         }
+    }
+
+    private fun determineTurno(stage: String?, matchday: Int?): String {
+        if (matchday != null) {
+            return if (matchday <= 19) "1º Turno" else "2º Turno"
+        }
+        if (!stage.isNullOrBlank()) {
+            val upper = stage.uppercase()
+            if (upper.contains("2º") || upper.contains("2_TURNO") || upper.contains("TURNO 2") || upper.endsWith("_2") || upper.endsWith("- 2")) {
+                return "2º Turno"
+            }
+            if (upper.contains("1º") || upper.contains("1_TURNO") || upper.contains("TURNO 1") || upper.endsWith("_1") || upper.endsWith("- 1")) {
+                return "1º Turno"
+            }
+            val matchNumber = Regex("\\d+").find(stage)?.value?.toIntOrNull()
+            if (matchNumber != null) {
+                return if (matchNumber <= 19) "1º Turno" else "2º Turno"
+            }
+        }
+        return "1º Turno"
     }
 
     private fun mapFootballDataStatus(status: String): MatchStatus {

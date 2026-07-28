@@ -5,6 +5,7 @@ import com.ligadospalpites.groups.infrastructure.persistence.SpringDataGroupRepo
 import com.ligadospalpites.groups.infrastructure.persistence.RedisLeaderboardRepository
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataMatchRepository
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataLeagueRepository
+import com.ligadospalpites.sportsfeed.domain.models.formatMatchPhase
 import com.ligadospalpites.notifications.infrastructure.persistence.SpringDataInAppNotificationRepository
 import com.ligadospalpites.predictions.infrastructure.persistence.SpringDataPredictionRepository
 import com.ligadospalpites.predictions.infrastructure.persistence.SpringDataSpecialPredictionRepository
@@ -109,7 +110,7 @@ class DashboardController(
                         homeTeam = it.homeTeamName,
                         awayTeam = it.awayTeamName,
                         kickoffTime = it.kickoffTime.toString(),
-                        phase = it.phase,
+                        phase = formatMatchPhase(it.phase),
                         homeTeamLogoUrl = it.homeTeamLogoUrl,
                         awayTeamLogoUrl = it.awayTeamLogoUrl
                     )

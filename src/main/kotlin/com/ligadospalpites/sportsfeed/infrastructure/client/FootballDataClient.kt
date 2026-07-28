@@ -47,6 +47,7 @@ data class FootballDataMatch(
     val utcDate: String,
     val status: String,
     val stage: String,
+    val matchday: Int? = null,
     val homeTeam: FootballDataTeam,
     val awayTeam: FootballDataTeam,
     val score: FootballDataScore? = null

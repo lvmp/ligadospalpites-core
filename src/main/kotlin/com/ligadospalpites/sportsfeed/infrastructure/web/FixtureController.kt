@@ -5,6 +5,7 @@ import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataLeagu
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataMatchRepository
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataSeasonRepository
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.MatchJpaEntity
+import com.ligadospalpites.sportsfeed.domain.models.formatMatchPhase
 import com.ligadospalpites.users.infrastructure.persistence.SpringDataUserEntitlementRepository
 import com.ligadospalpites.shared.identity.UserResolver
 import org.springframework.http.HttpStatus
@@ -195,7 +196,7 @@ data class MatchResponse(
             status = entity.status.name,
             scoreHome = entity.homeScore,
             scoreAway = entity.awayScore,
-            phase = entity.phase,
+            phase = formatMatchPhase(entity.phase),
             homeTeamLogoUrl = entity.homeTeamLogoUrl,
             awayTeamLogoUrl = entity.awayTeamLogoUrl
         )

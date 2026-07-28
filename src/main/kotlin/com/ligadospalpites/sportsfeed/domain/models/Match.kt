@@ -26,3 +26,21 @@ data class Match(
     val awayTeamLogoUrl: String? = null,
     val updatedAt: Instant = Instant.now()
 )
+
+fun formatMatchPhase(phase: String?): String? {
+    if (phase.isNullOrBlank()) return phase
+    val upper = phase.uppercase().replace("_", " ").trim()
+    return when {
+        upper == "REGULAR SEASON 1" || upper == "REGULAR SEASON" || upper == "RODADA REGULAR" || upper == "FASE REGULAR" -> "1º Turno"
+        upper == "REGULAR SEASON 2" -> "2º Turno"
+        upper.startsWith("REGULAR SEASON") -> {
+            val num = Regex("\\d+").find(upper)?.value?.toIntOrNull()
+            if (num != null) {
+                if (num <= 19) "1º Turno" else "2º Turno"
+            } else {
+                "1º Turno"
+            }
+        }
+        else -> phase
+    }
+}

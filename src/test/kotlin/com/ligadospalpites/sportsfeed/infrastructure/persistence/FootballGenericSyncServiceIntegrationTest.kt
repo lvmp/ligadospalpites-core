@@ -64,6 +64,40 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `should translate REGULAR_SEASON to 1º Turno for matchday 1 to 19 and 2º Turno for matchday 20+`() {
+        val matchTurno1 = FootballDataMatch(
+            id = 101L,
+            utcDate = "2026-05-01T19:00:00Z",
+            status = "SCHEDULED",
+            stage = "REGULAR_SEASON",
+            matchday = 5,
+            homeTeam = FootballDataTeam(1L, "Flamengo", "Flamengo"),
+            awayTeam = FootballDataTeam(2L, "Fluminense", "Fluminense")
+        )
+        val matchTurno2 = FootballDataMatch(
+            id = 102L,
+            utcDate = "2026-09-01T19:00:00Z",
+            status = "SCHEDULED",
+            stage = "REGULAR_SEASON",
+            matchday = 25,
+            homeTeam = FootballDataTeam(2L, "Fluminense", "Fluminense"),
+            awayTeam = FootballDataTeam(1L, "Flamengo", "Flamengo")
+        )
+        `when`(footballDataClient.fetchMatches("BSA")).thenReturn(listOf(matchTurno1, matchTurno2))
+
+        syncService.syncMatches(UUID.randomUUID(), brasileiraoLeagueId)
+
+        val saved = matchRepository.findByLeagueId(brasileiraoLeagueId)
+        assertEquals(2, saved.size)
+        val t1 = saved.find { it.homeTeamName == "Flamengo" }
+        val t2 = saved.find { it.homeTeamName == "Fluminense" }
+        assertNotNull(t1)
+        assertNotNull(t2)
+        assertEquals("1º Turno", t1?.phase)
+        assertEquals("2º Turno", t2?.phase)
+    }
+
+    @Test
     fun `should fallback to ApiFootball when primary provider fails`() {
         `when`(footballDataClient.fetchMatches("BSA")).thenThrow(RuntimeException("Football-Data is offline"))
 

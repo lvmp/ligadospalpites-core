@@ -43,8 +43,15 @@ data class ApiFootballResponse(
 
 data class ApiFootballFixtureWrapper(
     val fixture: ApiFootballFixture,
+    val league: ApiFootballLeague? = null,
     val teams: ApiFootballTeams,
     val goals: ApiFootballGoals
+)
+
+data class ApiFootballLeague(
+    val id: Long? = null,
+    val name: String? = null,
+    val round: String? = null
 )
 
 data class ApiFootballFixture(
