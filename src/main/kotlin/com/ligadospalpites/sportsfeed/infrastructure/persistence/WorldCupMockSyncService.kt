@@ -72,16 +72,18 @@ class WorldCupMockSyncService(
     }
 
     override fun syncNews(sportId: UUID) {
-        val mockArticles = listOf(
+        val now = Instant.now()
+        val mockArticles = (1..15).map { index ->
             mapOf(
-                "title" to "Brasil se prepara para enfrentar a França na final da Copa",
-                "url" to "https://ge.globo.com/copa/news1.html",
-                "urlToImage" to "https://ge.globo.com/image1.png",
+                "title" to "Brasil se prepara para enfrentar a França na final da Copa - Parte $index",
+                "url" to "https://ge.globo.com/copa/news$index.html",
+                "urlToImage" to "https://ge.globo.com/image$index.png",
                 "author" to "Globo Esporte",
-                "description" to "A seleção brasileira realizou seu último treino tático antes da grande final contra a França.",
-                "category" to "Copa do Mundo"
+                "description" to "Descrição detalhada da matéria mockada número $index para verificação de rolagem infinita.",
+                "category" to "Copa do Mundo",
+                "publishedAt" to now.minus(index.toLong(), java.time.temporal.ChronoUnit.HOURS).toString()
             )
-        )
+        }
         try {
             val json = objectMapper.writeValueAsString(mockArticles)
             redisTemplate.opsForValue().set("news:$sportId", json)

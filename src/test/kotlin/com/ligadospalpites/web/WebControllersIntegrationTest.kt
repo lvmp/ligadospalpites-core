@@ -325,6 +325,80 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `should return paginated news from Redis cache`() {
+        val targetSportId = footballId
+        val cacheKey = "news:$targetSportId"
+        
+        // 1. Preparar dados de notícias simulados no Redis (25 artigos)
+        val mockArticles = (1..25).map { index ->
+            mapOf(
+                "title" to "Artigo Sincronizado $index",
+                "url" to "https://ge.globo.com/copa/news$index.html",
+                "urlToImage" to "https://ge.globo.com/image$index.png",
+                "author" to "Liga dos Palpites",
+                "description" to "Descrição $index",
+                "category" to "Copa do Mundo"
+            )
+        }
+        val objectMapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
+        redisTemplate.opsForValue().set(cacheKey, objectMapper.writeValueAsString(mockArticles))
+
+        // 2. Chamar a primeira página (page=0, size=10)
+        var mvcResult = mockMvc.perform(get("/api/v1/home/news")
+            .param("page", "0")
+            .param("size", "10")
+            .param("sportId", targetSportId.toString()))
+            .andExpect(request().asyncStarted())
+            .andReturn()
+
+        mockMvc.perform(asyncDispatch(mvcResult))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content", hasSize<Int>(10)))
+            .andExpect(jsonPath("$.content[0].title", equalTo("Artigo Sincronizado 1")))
+            .andExpect(jsonPath("$.content[9].title", equalTo("Artigo Sincronizado 10")))
+            .andExpect(jsonPath("$.page", equalTo(0)))
+            .andExpect(jsonPath("$.size", equalTo(10)))
+            .andExpect(jsonPath("$.totalElements", equalTo(25)))
+            .andExpect(jsonPath("$.totalPages", equalTo(3)))
+            .andExpect(jsonPath("$.hasNext", equalTo(true)))
+
+        // 3. Chamar a segunda página (page=1, size=10)
+        mvcResult = mockMvc.perform(get("/api/v1/home/news")
+            .param("page", "1")
+            .param("size", "10")
+            .param("sportId", targetSportId.toString()))
+            .andExpect(request().asyncStarted())
+            .andReturn()
+
+        mockMvc.perform(asyncDispatch(mvcResult))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content", hasSize<Int>(10)))
+            .andExpect(jsonPath("$.content[0].title", equalTo("Artigo Sincronizado 11")))
+            .andExpect(jsonPath("$.content[9].title", equalTo("Artigo Sincronizado 20")))
+            .andExpect(jsonPath("$.page", equalTo(1)))
+            .andExpect(jsonPath("$.hasNext", equalTo(true)))
+
+        // 4. Chamar a terceira e última página (page=2, size=10)
+        mvcResult = mockMvc.perform(get("/api/v1/home/news")
+            .param("page", "2")
+            .param("size", "10")
+            .param("sportId", targetSportId.toString()))
+            .andExpect(request().asyncStarted())
+            .andReturn()
+
+        mockMvc.perform(asyncDispatch(mvcResult))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content", hasSize<Int>(5)))
+            .andExpect(jsonPath("$.content[0].title", equalTo("Artigo Sincronizado 21")))
+            .andExpect(jsonPath("$.content[4].title", equalTo("Artigo Sincronizado 25")))
+            .andExpect(jsonPath("$.page", equalTo(2)))
+            .andExpect(jsonPath("$.hasNext", equalTo(false)))
+            
+        // Limpar Redis após o teste
+        redisTemplate.delete(cacheKey)
+    }
+
+    @Test
     fun `should resolve user when X-User-Id is a Firebase UID instead of standard UUID`() {
         val firebaseUid = "OiItOeIXzxa6u3j28LS6HKIpxSe2"
 

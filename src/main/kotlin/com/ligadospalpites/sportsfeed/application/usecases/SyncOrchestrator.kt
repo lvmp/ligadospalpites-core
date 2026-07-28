@@ -131,29 +131,75 @@ class SyncOrchestrator(
                 logger.info("Sincronizando notícias da liga '$leagueName' ($leagueId) usando query: '$query'")
                 val articles = newsApiClient.fetchNews(query = query, language = "pt")
 
-                // Seleciona os top 10 artigos (conforme feedback do usuário) e os mapeia para JSON
-                val topArticles = articles.take(10).map { art ->
+                // 1. Tenta recuperar o histórico existente do cache
+                val cacheKeyLeague = "news:$sportId:$leagueId"
+                val cacheKeySport = "news:$sportId"
+                val existingNewsJson = redisTemplate.opsForValue().get(cacheKeyLeague)
+                    ?: redisTemplate.opsForValue().get(cacheKeySport)
+
+                val existingNews: List<Map<String, String>> = if (!existingNewsJson.isNullOrBlank()) {
+                    try {
+                        objectMapper.readValue(
+                            existingNewsJson,
+                            objectMapper.typeFactory.constructCollectionType(List::class.java, Map::class.java)
+                        )
+                    } catch (e: Exception) {
+                        emptyList()
+                    }
+                } else {
+                    emptyList()
+                }
+
+                // 2. Mapeia os novos 10 artigos contendo "publishedAt"
+                val newArticles = articles.take(10).map { art ->
                     mapOf(
                         "title" to art.title!!,
                         "url" to art.url!!,
                         "urlToImage" to (art.urlToImage ?: "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=600"),
                         "author" to (art.author ?: "Liga dos Palpites"),
                         "description" to (art.description ?: "Matéria completa disponível no link abaixo."),
-                        "category" to leagueName
+                        "category" to leagueName,
+                        "publishedAt" to (art.publishedAt ?: Instant.now().toString())
                     )
                 }
 
-                val json = objectMapper.writeValueAsString(topArticles)
+                // 3. Mescla, desduplica e filtra por idade (máximo de 14 dias / 2 semanas)
+                val fourteenDaysAgo = Instant.now().minus(14, java.time.temporal.ChronoUnit.DAYS)
+                val combinedAndFiltered = (newArticles + existingNews)
+                    .distinctBy { it["url"]?.trim()?.lowercase() ?: it["title"]?.trim()?.lowercase() }
+                    .filter { art ->
+                        val publishedAtStr = art["publishedAt"]
+                        if (!publishedAtStr.isNullOrBlank()) {
+                            try {
+                                val publishedAt = Instant.parse(publishedAtStr)
+                                publishedAt.isAfter(fourteenDaysAgo)
+                            } catch (e: Exception) {
+                                true
+                            }
+                        } else {
+                            true
+                        }
+                    }
+                    .sortedByDescending { art ->
+                        val publishedAtStr = art["publishedAt"]
+                        try {
+                            if (!publishedAtStr.isNullOrBlank()) Instant.parse(publishedAtStr) else Instant.MIN
+                        } catch (e: Exception) {
+                            Instant.MIN
+                        }
+                    }
+
+                val json = objectMapper.writeValueAsString(combinedAndFiltered)
                 
                 // Salva no Redis com as duas chaves (específica por liga e genérica por esporte para manter compatibilidade)
-                redisTemplate.opsForValue().set("news:$sportId:$leagueId", json)
-                redisTemplate.opsForValue().set("news:$sportId", json) // Fallback compatível
+                redisTemplate.opsForValue().set(cacheKeyLeague, json)
+                redisTemplate.opsForValue().set(cacheKeySport, json) // Fallback compatível
 
                 results.add(mapOf(
                     "leagueId" to leagueId,
                     "leagueName" to leagueName,
                     "status" to "SUCCESS",
-                    "articlesSynced" to topArticles.size
+                    "articlesSynced" to combinedAndFiltered.size
                 ))
             } catch (e: Exception) {
                 logger.error("Failed to sync news for league $leagueName ($leagueId): ${e.message}", e)

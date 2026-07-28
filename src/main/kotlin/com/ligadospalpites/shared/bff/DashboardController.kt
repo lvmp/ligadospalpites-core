@@ -113,7 +113,7 @@ class DashboardController(
                         cachedNewsJson,
                         objectMapper.typeFactory.constructCollectionType(List::class.java, Map::class.java)
                     )
-                    articles.map { art ->
+                    articles.take(10).map { art ->
                         NewsResponse(
                             title = art["title"] ?: "",
                             url = art["url"] ?: "",
@@ -191,6 +191,94 @@ class DashboardController(
             )
         }
     }
+
+    @GetMapping("/news")
+    fun getNews(
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "10") size: Int,
+        @RequestParam(required = false) sportId: UUID? = null,
+        @RequestParam(required = false) leagueId: UUID? = null
+    ): CompletableFuture<ResponseEntity<PagedNewsResponse>> {
+        return CompletableFuture.supplyAsync({
+            val targetSportId = sportId ?: UUID.fromString("f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c")
+            val isGroup = leagueId != null && groupRepository.existsById(leagueId)
+            val cacheKey = if (leagueId != null && !isGroup) "news:$targetSportId:$leagueId" else "news:$targetSportId"
+
+            val newsList = try {
+                val cachedNewsJson = redisTemplate.opsForValue().get(cacheKey)
+                if (!cachedNewsJson.isNullOrBlank()) {
+                    val articles: List<Map<String, String>> = objectMapper.readValue(
+                        cachedNewsJson,
+                        objectMapper.typeFactory.constructCollectionType(List::class.java, Map::class.java)
+                    )
+                    articles.map { art ->
+                        NewsResponse(
+                            title = art["title"] ?: "",
+                            url = art["url"] ?: "",
+                            urlToImage = art["urlToImage"] ?: "",
+                            author = art["author"] ?: "Liga dos Palpites",
+                            description = art["description"] ?: "Matéria completa disponível no link abaixo.",
+                            category = art["category"] ?: "Copa do Mundo"
+                        )
+                    }
+                } else {
+                    if (environment.activeProfiles.contains("prod")) {
+                        emptyList()
+                    } else {
+                        (1..15).map { index ->
+                            NewsResponse(
+                                title = "Brasil se prepara para enfrentar a França na final da Copa - Parte $index",
+                                url = "https://ge.globo.com/copa/news$index.html",
+                                urlToImage = "https://ge.globo.com/image$index.png",
+                                author = "Liga dos Palpites",
+                                description = "Descrição detalhada da matéria mockada número $index para verificação de rolagem infinita.",
+                                category = "Copa do Mundo"
+                            )
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                if (environment.activeProfiles.contains("prod")) {
+                    emptyList()
+                } else {
+                    (1..15).map { index ->
+                        NewsResponse(
+                            title = "Brasil se prepara para enfrentar a França na final da Copa - Parte $index",
+                            url = "https://ge.globo.com/copa/news$index.html",
+                            urlToImage = "https://ge.globo.com/image$index.png",
+                            author = "Liga dos Palpites",
+                            description = "Descrição detalhada da matéria mockada número $index para verificação de rolagem infinita.",
+                            category = "Copa do Mundo"
+                        )
+                    }
+                }
+            }
+
+            val totalElements = newsList.size
+            val totalPages = if (size > 0) Math.ceil(totalElements.toDouble() / size).toInt() else 0
+            
+            val start = page * size
+            val pagedContent = if (start < totalElements && size > 0) {
+                val end = Math.min(start + size, totalElements)
+                newsList.subList(start, end)
+            } else {
+                emptyList()
+            }
+            
+            val hasNext = (page + 1) < totalPages
+
+            ResponseEntity.ok(
+                PagedNewsResponse(
+                    content = pagedContent,
+                    page = page,
+                    size = size,
+                    totalElements = totalElements,
+                    totalPages = totalPages,
+                    hasNext = hasNext
+                )
+            )
+        }, executor)
+    }
 }
 
 // DTOs
@@ -229,4 +317,13 @@ data class NewsResponse(
     val author: String,
     val description: String,
     val category: String
+)
+
+data class PagedNewsResponse(
+    val content: List<NewsResponse>,
+    val page: Int,
+    val size: Int,
+    val totalElements: Int,
+    val totalPages: Int,
+    val hasNext: Boolean
 )

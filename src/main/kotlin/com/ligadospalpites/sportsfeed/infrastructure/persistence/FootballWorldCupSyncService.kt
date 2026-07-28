@@ -198,9 +198,27 @@ class FootballWorldCupSyncService(
 
     private fun cacheNewsInRedis(sportId: UUID, articles: List<com.ligadospalpites.sportsfeed.infrastructure.client.NewsApiArticle>) {
         try {
-            logger.info("Caching ${articles.size} news articles in Redis for sport: $sportId")
-            val topArticles = articles
-                .filter { !it.title.isNullOrBlank() }
+            logger.info("Caching news in Redis with historical accumulation and auto-purge for sport: $sportId")
+            
+            // 1. Tenta recuperar o histórico existente do cache
+            val cacheKey = "news:$sportId"
+            val existingNewsJson = redisTemplate.opsForValue().get(cacheKey)
+            val existingNews: List<Map<String, String>> = if (!existingNewsJson.isNullOrBlank()) {
+                try {
+                    objectMapper.readValue(
+                        existingNewsJson,
+                        objectMapper.typeFactory.constructCollectionType(List::class.java, Map::class.java)
+                    )
+                } catch (e: Exception) {
+                    emptyList()
+                }
+            } else {
+                emptyList()
+            }
+
+            // 2. Mapeia os novos 10 artigos contendo "publishedAt"
+            val newArticles = articles
+                .filter { !it.title.isNullOrBlank() && !it.url.isNullOrBlank() }
                 .distinctBy { it.title!!.lowercase().trim() }
                 .take(10)
                 .map { art ->
@@ -210,12 +228,40 @@ class FootballWorldCupSyncService(
                         "urlToImage" to (art.urlToImage ?: "https://ge.globo.com/image_default.png"),
                         "author" to (art.author ?: "Liga dos Palpites"),
                         "description" to (art.description ?: art.content ?: "Matéria completa disponível no link abaixo."),
-                        "category" to "Copa do Mundo"
+                        "category" to "Copa do Mundo",
+                        "publishedAt" to (art.publishedAt ?: Instant.now().toString())
                     )
                 }
-            val json = objectMapper.writeValueAsString(topArticles)
-            redisTemplate.opsForValue().set("news:$sportId", json)
-            logger.info("News cached in Redis successfully under key 'news:$sportId'.")
+
+            // 3. Mescla, desduplica e filtra por idade (máximo de 14 dias / 2 semanas)
+            val fourteenDaysAgo = Instant.now().minus(14, java.time.temporal.ChronoUnit.DAYS)
+            val combinedAndFiltered = (newArticles + existingNews)
+                .distinctBy { it["url"]?.trim()?.lowercase() ?: it["title"]?.trim()?.lowercase() }
+                .filter { art ->
+                    val publishedAtStr = art["publishedAt"]
+                    if (!publishedAtStr.isNullOrBlank()) {
+                        try {
+                            val publishedAt = Instant.parse(publishedAtStr)
+                            publishedAt.isAfter(fourteenDaysAgo)
+                        } catch (e: Exception) {
+                            true
+                        }
+                    } else {
+                        true
+                    }
+                }
+                .sortedByDescending { art ->
+                    val publishedAtStr = art["publishedAt"]
+                    try {
+                        if (!publishedAtStr.isNullOrBlank()) Instant.parse(publishedAtStr) else Instant.MIN
+                    } catch (e: Exception) {
+                        Instant.MIN
+                    }
+                }
+
+            val json = objectMapper.writeValueAsString(combinedAndFiltered)
+            redisTemplate.opsForValue().set(cacheKey, json)
+            logger.info("News cached in Redis successfully under key '$cacheKey'. Total articles cached: ${combinedAndFiltered.size}")
         } catch (e: Exception) {
             logger.error("Error caching news in Redis: ${e.message}", e)
         }
