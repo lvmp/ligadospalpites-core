@@ -4,11 +4,13 @@ import com.ligadospalpites.groups.infrastructure.persistence.SpringDataGroupMemb
 import com.ligadospalpites.groups.infrastructure.persistence.SpringDataGroupRepository
 import com.ligadospalpites.groups.infrastructure.persistence.RedisLeaderboardRepository
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataMatchRepository
+import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataLeagueRepository
 import com.ligadospalpites.notifications.infrastructure.persistence.SpringDataInAppNotificationRepository
 import com.ligadospalpites.shared.identity.UserResolver
 import org.springframework.core.env.Environment
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
+import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
@@ -20,6 +22,7 @@ class DashboardController(
     private val groupMemberRepository: SpringDataGroupMemberRepository,
     private val groupRepository: SpringDataGroupRepository,
     private val matchRepository: SpringDataMatchRepository,
+    private val leagueRepository: SpringDataLeagueRepository,
     private val notificationRepository: SpringDataInAppNotificationRepository,
     private val leaderboardRepository: RedisLeaderboardRepository,
     private val redisTemplate: org.springframework.data.redis.core.StringRedisTemplate,
@@ -52,7 +55,13 @@ class DashboardController(
         // 2. Fetch Next Scheduled Matches (Async)
         val nextMatchesFuture = CompletableFuture.supplyAsync({
             var matches = matchRepository.findAll()
-            matches = matches.filter { it.status.name == "SCHEDULED" }
+            val activeLeagueIds = leagueRepository.findByIsActiveTrue().map { it.id }.toSet()
+            
+            matches = matches.filter { 
+                it.status.name == "SCHEDULED" && 
+                activeLeagueIds.contains(it.leagueId) &&
+                it.kickoffTime.isAfter(Instant.now())
+            }
 
             if (sportId != null) {
                 matches = matches.filter { it.sportId == sportId }

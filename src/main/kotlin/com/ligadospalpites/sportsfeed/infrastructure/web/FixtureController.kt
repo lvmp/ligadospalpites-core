@@ -113,7 +113,8 @@ class FixtureController(
                 matchRepository.findByLeagueId(leagueId)
             }
             else -> {
-                matchRepository.findAll()
+                val activeLeagueIds = leagueRepository.findByIsActiveTrue().map { it.id }.toSet()
+                matchRepository.findAll().filter { activeLeagueIds.contains(it.leagueId) }
             }
         }
 

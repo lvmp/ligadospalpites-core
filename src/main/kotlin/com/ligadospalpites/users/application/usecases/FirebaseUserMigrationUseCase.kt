@@ -44,7 +44,8 @@ class FirebaseUserMigrationUseCase(
     private val specialPredictionRepository: SpringDataSpecialPredictionRepository,
     private val matchRepository: SpringDataMatchRepository,
     private val redisTemplate: StringRedisTemplate,
-    private val firestore: Firestore?
+    private val firestore: Firestore?,
+    private val environment: org.springframework.core.env.Environment
 ) {
     private val log = LoggerFactory.getLogger(FirebaseUserMigrationUseCase::class.java)
 
@@ -52,6 +53,16 @@ class FirebaseUserMigrationUseCase(
     fun execute(forceSimulation: Boolean = false): MigrationSummaryDto {
         val startTime = System.currentTimeMillis()
         val warnings = mutableListOf<String>()
+
+        val isProd = environment.activeProfiles.contains("prod")
+        if (isProd) {
+            if (forceSimulation) {
+                throw IllegalArgumentException("Simulation mode is not allowed in production profile.")
+            }
+            if (firestore == null) {
+                throw IllegalStateException("Cannot run Firebase migration in production: Firestore client is not configured (credentials or project ID missing).")
+            }
+        }
 
         val runSimulation = forceSimulation || firestore == null
         if (runSimulation) {
