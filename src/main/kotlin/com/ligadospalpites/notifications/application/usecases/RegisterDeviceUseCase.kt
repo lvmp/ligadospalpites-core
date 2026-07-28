@@ -18,7 +18,7 @@ class RegisterDeviceUseCase(private val deviceRepository: DeviceRepository) {
     @Transactional
     fun registerDevice(userId: UUID, request: RegisterDeviceRequest) {
         // 1. Ownership Transfer & Token Uniqueness check
-        deviceRepository.findByFcmToken(request.fcmToken)?.let { existing ->
+        deviceRepository.findAllByFcmToken(request.fcmToken).forEach { existing ->
             if (existing.userId != userId || existing.deviceId != request.deviceId) {
                 deviceRepository.delete(existing)
             }

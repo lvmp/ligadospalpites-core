@@ -16,8 +16,8 @@ class JpaDeviceRepositoryAdapter(
         springDataRepository.deleteByFcmToken(fcmToken)
     }
 
-    override fun findByFcmToken(fcmToken: String): Device? {
-        return springDataRepository.findByFcmToken(fcmToken)?.toDomain()
+    override fun findAllByFcmToken(fcmToken: String): List<Device> {
+        return springDataRepository.findAllByFcmToken(fcmToken).map { it.toDomain() }
     }
 
     override fun findByDeviceId(deviceId: UUID): Device? {

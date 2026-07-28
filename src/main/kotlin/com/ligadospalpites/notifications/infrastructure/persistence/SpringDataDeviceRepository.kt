@@ -4,7 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository
 import java.util.UUID
 
 interface SpringDataDeviceRepository : JpaRepository<DeviceJpaEntity, UUID> {
-    fun findByFcmToken(fcmToken: String): DeviceJpaEntity?
+    fun findAllByFcmToken(fcmToken: String): List<DeviceJpaEntity>
     fun findByDeviceId(deviceId: UUID): DeviceJpaEntity?
     fun deleteByFcmToken(fcmToken: String)
     fun findAllByUserId(userId: UUID): List<DeviceJpaEntity>

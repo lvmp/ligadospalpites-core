@@ -43,7 +43,7 @@ class DeviceRegistrationIntegrationTest : BaseIntegrationTest() {
             request = RegisterDeviceRequest(deviceId = deviceId1, fcmToken = sharedToken, deviceType = "ANDROID")
         )
 
-        val deviceForUser1 = deviceRepository.findByFcmToken(sharedToken)
+        val deviceForUser1 = deviceRepository.findAllByFcmToken(sharedToken).firstOrNull()
         assertNotNull(deviceForUser1)
         assertEquals(user1.id, deviceForUser1?.userId)
 
@@ -55,7 +55,7 @@ class DeviceRegistrationIntegrationTest : BaseIntegrationTest() {
 
         // Assert
         // Shared token must be detached from User 1 and assigned exclusively to User 2
-        val finalDeviceForUser2 = deviceRepository.findByFcmToken(sharedToken)
+        val finalDeviceForUser2 = deviceRepository.findAllByFcmToken(sharedToken).firstOrNull()
         assertNotNull(finalDeviceForUser2)
         assertEquals(user2.id, finalDeviceForUser2?.userId)
         assertEquals(deviceId2, finalDeviceForUser2?.deviceId)
@@ -76,7 +76,7 @@ class DeviceRegistrationIntegrationTest : BaseIntegrationTest() {
             request = RegisterDeviceRequest(deviceId = UUID.randomUUID(), fcmToken = expiredToken, deviceType = "IOS")
         )
 
-        val activeDevice = deviceRepository.findByFcmToken(expiredToken)
+        val activeDevice = deviceRepository.findAllByFcmToken(expiredToken).firstOrNull()
         assertNotNull(activeDevice)
 
         // Act - Publish Expired Token event
@@ -86,7 +86,51 @@ class DeviceRegistrationIntegrationTest : BaseIntegrationTest() {
         Thread.sleep(1000)
 
         // Assert
-        val prunedDevice = deviceRepository.findByFcmToken(expiredToken)
+        val prunedDevice = deviceRepository.findAllByFcmToken(expiredToken).firstOrNull()
         assertNull(prunedDevice)
+    }
+
+    @Test
+    fun `should gracefully register device and delete multiple old duplicates with same token`() {
+        // Arrange
+        val user1 = userRepository.save(User(UUID.randomUUID(), "firebase-uid-dup-1", "dup1@test.com", "Dup One"))
+        val user2 = userRepository.save(User(UUID.randomUUID(), "firebase-uid-dup-2", "dup2@test.com", "Dup Two"))
+        val user3 = userRepository.save(User(UUID.randomUUID(), "firebase-uid-dup-3", "dup3@test.com", "Dup Three"))
+
+        val sharedToken = "fcm_token_multiple_duplicates"
+
+        // Salva manualmente múltiplos dispositivos com o mesmo FCM token no banco para simular o estado duplicado da produção
+        deviceRepository.save(com.ligadospalpites.notifications.domain.ports.Device(
+            id = UUID.randomUUID(),
+            userId = user1.id,
+            deviceId = UUID.randomUUID(),
+            fcmToken = sharedToken,
+            deviceType = "ANDROID"
+        ))
+        deviceRepository.save(com.ligadospalpites.notifications.domain.ports.Device(
+            id = UUID.randomUUID(),
+            userId = user2.id,
+            deviceId = UUID.randomUUID(),
+            fcmToken = sharedToken,
+            deviceType = "ANDROID"
+        ))
+
+        // Verifica que existem múltiplos dispositivos cadastrados para o mesmo token
+        val initialDevices = deviceRepository.findAllByFcmToken(sharedToken)
+        assertEquals(2, initialDevices.size)
+
+        // Act - Usuário 3 se registra usando o token duplicado
+        val targetDeviceId = UUID.randomUUID()
+        registerDeviceUseCase.registerDevice(
+            userId = user3.id,
+            request = RegisterDeviceRequest(deviceId = targetDeviceId, fcmToken = sharedToken, deviceType = "ANDROID")
+        )
+
+        // Assert - As duplicatas anteriores devem ser excluídas e apenas o dispositivo do Usuário 3 associado ao token permanece ativo
+        val finalDevices = deviceRepository.findAllByFcmToken(sharedToken)
+        assertEquals(1, finalDevices.size)
+        val activeDevice = finalDevices.first()
+        assertEquals(user3.id, activeDevice.userId)
+        assertEquals(targetDeviceId, activeDevice.deviceId)
     }
 }
