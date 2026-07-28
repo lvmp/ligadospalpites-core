@@ -14,6 +14,8 @@ import org.springframework.core.env.Environment
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
@@ -80,15 +82,21 @@ class DashboardController(
             Pair(rank, score)
         }, executor)
 
-        // 2. Fetch Next Scheduled Matches (Async)
+        // 2. Fetch Next Scheduled Matches (Async - Next 3 days including current date)
         val nextMatchesFuture = CompletableFuture.supplyAsync({
+            val zoneId = ZoneId.of("America/Sao_Paulo")
+            val today = LocalDate.now(zoneId)
+            val startOfToday = today.atStartOfDay(zoneId).toInstant()
+            val endOf3Days = today.plusDays(3).atStartOfDay(zoneId).toInstant()
+
             var matches = matchRepository.findAll()
             val activeLeagueIds = leagueRepository.findByIsActiveTrue().map { it.id }.toSet()
             
             matches = matches.filter { 
-                it.status.name == "SCHEDULED" && 
+                (it.status.name == "SCHEDULED" || it.status.name == "LIVE") && 
                 activeLeagueIds.contains(it.leagueId) &&
-                it.kickoffTime.isAfter(Instant.now())
+                !it.kickoffTime.isBefore(startOfToday) &&
+                it.kickoffTime.isBefore(endOf3Days)
             }
 
             if (sportId != null) {
@@ -103,7 +111,6 @@ class DashboardController(
             }
 
             matches.sortedBy { it.kickoffTime }
-                .take(5)
                 .map {
                     NextMatchResponse(
                         matchId = it.id,
