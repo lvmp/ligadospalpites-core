@@ -28,6 +28,10 @@ class LeaderboardUpdaterObserver(
             // 1. Atualiza ranking global no Redis
             leaderboardRepository.incrementScore(globalKey, update.userId, update.pointsGained)
 
+            // 1.1 Atualiza ranking específico da liga no Redis
+            val leagueKey = "leaderboard:league:${event.leagueId}"
+            leaderboardRepository.incrementScore(leagueKey, update.userId, update.pointsGained)
+
             // 2. Busca todos os grupos aos quais este usuário pertence no PostgreSQL
             val userGroups = springDataGroupMemberRepository.findByUserId(update.userId)
             log.info("User ${update.userId} belongs to ${userGroups.size} groups in Postgres")

@@ -5,6 +5,7 @@ import com.ligadospalpites.predictions.infrastructure.persistence.SpringDataSpec
 import com.ligadospalpites.predictions.infrastructure.persistence.PredictionJpaEntity
 import com.ligadospalpites.predictions.infrastructure.persistence.SpecialPredictionJpaEntity
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataMatchRepository
+import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataLeagueRepository
 import org.springframework.http.HttpStatus
 import com.ligadospalpites.shared.identity.UserResolver
 import org.springframework.http.ResponseEntity
@@ -22,6 +23,7 @@ class PredictionController(
     private val predictionRepository: SpringDataPredictionRepository,
     private val specialPredictionRepository: SpringDataSpecialPredictionRepository,
     private val matchRepository: SpringDataMatchRepository,
+    private val leagueRepository: SpringDataLeagueRepository,
     private val userResolver: UserResolver,
     private val eventPublisher: ApplicationEventPublisher
 ) {
@@ -138,12 +140,14 @@ class PredictionController(
                 val prediction = predictionRepository.findByUserIdAndMatchId(userUUID, matchId)
                 ResponseEntity.ok(prediction?.let { listOf(it) } ?: emptyList<PredictionJpaEntity>())
             }
-            leagueId != null -> {
-                val predictions = predictionRepository.findByUserId(userUUID).filter { it.leagueId == leagueId }
-                ResponseEntity.ok(predictions)
-            }
             else -> {
-                val predictions = predictionRepository.findByUserId(userUUID)
+                // Se leagueId for nulo, tenta filtrar pela liga ativa
+                val targetLeagueId = leagueId ?: leagueRepository.findByIsActiveTrue().firstOrNull()?.id
+                val predictions = if (targetLeagueId != null) {
+                    predictionRepository.findByUserId(userUUID).filter { it.leagueId == targetLeagueId }
+                } else {
+                    predictionRepository.findByUserId(userUUID)
+                }
                 ResponseEntity.ok(predictions)
             }
         }
@@ -157,8 +161,10 @@ class PredictionController(
     ): ResponseEntity<Any> {
         val userUUID = userResolver.resolveByUidOrUuid(userIdHeader)
 
-        val predictions = if (leagueId != null) {
-            specialPredictionRepository.findByUserId(userUUID).filter { it.leagueId == leagueId }
+        // Se leagueId for nulo, tenta filtrar pela liga ativa
+        val targetLeagueId = leagueId ?: leagueRepository.findByIsActiveTrue().firstOrNull()?.id
+        val predictions = if (targetLeagueId != null) {
+            specialPredictionRepository.findByUserId(userUUID).filter { it.leagueId == targetLeagueId }
         } else {
             specialPredictionRepository.findByUserId(userUUID)
         }

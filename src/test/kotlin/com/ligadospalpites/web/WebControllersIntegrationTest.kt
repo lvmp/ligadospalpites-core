@@ -6,6 +6,7 @@ import com.ligadospalpites.groups.infrastructure.persistence.GroupMemberJpaEntit
 import com.ligadospalpites.groups.infrastructure.persistence.SpringDataGroupMemberRepository
 import com.ligadospalpites.groups.infrastructure.persistence.SpringDataGroupRepository
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.*
+import com.ligadospalpites.predictions.infrastructure.persistence.*
 import com.ligadospalpites.users.infrastructure.persistence.SpringDataUserEntitlementRepository
 import com.ligadospalpites.users.infrastructure.persistence.UserEntitlementJpaEntity
 import com.ligadospalpites.users.infrastructure.persistence.SpringDataUserRepository
@@ -769,5 +770,142 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
         val updatedMember = groupMemberRepository.findById(com.ligadospalpites.groups.infrastructure.persistence.GroupMemberId(groupId, testUserId)).orElse(null)
         assertNotNull(updatedMember)
         assertEquals(50, updatedMember.accumulatedPoints)
+    }
+
+    @Test
+    fun `should isolate predictions and special predictions by active league when leagueId is null`() {
+        // Arrange: 
+        // 1. Tornar Copa do Mundo inativa
+        val worldCupLeague = leagueRepository.findById(worldCupLeagueId).orElse(null)
+        assertNotNull(worldCupLeague)
+        leagueRepository.save(com.ligadospalpites.sportsfeed.infrastructure.persistence.LeagueJpaEntity(
+            id = worldCupLeague.id,
+            sportId = worldCupLeague.sportId,
+            name = worldCupLeague.name,
+            isActive = false
+        ))
+
+        // 2. Criar uma nova liga (Brasileirão) e marcá-la como ativa
+        val brasileiraoLeagueId = UUID.randomUUID()
+        leagueRepository.save(com.ligadospalpites.sportsfeed.infrastructure.persistence.LeagueJpaEntity(
+            id = brasileiraoLeagueId,
+            sportId = footballId,
+            name = "Campeonato Brasileiro",
+            isActive = true
+        ))
+
+        // 2.1 Criar partidas válidas no banco de dados para evitar violação de Foreign Key
+        val worldCupMatchId = UUID.randomUUID()
+        matchRepository.save(
+            MatchJpaEntity(
+                id = worldCupMatchId,
+                sportId = footballId,
+                leagueId = worldCupLeagueId,
+                seasonId = testSeasonId,
+                homeTeamName = "Brasil",
+                awayTeamName = "França",
+                kickoffTime = Instant.now().plus(2, ChronoUnit.HOURS),
+                status = MatchStatus.SCHEDULED
+            )
+        )
+
+        val brasileiraoMatchId = UUID.randomUUID()
+        matchRepository.save(
+            MatchJpaEntity(
+                id = brasileiraoMatchId,
+                sportId = footballId,
+                leagueId = brasileiraoLeagueId,
+                seasonId = testSeasonId,
+                homeTeamName = "Palmeiras",
+                awayTeamName = "Flamengo",
+                kickoffTime = Instant.now().plus(2, ChronoUnit.HOURS),
+                status = MatchStatus.SCHEDULED
+            )
+        )
+
+        // 3. Cadastrar palpites normais para ambas as ligas
+        // Palpite Copa do Mundo (Inativa)
+        predictionRepository.save(
+            PredictionJpaEntity(
+                id = UUID.randomUUID(),
+                userId = testUserId,
+                matchId = worldCupMatchId,
+                leagueId = worldCupLeagueId,
+                predictedHomeScore = 1,
+                predictedAwayScore = 0,
+                pointsAwarded = 25,
+                isProcessed = true
+            )
+        )
+
+        // Palpite Brasileirão (Ativa)
+        predictionRepository.save(
+            PredictionJpaEntity(
+                id = UUID.randomUUID(),
+                userId = testUserId,
+                matchId = brasileiraoMatchId,
+                leagueId = brasileiraoLeagueId,
+                predictedHomeScore = 3,
+                predictedAwayScore = 2,
+                pointsAwarded = 10,
+                isProcessed = true
+            )
+        )
+
+        // 4. Cadastrar superpalpites para ambas as ligas
+        // Superpalpite Copa (Inativa)
+        specialPredictionRepository.save(
+            com.ligadospalpites.predictions.infrastructure.persistence.SpecialPredictionJpaEntity(
+                id = UUID.randomUUID(),
+                userId = testUserId,
+                leagueId = worldCupLeagueId,
+                type = "CHAMPION",
+                predictionValue = "ARG",
+                pointsAwarded = 50,
+                isProcessed = true
+            )
+        )
+
+        // Superpalpite Brasileirão (Ativa)
+        specialPredictionRepository.save(
+            com.ligadospalpites.predictions.infrastructure.persistence.SpecialPredictionJpaEntity(
+                id = UUID.randomUUID(),
+                userId = testUserId,
+                leagueId = brasileiraoLeagueId,
+                type = "CHAMPION",
+                predictionValue = "PAL",
+                pointsAwarded = 15,
+                isProcessed = true
+            )
+        )
+
+        // Act & Assert: Match Predictions GET (Sem leagueId)
+        // Deve retornar apenas o palpite do Brasileirão (Ativo)
+        mockMvc.perform(get("/api/v1/predictions")
+            .header("X-User-Id", testUserId.toString()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$", hasSize<Int>(1)))
+            .andExpect(jsonPath("$[0].leagueId", equalTo(brasileiraoLeagueId.toString())))
+            .andExpect(jsonPath("$[0].predictedHomeScore", equalTo(3)))
+
+        // Act & Assert: Special Predictions GET (Sem leagueId)
+        // Deve retornar apenas o superpalpite do Brasileirão (Ativo)
+        mockMvc.perform(get("/api/v1/special-predictions")
+            .header("X-User-Id", testUserId.toString()))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$", hasSize<Int>(1)))
+            .andExpect(jsonPath("$[0].leagueId", equalTo(brasileiraoLeagueId.toString())))
+            .andExpect(jsonPath("$[0].predictionValue", equalTo("PAL")))
+
+        // Act & Assert: Home Dashboard (Sem leagueId)
+        // Deve retornar os pontos da liga ativa (Brasileirão = 10 do palpite + 15 do superpalpite = 25 pontos)
+        val mvcResult = mockMvc.perform(get("/api/v1/home/dashboard")
+            .header("X-User-Id", testUserId.toString()))
+            .andExpect(request().asyncStarted())
+            .andReturn()
+
+        mockMvc.perform(asyncDispatch(mvcResult))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.points", equalTo(25)))
     }
 }

@@ -18,4 +18,7 @@ interface SpringDataPredictionRepository : JpaRepository<PredictionJpaEntity, UU
         )
     """)
     fun findUserIdsBySportId(@Param("sportId") sportId: UUID): List<UUID>
+
+    @Query("SELECT COALESCE(SUM(p.pointsAwarded), 0) FROM PredictionJpaEntity p WHERE p.userId = :userId AND p.leagueId = :leagueId")
+    fun sumPointsByUserIdAndLeagueId(@Param("userId") userId: UUID, @Param("leagueId") leagueId: UUID): Int
 }

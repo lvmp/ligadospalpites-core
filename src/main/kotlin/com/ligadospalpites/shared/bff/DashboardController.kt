@@ -6,6 +6,8 @@ import com.ligadospalpites.groups.infrastructure.persistence.RedisLeaderboardRep
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataMatchRepository
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataLeagueRepository
 import com.ligadospalpites.notifications.infrastructure.persistence.SpringDataInAppNotificationRepository
+import com.ligadospalpites.predictions.infrastructure.persistence.SpringDataPredictionRepository
+import com.ligadospalpites.predictions.infrastructure.persistence.SpringDataSpecialPredictionRepository
 import com.ligadospalpites.shared.identity.UserResolver
 import org.springframework.core.env.Environment
 import org.springframework.http.ResponseEntity
@@ -25,6 +27,8 @@ class DashboardController(
     private val leagueRepository: SpringDataLeagueRepository,
     private val notificationRepository: SpringDataInAppNotificationRepository,
     private val leaderboardRepository: RedisLeaderboardRepository,
+    private val predictionRepository: SpringDataPredictionRepository,
+    private val specialPredictionRepository: SpringDataSpecialPredictionRepository,
     private val redisTemplate: org.springframework.data.redis.core.StringRedisTemplate,
     private val userResolver: UserResolver,
     private val environment: Environment
@@ -45,10 +49,33 @@ class DashboardController(
         // 1. Fetch Rank and Points (Async)
         val rankAndPointsFuture = CompletableFuture.supplyAsync({
             val isGroup = leagueId != null && groupRepository.existsById(leagueId)
-            val key = if (isGroup) "leaderboard:group:$leagueId:overall" else "leaderboard:global"
+            
+            // Decidir qual liga deve ser considerada (seja passada ou a ativa padrão)
+            val activeLeague = leagueRepository.findByIsActiveTrue().firstOrNull()
+            val targetLeagueId = if (isGroup) null else (leagueId ?: activeLeague?.id)
+            
+            val key = if (isGroup) {
+                "leaderboard:group:$leagueId:overall"
+            } else if (targetLeagueId != null) {
+                "leaderboard:league:$targetLeagueId"
+            } else {
+                "leaderboard:global"
+            }
+
+            // Lazy initialization se for uma liga específica e o score no Redis for nulo
+            if (targetLeagueId != null && !isGroup) {
+                val existingScore = leaderboardRepository.getUserRankAndScore(key, userUUID).second
+                if (existingScore == null) {
+                    val matchPoints = predictionRepository.sumPointsByUserIdAndLeagueId(userUUID, targetLeagueId)
+                    val specialPoints = specialPredictionRepository.sumPointsByUserIdAndLeagueId(userUUID, targetLeagueId)
+                    val totalPoints = matchPoints + specialPoints
+                    leaderboardRepository.incrementScore(key, userUUID, totalPoints)
+                }
+            }
+
             val rankAndScore = leaderboardRepository.getUserRankAndScore(key, userUUID)
             val rank = rankAndScore.first?.toInt() ?: 1
-            val score = rankAndScore.second?.toInt() ?: (if (isGroup) 0 else 120)
+            val score = rankAndScore.second?.toInt() ?: (if (isGroup) 0 else (if (targetLeagueId != null) 0 else 120))
             Pair(rank, score)
         }, executor)
 
