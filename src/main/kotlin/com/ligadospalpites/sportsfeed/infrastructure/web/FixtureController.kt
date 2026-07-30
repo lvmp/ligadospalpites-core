@@ -8,6 +8,7 @@ import com.ligadospalpites.sportsfeed.infrastructure.persistence.MatchJpaEntity
 import com.ligadospalpites.sportsfeed.domain.models.formatMatchPhase
 import com.ligadospalpites.users.infrastructure.persistence.SpringDataUserEntitlementRepository
 import com.ligadospalpites.shared.identity.UserResolver
+import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -62,6 +63,8 @@ class FixtureController(
     }
 
     // 2. List fixtures for a sport/league (with active check and premium sport lock)
+    @SecurityRequirement(name = "bearerAuth")
+    @SecurityRequirement(name = "X-User-Id")
     @GetMapping("/fixtures")
     fun getFixtures(
         @RequestParam(required = false) sportId: UUID?,

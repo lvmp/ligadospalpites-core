@@ -6,6 +6,7 @@ import com.ligadospalpites.groups.infrastructure.persistence.RedisLeaderboardRep
 import com.ligadospalpites.groups.infrastructure.persistence.GroupMemberId
 import com.ligadospalpites.shared.identity.UserResolver
 import com.ligadospalpites.users.infrastructure.persistence.SpringDataUserRepository
+import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -22,6 +23,8 @@ class GroupController(
 ) {
 
     // 1. Kick/Remove member (Restricted to group creator)
+    @SecurityRequirement(name = "bearerAuth")
+    @SecurityRequirement(name = "X-User-Id")
     @DeleteMapping("/{groupId}/members/{memberUserId}")
     fun expelMember(
         @PathVariable groupId: UUID,

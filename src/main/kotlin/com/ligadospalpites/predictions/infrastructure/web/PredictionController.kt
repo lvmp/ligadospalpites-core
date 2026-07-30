@@ -6,6 +6,7 @@ import com.ligadospalpites.predictions.infrastructure.persistence.PredictionJpaE
 import com.ligadospalpites.predictions.infrastructure.persistence.SpecialPredictionJpaEntity
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataMatchRepository
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataLeagueRepository
+import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import org.springframework.http.HttpStatus
 import com.ligadospalpites.shared.identity.UserResolver
 import org.springframework.http.ResponseEntity
@@ -29,6 +30,8 @@ class PredictionController(
 ) {
 
     // 1. Submit match prediction
+    @SecurityRequirement(name = "bearerAuth")
+    @SecurityRequirement(name = "X-User-Id")
     @PostMapping("/predictions")
     fun submitPrediction(
         @RequestBody request: MatchPredictionRequest,
@@ -80,6 +83,8 @@ class PredictionController(
     }
 
     // 2. Submit special prediction (CHAMPION, TOP_SCORER, etc.)
+    @SecurityRequirement(name = "bearerAuth")
+    @SecurityRequirement(name = "X-User-Id")
     @PostMapping("/special-predictions")
     fun submitSpecialPrediction(
         @RequestBody request: SpecialPredictionRequest,
@@ -127,6 +132,8 @@ class PredictionController(
     }
 
     // 3. GET Match Predictions for user
+    @SecurityRequirement(name = "bearerAuth")
+    @SecurityRequirement(name = "X-User-Id")
     @GetMapping("/predictions")
     fun getPredictions(
         @RequestParam(required = false) matchId: UUID?,
@@ -154,6 +161,8 @@ class PredictionController(
     }
 
     // 4. GET Special Predictions for user
+    @SecurityRequirement(name = "bearerAuth")
+    @SecurityRequirement(name = "X-User-Id")
     @GetMapping("/special-predictions")
     fun getSpecialPredictions(
         @RequestParam(required = false) leagueId: UUID?,

@@ -10,6 +10,7 @@ import com.ligadospalpites.notifications.infrastructure.persistence.SpringDataIn
 import com.ligadospalpites.predictions.infrastructure.persistence.SpringDataPredictionRepository
 import com.ligadospalpites.predictions.infrastructure.persistence.SpringDataSpecialPredictionRepository
 import com.ligadospalpites.shared.identity.UserResolver
+import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import org.springframework.core.env.Environment
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -41,6 +42,8 @@ class DashboardController(
 
     private val executor: Executor = Executors.newFixedThreadPool(10)
 
+    @SecurityRequirement(name = "bearerAuth")
+    @SecurityRequirement(name = "X-User-Id")
     @GetMapping("/dashboard")
     fun getDashboard(
         @RequestHeader(value = "X-User-Id", required = false) userIdHeader: String?,

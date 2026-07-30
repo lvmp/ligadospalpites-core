@@ -50,6 +50,8 @@ logbook:
       - "client_secret"
 
 app:
+  admin:
+    api-key: "${ADMIN_API_KEY:${WORKSPACE_ADMIN_API_KEY:lp_ws_live_secret_key_2026_x89f}}"
   sportsfeed:
     football-data:
       url: "https://api.football-data.org"

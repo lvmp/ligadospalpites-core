@@ -3,6 +3,7 @@ package com.ligadospalpites.notifications.infrastructure.web
 import com.ligadospalpites.notifications.application.usecases.RegisterDeviceRequest
 import com.ligadospalpites.notifications.application.usecases.RegisterDeviceUseCase
 import com.ligadospalpites.shared.identity.UserResolver
+import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.util.UUID
@@ -14,6 +15,8 @@ class DeviceController(
     private val userResolver: UserResolver
 ) {
 
+    @SecurityRequirement(name = "bearerAuth")
+    @SecurityRequirement(name = "X-User-Id")
     @PostMapping("/register")
     fun registerDevice(
         @RequestBody request: DeviceRegistrationRequest,

@@ -5,4 +5,5 @@ import java.util.UUID
 
 interface SpringDataLeagueRepository : JpaRepository<LeagueJpaEntity, UUID> {
     fun findByIsActiveTrue(): List<LeagueJpaEntity>
+    fun countByIsActive(isActive: Boolean): Long
 }
