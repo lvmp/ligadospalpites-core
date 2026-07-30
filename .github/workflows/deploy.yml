@@ -1,0 +1,48 @@
+name: CI/CD Pipeline - Deploy to GCP Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Build & Deploy to Cloud Run
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ligadospalpites-core
+          region: us-central1
+          source: .
+          flags: '--allow-unauthenticated --max-instances=3 --min-instances=0 --cpu-throttling --memory=512Mi --cpu=1'
+          env_vars: |
+            SPRING_PROFILES_ACTIVE=prod
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+            DATABASE_USERNAME=${{ secrets.DATABASE_USERNAME }}
+            DATABASE_PASSWORD=${{ secrets.DATABASE_PASSWORD }}
+            REDIS_HOST=${{ secrets.REDIS_HOST }}
+            REDIS_PORT=${{ secrets.REDIS_PORT }}
+            REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
+            FOOTBALL_DATA_API_KEY=${{ secrets.FOOTBALL_DATA_API_KEY }}
+            API_FOOTBALL_API_KEY=${{ secrets.API_FOOTBALL_API_KEY }}
+            NEWS_API_KEY=${{ secrets.NEWS_API_KEY }}
+            FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}
+            FIREBASE_CREDENTIALS=${{ secrets.FIREBASE_CREDENTIALS }}
+            ADMIN_API_KEY=${{ secrets.ADMIN_API_KEY }}
+            WORKSPACE_ADMIN_API_KEY=${{ secrets.WORKSPACE_ADMIN_API_KEY }}
+
+      - name: Show Output URL
+        run: echo "Service deployed successfully to ${{ steps.deploy.outputs.url }}"
