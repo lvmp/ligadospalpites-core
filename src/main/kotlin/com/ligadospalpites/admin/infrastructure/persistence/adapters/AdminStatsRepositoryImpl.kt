@@ -36,6 +36,19 @@ class AdminStatsRepositoryImpl(
         )
     }
 
+    override fun getAllLeagues(): List<com.ligadospalpites.admin.infrastructure.web.dtos.AdminLeagueDto> {
+        return leagueRepository.findAll().map { league ->
+            com.ligadospalpites.admin.infrastructure.web.dtos.AdminLeagueDto(
+                id = league.id.toString(),
+                name = league.name,
+                sportId = league.sportId.toString(),
+                isActive = league.isActive,
+                logoUrl = league.logoUrl,
+                createdAt = league.createdAt
+            )
+        }
+    }
+
     override fun updateLeagueStatus(leagueId: UUID, isActive: Boolean): Boolean {
         val optionalLeague = leagueRepository.findById(leagueId)
         if (optionalLeague.isEmpty) return false

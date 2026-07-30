@@ -2,8 +2,10 @@ package com.ligadospalpites.admin.infrastructure.web
 
 import com.ligadospalpites.admin.application.usecases.ForceSyncLeagueUseCase
 import com.ligadospalpites.admin.application.usecases.GetAdminLeagueStatsUseCase
+import com.ligadospalpites.admin.application.usecases.GetAdminLeaguesListUseCase
 import com.ligadospalpites.admin.application.usecases.UpdateLeagueStatusUseCase
 import com.ligadospalpites.admin.domain.models.AdminLeagueStats
+import com.ligadospalpites.admin.infrastructure.web.dtos.AdminLeagueDto
 import com.ligadospalpites.admin.infrastructure.web.dtos.UpdateLeagueStatusRequest
 import jakarta.validation.Valid
 import org.springframework.http.ResponseEntity
@@ -14,9 +16,16 @@ import java.util.UUID
 @RequestMapping("/api/v1/admin/leagues", "/api/v1/workspace/leagues")
 class AdminLeagueController(
     private val getAdminLeagueStatsUseCase: GetAdminLeagueStatsUseCase,
+    private val getAdminLeaguesListUseCase: GetAdminLeaguesListUseCase,
     private val updateLeagueStatusUseCase: UpdateLeagueStatusUseCase,
     private val forceSyncLeagueUseCase: ForceSyncLeagueUseCase
 ) {
+
+    @GetMapping
+    fun getAllLeagues(): ResponseEntity<List<AdminLeagueDto>> {
+        val leagues = getAdminLeaguesListUseCase()
+        return ResponseEntity.ok(leagues)
+    }
 
     @GetMapping("/stats")
     fun getStats(): ResponseEntity<AdminLeagueStats> {

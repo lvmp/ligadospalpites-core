@@ -9,6 +9,16 @@ data class UpdateLeagueStatusRequest(
     val status: String
 )
 
+data class AdminLeagueDto(
+    val id: String,
+    val name: String,
+    val sportId: String,
+    @get:com.fasterxml.jackson.annotation.JsonProperty("isActive")
+    val isActive: Boolean,
+    val logoUrl: String?,
+    val createdAt: Instant
+)
+
 data class GrantUserPlanRequest(
     @field:NotBlank(message = "Plan is required")
     val plan: String,

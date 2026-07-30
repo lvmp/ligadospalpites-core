@@ -106,6 +106,12 @@ class AdminModuleIntegrationTest : BaseIntegrationTest() {
         val logs = auditLogRepository.findAll()
         val statusLog = logs.find { it.action == "UPDATE_LEAGUE_STATUS" && it.targetId == leagueId.toString() }
         assertNotNull(statusLog)
+
+        // Get All Leagues List (including inactives)
+        mockMvc.perform(get("/api/v1/admin/leagues")
+            .header("X-Admin-Api-Key", adminApiKey))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$[?(@.id == '$leagueId')].isActive", hasItem(false)))
     }
 
     @Test
