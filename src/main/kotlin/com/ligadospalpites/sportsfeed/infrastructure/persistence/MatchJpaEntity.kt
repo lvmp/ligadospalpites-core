@@ -49,6 +49,10 @@ class MatchJpaEntity(
     @Column(name = "away_team_logo_url", length = 512)
     val awayTeamLogoUrl: String? = null,
 
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "period_scores_json", columnDefinition = "jsonb")
+    val periodScoresJson: String? = null,
+
     @Column(name = "updated_at", nullable = false)
     val updatedAt: Instant = Instant.now()
 ) {
@@ -66,6 +70,7 @@ class MatchJpaEntity(
         phase = phase,
         homeTeamLogoUrl = homeTeamLogoUrl,
         awayTeamLogoUrl = awayTeamLogoUrl,
+        periodScoresJson = periodScoresJson,
         updatedAt = updatedAt
     )
 
@@ -84,6 +89,7 @@ class MatchJpaEntity(
             phase = match.phase,
             homeTeamLogoUrl = match.homeTeamLogoUrl,
             awayTeamLogoUrl = match.awayTeamLogoUrl,
+            periodScoresJson = match.periodScoresJson,
             updatedAt = match.updatedAt
         )
     }

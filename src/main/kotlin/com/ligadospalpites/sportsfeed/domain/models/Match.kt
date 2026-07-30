@@ -24,6 +24,7 @@ data class Match(
     val phase: String? = null,
     val homeTeamLogoUrl: String? = null,
     val awayTeamLogoUrl: String? = null,
+    val periodScoresJson: String? = null,
     val updatedAt: Instant = Instant.now()
 )
 

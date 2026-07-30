@@ -40,7 +40,8 @@ class PredictionsProcessorService(
                     predAway = pred.predictedAwayScore,
                     realHome = event.homeScore,
                     realAway = event.awayScore,
-                    isFinal = false // Default to standard rule matches
+                    isFinal = false, // Default to standard rule matches
+                    sportId = event.sportId
                 )
 
                 log.debug("User ${pred.userId} earned $points points for match ${event.matchId}")

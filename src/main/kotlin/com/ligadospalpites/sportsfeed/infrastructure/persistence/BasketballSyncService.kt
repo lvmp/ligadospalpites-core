@@ -5,6 +5,7 @@ import com.ligadospalpites.sportsfeed.domain.models.MatchStatus
 import com.ligadospalpites.sportsfeed.domain.events.MatchStartedEvent
 import com.ligadospalpites.sportsfeed.domain.events.MatchFinishedEvent
 import com.ligadospalpites.sportsfeed.infrastructure.client.ApiBasketballClient
+import com.ligadospalpites.sportsfeed.infrastructure.client.EspnBasketballClient
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
 import io.github.resilience4j.retry.annotation.Retry
 import org.slf4j.LoggerFactory
@@ -26,6 +27,7 @@ data class BasketballLeagueMetadata(
 class BasketballSyncService(
     private val matchRepository: SpringDataMatchRepository,
     private val apiBasketballClient: ApiBasketballClient,
+    @Autowired(required = false) private val espnBasketballClient: EspnBasketballClient? = null,
     private val seasonRepository: SpringDataSeasonRepository,
     private val eventPublisher: ApplicationEventPublisher
 ) : LeagueSyncService {
@@ -97,6 +99,31 @@ class BasketballSyncService(
         val targetSeasonId = activeSeason?.id ?: throw IllegalStateException("No active season found for league: $leagueId")
         val seasonYear = activeSeason.externalSeasonCode
 
+        if (metadata.defaultName.equals("NBA", ignoreCase = true) && espnBasketballClient != null) {
+            val espnGames = espnBasketballClient.fetchNbaScoreboard()
+            if (espnGames.isNotEmpty()) {
+                return espnGames.map { game ->
+                    MatchJpaEntity(
+                        id = UUID.randomUUID(),
+                        sportId = basketballId,
+                        leagueId = leagueId,
+                        seasonId = targetSeasonId,
+                        homeTeamName = translateTeamName(game.homeTeamName),
+                        awayTeamName = translateTeamName(game.awayTeamName),
+                        homeTeamLogoUrl = game.homeTeamLogoUrl,
+                        awayTeamLogoUrl = game.awayTeamLogoUrl,
+                        kickoffTime = parseIsoInstant(game.date),
+                        status = mapBasketballStatus(game.statusShort),
+                        homeScore = game.homeScore,
+                        awayScore = game.awayScore,
+                        phase = game.phase,
+                        periodScoresJson = game.periodScoresJson,
+                        updatedAt = Instant.now()
+                    )
+                }
+            }
+        }
+
         val externalGames = apiBasketballClient.fetchGames(leagueId = metadata.apiBasketballId, season = seasonYear)
         return externalGames.map { game ->
             val homeTranslated = translateTeamName(game.teams.home.name)
@@ -115,6 +142,7 @@ class BasketballSyncService(
                 homeScore = game.scores.home?.total,
                 awayScore = game.scores.away?.total,
                 phase = game.stage ?: "Temporada Regular",
+                periodScoresJson = null,
                 updatedAt = Instant.now()
             )
         }
@@ -168,6 +196,7 @@ class BasketballSyncService(
                 homeScore = scores.first,
                 awayScore = scores.second,
                 phase = "Temporada Regular",
+                periodScoresJson = null,
                 updatedAt = now
             )
         }
@@ -215,6 +244,7 @@ class BasketballSyncService(
                     homeScore = inc.homeScore,
                     awayScore = inc.awayScore,
                     phase = inc.phase,
+                    periodScoresJson = inc.periodScoresJson ?: matchMatch.periodScoresJson,
                     updatedAt = Instant.now()
                 )
             } else {
@@ -251,6 +281,19 @@ class BasketballSyncService(
             "FT", "AOT" -> MatchStatus.FINISHED
             "CAN", "CANC", "PST", "POST", "ABD" -> MatchStatus.CANCELLED
             else -> MatchStatus.SCHEDULED
+        }
+    }
+
+    private fun parseIsoInstant(dateStr: String?): Instant {
+        if (dateStr.isNullOrBlank()) return Instant.now()
+        return try {
+            Instant.parse(dateStr)
+        } catch (e: Exception) {
+            try {
+                java.time.OffsetDateTime.parse(dateStr).toInstant()
+            } catch (e2: Exception) {
+                Instant.now()
+            }
         }
     }
 }

@@ -1,12 +1,21 @@
 package com.ligadospalpites.predictions.domain.services
 
+import java.util.UUID
+
 object ScoringEngine {
+
+    val BASKETBALL_SPORT_ID: UUID = UUID.fromString("e5284bf1-d576-4740-97cc-f06bca181cb2")
 
     fun calculateMatchPoints(
         predHome: Int, predAway: Int,
         realHome: Int, realAway: Int,
-        isFinal: Boolean
+        isFinal: Boolean = false,
+        sportId: UUID? = null
     ): Int {
+        if (sportId == BASKETBALL_SPORT_ID) {
+            return calculateBasketballMatchPoints(predHome, predAway, realHome, realAway, isFinal)
+        }
+
         // Rule 1: Exact Score Match (25 points / 50 for final)
         if (predHome == realHome && predAway == realAway) {
             return if (isFinal) 50 else 25
@@ -40,5 +49,38 @@ object ScoringEngine {
         if (predHome == realHome) points += 5
         if (predAway == realAway) points += 5
         return if (isFinal) points * 2 else points
+    }
+
+    fun calculateBasketballMatchPoints(
+        predHome: Int, predAway: Int,
+        realHome: Int, realAway: Int,
+        isFinal: Boolean = false
+    ): Int {
+        val predWinner = when {
+            predHome > predAway -> 1
+            predHome < predAway -> -1
+            else -> 0
+        }
+        val realWinner = when {
+            realHome > realAway -> 1
+            realHome < realAway -> -1
+            else -> 0
+        }
+
+        if (predWinner == 0 || predWinner != realWinner) {
+            return 0
+        }
+
+        val predMargin = predHome - predAway
+        val realMargin = realHome - realAway
+        val diff = kotlin.math.abs(predMargin - realMargin)
+
+        val basePoints = when {
+            diff == 0 -> 25
+            diff <= 3 -> 15
+            else -> 10
+        }
+
+        return if (isFinal) basePoints * 2 else basePoints
     }
 }

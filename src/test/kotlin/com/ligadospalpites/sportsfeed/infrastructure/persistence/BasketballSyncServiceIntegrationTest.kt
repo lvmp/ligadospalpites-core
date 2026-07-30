@@ -24,12 +24,16 @@ class BasketballSyncServiceIntegrationTest : BaseIntegrationTest() {
     @MockitoBean
     private lateinit var apiBasketballClient: ApiBasketballClient
 
+    @MockitoBean
+    private lateinit var espnBasketballClient: EspnBasketballClient
+
     private val nbaLeagueId = UUID.fromString("5c1e3a11-b9db-44ab-ba02-411a0c0bcf14")
     private val nbaSeasonId = UUID.fromString("8a6a4c33-3112-4fb2-a6bc-cd8a0cbf42ef")
 
     @BeforeEach
     fun setUp() {
         matchRepository.deleteAll()
+        `when`(espnBasketballClient.fetchNbaScoreboard()).thenReturn(emptyList())
     }
 
     @Test
@@ -92,5 +96,35 @@ class BasketballSyncServiceIntegrationTest : BaseIntegrationTest() {
         assertEquals(MatchStatus.FINISHED, saved[0].status)
         assertEquals(115, saved[0].homeScore)
         assertEquals(105, saved[0].awayScore)
+    }
+
+    @Test
+    fun `should sync from EspnBasketballClient and persist periodScoresJson`() {
+        val espnGame = EspnBasketballGame(
+            externalId = "401584001",
+            date = "2026-10-21T00:00:00Z",
+            homeTeamName = "Boston Celtics",
+            awayTeamName = "Miami Heat",
+            homeTeamLogoUrl = "https://cdn.espn.com/celtics.png",
+            awayTeamLogoUrl = "https://cdn.espn.com/heat.png",
+            homeScore = 110,
+            awayScore = 100,
+            statusShort = "FT",
+            periodScoresJson = """{"home":[28,30,22,30],"away":[24,25,29,22],"homeOvertime":0,"awayOvertime":0}""",
+            phase = "NBA"
+        )
+        `when`(espnBasketballClient.fetchNbaScoreboard()).thenReturn(listOf(espnGame))
+
+        syncService.syncMatches(UUID.randomUUID(), nbaLeagueId)
+
+        val saved = matchRepository.findByLeagueId(nbaLeagueId)
+        assertEquals(1, saved.size)
+        assertEquals("Boston Celtics", saved[0].homeTeamName)
+        assertEquals("Miami Heat", saved[0].awayTeamName)
+        assertEquals(MatchStatus.FINISHED, saved[0].status)
+        assertEquals(110, saved[0].homeScore)
+        assertEquals(100, saved[0].awayScore)
+        assertNotNull(saved[0].periodScoresJson)
+        assertTrue(saved[0].periodScoresJson!!.contains("28, 30, 22, 30") || saved[0].periodScoresJson!!.contains("28,30,22,30"))
     }
 }
