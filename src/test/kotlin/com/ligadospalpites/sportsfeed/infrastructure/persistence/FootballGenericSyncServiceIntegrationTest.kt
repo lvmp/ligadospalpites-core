@@ -27,6 +27,9 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
     @MockitoBean
     private lateinit var apiFootballClient: ApiFootballClient
 
+    @MockitoBean
+    private lateinit var espnSoccerClient: EspnSoccerClient
+
     private val brasileiraoLeagueId = UUID.fromString("3dbd8422-9e22-4411-b0db-b06d0421da6a")
     private val libertadoresLeagueId = UUID.fromString("4acdf011-fbde-4122-83bc-c46b1ba847de")
     private val brasileiraoSeasonId = UUID.fromString("e89c6fb4-2be6-4447-b2e1-87bbca8474ef")
@@ -123,13 +126,23 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
-    fun `should bypass FootballData and call ApiFootball directly for unsupported leagues`() {
-        val afFixture = ApiFootballFixtureWrapper(
-            fixture = ApiFootballFixture(789L, "2026-04-11T19:00:00Z", ApiFootballStatus("NS")),
-            teams = ApiFootballTeams(ApiFootballTeam("Flamengo"), ApiFootballTeam("Palmeiras")),
-            goals = ApiFootballGoals(null, null)
+    fun `should call EspnSoccerClient for Libertadores league`() {
+        val espnEvent = EspnSoccerEvent(
+            id = "789",
+            date = "2026-04-11T19:00:00Z",
+            competitions = listOf(
+                EspnSoccerCompetition(
+                    id = "789",
+                    date = "2026-04-11T19:00:00Z",
+                    status = EspnSoccerStatus(EspnSoccerStatusType(state = "pre")),
+                    competitors = listOf(
+                        EspnSoccerCompetitor("1", "home", false, EspnSoccerTeam("1", displayName = "Flamengo")),
+                        EspnSoccerCompetitor("2", "away", false, EspnSoccerTeam("2", displayName = "Palmeiras"))
+                    )
+                )
+            )
         )
-        `when`(apiFootballClient.fetchMatches(leagueId = 13, season = 2026)).thenReturn(listOf(afFixture))
+        `when`(espnSoccerClient.fetchLibertadoresMatches()).thenReturn(listOf(espnEvent))
 
         syncService.syncMatches(UUID.randomUUID(), libertadoresLeagueId)
 
@@ -140,7 +153,7 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
         assertEquals(MatchStatus.SCHEDULED, saved[0].status)
 
         verifyNoInteractions(footballDataClient)
-        verify(apiFootballClient, times(1)).fetchMatches(leagueId = 13, season = 2026)
+        verify(espnSoccerClient, times(1)).fetchLibertadoresMatches()
     }
 
     @Test

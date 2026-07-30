@@ -22,7 +22,15 @@ class FootballGenericMockSyncService(
         UUID.fromString("4acdf011-fbde-4122-83bc-c46b1ba847de"), // Libertadores
         UUID.fromString("9284ca51-bb54-47c1-841f-81ab28120fa2"), // La Liga
         UUID.fromString("827d043c-62c2-402c-b011-3ba2849e7b23"), // Premier League
-        UUID.fromString("e2d03a11-b9db-44ab-ba02-411a0c0bcf14")  // Champions League
+        UUID.fromString("e2d03a11-b9db-44ab-ba02-411a0c0bcf14"), // Champions League
+        UUID.fromString("5acdf011-fbde-4122-83bc-c46b1ba847de"), // Championship
+        UUID.fromString("6acdf011-fbde-4122-83bc-c46b1ba847de"), // Eurocopa
+        UUID.fromString("7acdf011-fbde-4122-83bc-c46b1ba847de"), // Ligue 1
+        UUID.fromString("8acdf011-fbde-4122-83bc-c46b1ba847de"), // Bundesliga
+        UUID.fromString("9acdf011-fbde-4122-83bc-c46b1ba847de"), // Serie A
+        UUID.fromString("aacdf011-fbde-4122-83bc-c46b1ba847de"), // Eredivisie
+        UUID.fromString("bacdf011-fbde-4122-83bc-c46b1ba847de"), // Primeira Liga
+        UUID.fromString("b3cdf011-fbde-4122-83bc-c46b1ba847de")  // Copa do Brasil
     )
 
     override fun supports(sportId: UUID, leagueId: UUID): Boolean {

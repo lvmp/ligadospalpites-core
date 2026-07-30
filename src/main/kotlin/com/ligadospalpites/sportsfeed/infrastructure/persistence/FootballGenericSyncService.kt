@@ -6,6 +6,7 @@ import com.ligadospalpites.sportsfeed.domain.events.MatchStartedEvent
 import com.ligadospalpites.sportsfeed.domain.events.MatchGoalEvent
 import com.ligadospalpites.sportsfeed.domain.events.MatchFinishedEvent
 import com.ligadospalpites.sportsfeed.infrastructure.client.ApiFootballClient
+import com.ligadospalpites.sportsfeed.infrastructure.client.EspnSoccerClient
 import com.ligadospalpites.sportsfeed.infrastructure.client.FootballDataClient
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
 import io.github.resilience4j.retry.annotation.Retry
@@ -21,7 +22,9 @@ data class FootballLeagueMetadata(
     val id: UUID,
     val footballDataCode: String?,
     val apiFootballId: Int,
-    val defaultName: String
+    val defaultName: String,
+    val isLibertadores: Boolean = false,
+    val isCopaDoBrasil: Boolean = false
 )
 
 @Service
@@ -30,6 +33,7 @@ class FootballGenericSyncService(
     private val matchRepository: SpringDataMatchRepository,
     private val footballDataClient: FootballDataClient,
     private val apiFootballClient: ApiFootballClient,
+    private val espnSoccerClient: EspnSoccerClient,
     private val seasonRepository: SpringDataSeasonRepository,
     private val eventPublisher: ApplicationEventPublisher
 ) : LeagueSyncService {
@@ -51,9 +55,10 @@ class FootballGenericSyncService(
         ),
         UUID.fromString("4acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("4acdf011-fbde-4122-83bc-c46b1ba847de"),
-            footballDataCode = null, // Only supported in API-Sports/API-Football
+            footballDataCode = null,
             apiFootballId = 13,
-            defaultName = "Copa Libertadores"
+            defaultName = "Copa Libertadores",
+            isLibertadores = true
         ),
         UUID.fromString("9284ca51-bb54-47c1-841f-81ab28120fa2") to FootballLeagueMetadata(
             id = UUID.fromString("9284ca51-bb54-47c1-841f-81ab28120fa2"),
@@ -73,7 +78,6 @@ class FootballGenericSyncService(
             apiFootballId = 2,
             defaultName = "UEFA Champions League"
         ),
-        // Additional free tier football-data.org leagues pre-mapped for seamless scalability
         UUID.fromString("5acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("5acdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = "ELC",
@@ -115,6 +119,13 @@ class FootballGenericSyncService(
             footballDataCode = "PPL",
             apiFootballId = 94,
             defaultName = "Primeira Liga"
+        ),
+        UUID.fromString("b3cdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
+            id = UUID.fromString("b3cdf011-fbde-4122-83bc-c46b1ba847de"),
+            footballDataCode = null,
+            apiFootballId = 73,
+            defaultName = "Copa do Brasil",
+            isCopaDoBrasil = true
         )
     )
 
@@ -160,9 +171,15 @@ class FootballGenericSyncService(
         logger.info("Starting matches sync for football league: ${metadata.defaultName}")
 
         val incomingMatches = try {
-            self.fetchFromFootballData(sportId, leagueId)
+            if (metadata.isLibertadores) {
+                self.fetchFromEspnLibertadores(sportId, leagueId)
+            } else if (metadata.footballDataCode != null) {
+                self.fetchFromFootballData(sportId, leagueId)
+            } else {
+                self.fetchFromApiFootball(sportId, leagueId, IllegalStateException("No primary free client for ${metadata.defaultName}"))
+            }
         } catch (e: Exception) {
-            logger.error("Failed to sync matches after trying all external providers: ${e.message}")
+            logger.error("Failed to sync matches after trying external providers: ${e.message}")
             throw RuntimeException("Football sync failed for league ${metadata.defaultName}.", e)
         }
 
@@ -170,6 +187,46 @@ class FootballGenericSyncService(
             performUpsert(leagueId, incomingMatches)
         } else {
             logger.warn("No matches retrieved for league ${metadata.defaultName}. Local database unchanged.")
+        }
+    }
+
+    @CircuitBreaker(name = "espnSoccerApi", fallbackMethod = "fetchFromApiFootball")
+    @Retry(name = "espnSoccerApi")
+    fun fetchFromEspnLibertadores(sportId: UUID, leagueId: UUID): List<MatchJpaEntity> {
+        val metadata = leaguesMetadata[leagueId] ?: throw IllegalArgumentException("Invalid league ID: $leagueId")
+        logger.info("Trying primary provider (ESPN API) for Libertadores league: ${metadata.defaultName}")
+        val activeSeason = seasonRepository.findByLeagueIdAndIsActiveTrue(leagueId)
+        val targetSeasonId = activeSeason?.id ?: throw IllegalStateException("No active season found for league: $leagueId")
+
+        val events = espnSoccerClient.fetchLibertadoresMatches()
+        return events.mapNotNull { event ->
+            val comp = event.competitions.firstOrNull() ?: return@mapNotNull null
+            val homeComp = comp.competitors.find { it.homeAway == "home" } ?: return@mapNotNull null
+            val awayComp = comp.competitors.find { it.homeAway == "away" } ?: return@mapNotNull null
+
+            val homeName = translateTeamName(homeComp.team.displayName ?: homeComp.team.name ?: "A definir")
+            val awayName = translateTeamName(awayComp.team.displayName ?: awayComp.team.name ?: "A definir")
+
+            val statusState = comp.status?.type?.state ?: "pre"
+            val status = mapEspnStatus(statusState)
+            val kickoff = try { Instant.parse(event.date) } catch (e: Exception) { Instant.now() }
+
+            MatchJpaEntity(
+                id = UUID.randomUUID(),
+                sportId = footballId,
+                leagueId = leagueId,
+                seasonId = targetSeasonId,
+                homeTeamName = homeName,
+                awayTeamName = awayName,
+                homeTeamLogoUrl = homeComp.team.logo,
+                awayTeamLogoUrl = awayComp.team.logo,
+                kickoffTime = kickoff,
+                status = status,
+                homeScore = homeComp.score?.toIntOrNull(),
+                awayScore = awayComp.score?.toIntOrNull(),
+                phase = comp.status?.type?.description ?: "Fase de Grupos",
+                updatedAt = Instant.now()
+            )
         }
     }
 
@@ -386,6 +443,15 @@ class FootballGenericSyncService(
             "1H", "2H", "HT", "ET", "BT", "P", "INT" -> MatchStatus.LIVE
             "FT", "AET", "PEN" -> MatchStatus.FINISHED
             "CAN", "PST", "ABD" -> MatchStatus.CANCELLED
+            else -> MatchStatus.SCHEDULED
+        }
+    }
+
+    private fun mapEspnStatus(state: String): MatchStatus {
+        return when (state.lowercase()) {
+            "pre" -> MatchStatus.SCHEDULED
+            "in" -> MatchStatus.LIVE
+            "post" -> MatchStatus.FINISHED
             else -> MatchStatus.SCHEDULED
         }
     }
