@@ -23,17 +23,38 @@ class ApiBasketballClient(
         .build()
 
     fun fetchGames(leagueId: Int, season: Int = 2026): List<ApiBasketballGameWrapper> {
-        logger.info("Fetching basketball games from API-Basketball for league: $leagueId, season: $season")
-        return try {
-            val response = restClient.get()
-                .uri("/games?league=$leagueId&season=$season")
-                .retrieve()
-                .body(ApiBasketballResponse::class.java)
-            response?.response ?: emptyList()
-        } catch (e: Exception) {
-            logger.error("Error communicating with API-Basketball API: ${e.message}", e)
-            throw e
+        return fetchGames(leagueId = leagueId, seasonParam = season.toString())
+    }
+
+    fun fetchGames(leagueId: Int, seasonParam: String): List<ApiBasketballGameWrapper> {
+        val seasonYearInt = seasonParam.take(4).toIntOrNull() ?: 2026
+        val candidateSeasons = listOf(
+            seasonParam,
+            "${seasonYearInt - 1}-$seasonYearInt",
+            "$seasonYearInt-${seasonYearInt + 1}",
+            "$seasonYearInt"
+        ).distinct()
+
+        for (candidate in candidateSeasons) {
+            logger.info("Fetching basketball games from API-Basketball for league: $leagueId, season: $candidate")
+            try {
+                val response = restClient.get()
+                    .uri("/games?league=$leagueId&season=$candidate")
+                    .retrieve()
+                    .body(ApiBasketballResponse::class.java)
+                val games = response?.response ?: emptyList()
+                logger.info("API-Basketball response for league $leagueId, season $candidate: ${games.size} games retrieved.")
+                if (games.isNotEmpty()) {
+                    return games
+                }
+            } catch (e: Exception) {
+                logger.error("Error communicating with API-Basketball API for season $candidate: ${e.message}", e)
+                if (candidate == candidateSeasons.last()) {
+                    throw e
+                }
+            }
         }
+        return emptyList()
     }
 }
 

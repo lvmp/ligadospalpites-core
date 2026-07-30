@@ -135,6 +135,22 @@ class SyncOrchestratorTest {
     }
 
     @Test
+    fun `should sync unseeded leagues with 0 matches even when force is false`() {
+        val activeLeagues = listOf(
+            LeagueJpaEntity(id = leagueId1, name = "League 1", sportId = sportId, isActive = true)
+        )
+        `when`(leagueRepository.findByIsActiveTrue()).thenReturn(activeLeagues)
+        `when`(leagueSyncService1.supports(sportId, leagueId1)).thenReturn(true)
+        `when`(matchRepository.findByLeagueId(leagueId1)).thenReturn(emptyList())
+
+        val results = orchestrator.syncAllActiveLeagues(force = false)
+
+        assertEquals(1, results.size)
+        assertEquals("SUCCESS", results[0]["status"])
+        verify(leagueSyncService1).syncMatches(sportId, leagueId1)
+    }
+
+    @Test
     fun `should handle individual league sync failure without crashing the whole execution`() {
         val activeLeagues = listOf(
             LeagueJpaEntity(id = leagueId1, name = "League 1", sportId = sportId, isActive = true),

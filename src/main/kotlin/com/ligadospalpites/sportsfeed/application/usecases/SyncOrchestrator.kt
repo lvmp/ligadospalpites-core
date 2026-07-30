@@ -60,29 +60,31 @@ class SyncOrchestrator(
                 continue
             }
 
-            // Se NÃO for force, aplicamos o filtro inteligente de janela de atividade
+            // Se NÃO for force, aplicamos o filtro inteligente de janela de atividade (exceto se a liga não tiver jogos cadastrados)
             if (!force) {
                 val matches = matchRepository.findByLeagueId(leagueId)
-                val hasActiveMatch = matches.any { match ->
-                    val isLive = match.status == MatchStatus.LIVE
-                    val isNearKickoff = match.kickoffTime?.let { kickoff ->
-                        val startWindow = now.minus(15, ChronoUnit.MINUTES)
-                        val endWindow = now.plus(3, ChronoUnit.HOURS)
-                        kickoff.isAfter(startWindow) && kickoff.isBefore(endWindow)
-                    } ?: false
+                if (matches.isNotEmpty()) {
+                    val hasActiveMatch = matches.any { match ->
+                        val isLive = match.status == MatchStatus.LIVE
+                        val isNearKickoff = match.kickoffTime?.let { kickoff ->
+                            val startWindow = now.minus(15, ChronoUnit.MINUTES)
+                            val endWindow = now.plus(3, ChronoUnit.HOURS)
+                            kickoff.isAfter(startWindow) && kickoff.isBefore(endWindow)
+                        } ?: false
 
-                    isLive || isNearKickoff
-                }
+                        isLive || isNearKickoff
+                    }
 
-                if (!hasActiveMatch) {
-                    logger.info("Skipping real-time sync for league $leagueName (ID: $leagueId) - No live or upcoming matches in the active window.")
-                    results.add(mapOf(
-                        "leagueId" to leagueId,
-                        "leagueName" to leagueName,
-                        "status" to "SKIPPED",
-                        "reason" to "No active window matches"
-                    ))
-                    continue
+                    if (!hasActiveMatch) {
+                        logger.info("Skipping real-time sync for league $leagueName (ID: $leagueId) - No live or upcoming matches in the active window.")
+                        results.add(mapOf(
+                            "leagueId" to leagueId,
+                            "leagueName" to leagueName,
+                            "status" to "SKIPPED",
+                            "reason" to "No active window matches"
+                        ))
+                        continue
+                    }
                 }
             }
 
