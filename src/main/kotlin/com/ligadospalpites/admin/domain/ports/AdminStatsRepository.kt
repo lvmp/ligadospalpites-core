@@ -9,6 +9,7 @@ interface AdminStatsRepository {
     fun getLeagueStats(): AdminLeagueStats
     fun updateLeagueStatus(leagueId: UUID, isActive: Boolean): Boolean
     fun getUserStats(): AdminUserStats
+    fun getUsers(page: Int, size: Int): com.ligadospalpites.admin.infrastructure.web.dtos.AdminUsersPageResponse
     fun grantUserPlan(userId: UUID, plan: String, durationDays: Int): Boolean
     fun getConnectorsHealth(): ConnectorsHealthInfo
 }

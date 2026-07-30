@@ -77,6 +77,42 @@ class AdminStatsRepositoryImpl(
         )
     }
 
+    override fun getUsers(page: Int, size: Int): com.ligadospalpites.admin.infrastructure.web.dtos.AdminUsersPageResponse {
+        val pageable = org.springframework.data.domain.PageRequest.of(page, size, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"))
+        val userPage = userRepository.findAll(pageable)
+        val entitlements = userEntitlementRepository.findAll()
+
+        val content = userPage.content.map { user ->
+            val userEnts = entitlements.filter { it.userId == user.id }
+            val activeEnt = userEnts.firstOrNull {
+                val exp = it.expiresAt
+                exp == null || exp.isAfter(Instant.now())
+            }
+            val planName = when (activeEnt?.entitlementType) {
+                EntitlementType.PREMIUM -> "PREMIUM"
+                EntitlementType.SPORT_PASS -> "PRO"
+                else -> "FREE"
+            }
+            com.ligadospalpites.admin.infrastructure.web.dtos.AdminUserSummaryDto(
+                id = user.id.toString(),
+                firebaseUid = user.firebaseUid,
+                email = user.email,
+                name = user.name,
+                avatarUrl = user.avatarUrl,
+                plan = planName,
+                createdAt = user.createdAt
+            )
+        }
+
+        return com.ligadospalpites.admin.infrastructure.web.dtos.AdminUsersPageResponse(
+            content = content,
+            totalElements = userPage.totalElements,
+            totalPages = userPage.totalPages,
+            page = page,
+            size = size
+        )
+    }
+
     override fun grantUserPlan(userId: UUID, plan: String, durationDays: Int): Boolean {
         val userOptional = userRepository.findById(userId)
         if (userOptional.isEmpty) return false

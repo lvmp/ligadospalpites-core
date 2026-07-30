@@ -1,8 +1,10 @@
 package com.ligadospalpites.admin.infrastructure.web
 
 import com.ligadospalpites.admin.application.usecases.GetAdminUserStatsUseCase
+import com.ligadospalpites.admin.application.usecases.GetAdminUsersListUseCase
 import com.ligadospalpites.admin.application.usecases.GrantUserPlanUseCase
 import com.ligadospalpites.admin.domain.models.AdminUserStats
+import com.ligadospalpites.admin.infrastructure.web.dtos.AdminUsersPageResponse
 import com.ligadospalpites.admin.infrastructure.web.dtos.GrantUserPlanRequest
 import jakarta.validation.Valid
 import org.springframework.http.ResponseEntity
@@ -13,8 +15,18 @@ import java.util.UUID
 @RequestMapping("/api/v1/admin/users", "/api/v1/workspace/users")
 class AdminUserController(
     private val getAdminUserStatsUseCase: GetAdminUserStatsUseCase,
+    private val getAdminUsersListUseCase: GetAdminUsersListUseCase,
     private val grantUserPlanUseCase: GrantUserPlanUseCase
 ) {
+
+    @GetMapping
+    fun getUsers(
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "50") size: Int
+    ): ResponseEntity<AdminUsersPageResponse> {
+        val usersPage = getAdminUsersListUseCase(page, size)
+        return ResponseEntity.ok(usersPage)
+    }
 
     @GetMapping("/stats")
     fun getStats(): ResponseEntity<AdminUserStats> {

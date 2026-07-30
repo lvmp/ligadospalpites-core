@@ -132,6 +132,13 @@ class AdminModuleIntegrationTest : BaseIntegrationTest() {
         val logs = auditLogRepository.findAll()
         val grantLog = logs.find { it.action == "GRANT_USER_PLAN" && it.targetId == userId.toString() }
         assertNotNull(grantLog)
+
+        // Get Paginated Users List
+        mockMvc.perform(get("/api/v1/admin/users?page=0&size=50")
+            .header("X-Admin-Api-Key", adminApiKey))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content", notNullValue()))
+            .andExpect(jsonPath("$.totalElements", greaterThanOrEqualTo(1)))
     }
 
     @Test

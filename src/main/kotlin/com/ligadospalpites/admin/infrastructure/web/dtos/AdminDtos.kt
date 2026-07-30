@@ -39,3 +39,21 @@ data class AuditLogDto(
 data class AuditLogsResponse(
     val logs: List<AuditLogDto>
 )
+
+data class AdminUserSummaryDto(
+    val id: String,
+    val firebaseUid: String,
+    val email: String,
+    val name: String,
+    val avatarUrl: String?,
+    val plan: String,
+    val createdAt: Instant
+)
+
+data class AdminUsersPageResponse(
+    val content: List<AdminUserSummaryDto>,
+    val totalElements: Long,
+    val totalPages: Int,
+    val page: Int,
+    val size: Int
+)
