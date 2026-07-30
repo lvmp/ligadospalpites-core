@@ -170,7 +170,8 @@ class AdminStatsRepositoryImpl(
                 name = user.name,
                 avatarUrl = user.avatarUrl,
                 plan = planName,
-                createdAt = user.createdAt
+                createdAt = user.createdAt,
+                lastAccess = user.lastAccess
             )
         }
 

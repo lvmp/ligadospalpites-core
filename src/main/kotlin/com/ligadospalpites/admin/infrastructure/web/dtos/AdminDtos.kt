@@ -57,7 +57,8 @@ data class AdminUserSummaryDto(
     val name: String,
     val avatarUrl: String?,
     val plan: String,
-    val createdAt: Instant
+    val createdAt: Instant,
+    val lastAccess: Instant
 )
 
 data class AdminUsersPageResponse(

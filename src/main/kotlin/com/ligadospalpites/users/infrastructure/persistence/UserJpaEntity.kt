@@ -24,7 +24,10 @@ class UserJpaEntity(
     val avatarUrl: String? = null,
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    val createdAt: Instant = Instant.now()
+    val createdAt: Instant = Instant.now(),
+
+    @Column(name = "last_access", nullable = false)
+    val lastAccess: Instant = createdAt
 ) {
     fun toDomain(): User = User(
         id = id,
@@ -32,7 +35,8 @@ class UserJpaEntity(
         email = email,
         name = name,
         avatarUrl = avatarUrl,
-        createdAt = createdAt
+        createdAt = createdAt,
+        lastAccess = lastAccess
     )
 
     companion object {
@@ -42,7 +46,8 @@ class UserJpaEntity(
             email = user.email,
             name = user.name,
             avatarUrl = user.avatarUrl,
-            createdAt = user.createdAt
+            createdAt = user.createdAt,
+            lastAccess = user.lastAccess
         )
     }
 }
