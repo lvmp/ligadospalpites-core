@@ -15,9 +15,13 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 
+import com.ligadospalpites.sportsfeed.infrastructure.persistence.SeasonJpaEntity
+import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataSeasonRepository
+
 @Repository
 class AdminStatsRepositoryImpl(
     private val leagueRepository: SpringDataLeagueRepository,
+    private val seasonRepository: SpringDataSeasonRepository,
     private val matchRepository: SpringDataMatchRepository,
     private val userRepository: SpringDataUserRepository,
     private val userEntitlementRepository: SpringDataUserEntitlementRepository,
@@ -51,18 +55,71 @@ class AdminStatsRepositoryImpl(
 
     override fun updateLeagueStatus(leagueId: UUID, isActive: Boolean): Boolean {
         val optionalLeague = leagueRepository.findById(leagueId)
-        if (optionalLeague.isEmpty) return false
-        val existing = optionalLeague.get()
-        val updated = LeagueJpaEntity(
-            id = existing.id,
-            name = existing.name,
-            sportId = existing.sportId,
-            isActive = isActive,
-            logoUrl = existing.logoUrl,
-            createdAt = existing.createdAt
-        )
-        leagueRepository.save(updated)
-        return true
+        if (optionalLeague.isPresent) {
+            val existing = optionalLeague.get()
+            val updated = LeagueJpaEntity(
+                id = existing.id,
+                name = existing.name,
+                sportId = existing.sportId,
+                isActive = isActive,
+                logoUrl = existing.logoUrl,
+                createdAt = existing.createdAt
+            )
+            leagueRepository.save(updated)
+
+            // Cascade to Seasons
+            val seasons = seasonRepository.findByLeagueId(leagueId)
+            seasons.forEach { season ->
+                seasonRepository.save(
+                    SeasonJpaEntity(
+                        id = season.id,
+                        leagueId = season.leagueId,
+                        name = season.name,
+                        startDate = season.startDate,
+                        endDate = season.endDate,
+                        isActive = isActive,
+                        externalSeasonCode = season.externalSeasonCode,
+                        createdAt = season.createdAt
+                    )
+                )
+            }
+            return true
+        }
+
+        // Support case if a Season ID was passed
+        val optionalSeason = seasonRepository.findById(leagueId)
+        if (optionalSeason.isPresent) {
+            val season = optionalSeason.get()
+            seasonRepository.save(
+                SeasonJpaEntity(
+                    id = season.id,
+                    leagueId = season.leagueId,
+                    name = season.name,
+                    startDate = season.startDate,
+                    endDate = season.endDate,
+                    isActive = isActive,
+                    externalSeasonCode = season.externalSeasonCode,
+                    createdAt = season.createdAt
+                )
+            )
+
+            val parentLeague = leagueRepository.findById(season.leagueId).orElse(null)
+            if (parentLeague != null) {
+                leagueRepository.save(
+                    LeagueJpaEntity(
+                        id = parentLeague.id,
+                        name = parentLeague.name,
+                        sportId = parentLeague.sportId,
+                        isActive = isActive,
+                        logoUrl = parentLeague.logoUrl,
+                        createdAt = parentLeague.createdAt
+                    )
+                )
+            }
+            return true
+        }
+
+        return false
     }
 
     override fun getUserStats(): AdminUserStats {
