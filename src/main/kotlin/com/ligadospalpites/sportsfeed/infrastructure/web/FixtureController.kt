@@ -48,6 +48,7 @@ class FixtureController(
                         leagueId = league.id,
                         name = league.name,
                         isActive = league.isActive,
+                        logoUrl = league.logoUrl,
                         currentSeason = currentSeasonRes
                     )
                 }
@@ -171,6 +172,7 @@ data class LeagueResponse(
     val leagueId: UUID,
     val name: String,
     val isActive: Boolean,
+    val logoUrl: String? = null,
     val currentSeason: SeasonResponse? = null
 )
 

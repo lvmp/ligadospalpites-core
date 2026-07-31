@@ -147,14 +147,13 @@ class PredictionController(
                 val prediction = predictionRepository.findByUserIdAndMatchId(userUUID, matchId)
                 ResponseEntity.ok(prediction?.let { listOf(it) } ?: emptyList<PredictionJpaEntity>())
             }
+            leagueId != null -> {
+                val predictions = predictionRepository.findByUserId(userUUID).filter { it.leagueId == leagueId }
+                ResponseEntity.ok(predictions)
+            }
             else -> {
-                // Se leagueId for nulo, tenta filtrar pela liga ativa
-                val targetLeagueId = leagueId ?: leagueRepository.findByIsActiveTrue().firstOrNull()?.id
-                val predictions = if (targetLeagueId != null) {
-                    predictionRepository.findByUserId(userUUID).filter { it.leagueId == targetLeagueId }
-                } else {
-                    predictionRepository.findByUserId(userUUID)
-                }
+                val activeLeagueIds = leagueRepository.findByIsActiveTrue().map { it.id }.toSet()
+                val predictions = predictionRepository.findByUserId(userUUID).filter { activeLeagueIds.contains(it.leagueId) }
                 ResponseEntity.ok(predictions)
             }
         }
@@ -170,12 +169,11 @@ class PredictionController(
     ): ResponseEntity<Any> {
         val userUUID = userResolver.resolveByUidOrUuid(userIdHeader)
 
-        // Se leagueId for nulo, tenta filtrar pela liga ativa
-        val targetLeagueId = leagueId ?: leagueRepository.findByIsActiveTrue().firstOrNull()?.id
-        val predictions = if (targetLeagueId != null) {
-            specialPredictionRepository.findByUserId(userUUID).filter { it.leagueId == targetLeagueId }
+        val predictions = if (leagueId != null) {
+            specialPredictionRepository.findByUserId(userUUID).filter { it.leagueId == leagueId }
         } else {
-            specialPredictionRepository.findByUserId(userUUID)
+            val activeLeagueIds = leagueRepository.findByIsActiveTrue().map { it.id }.toSet()
+            specialPredictionRepository.findByUserId(userUUID).filter { activeLeagueIds.contains(it.leagueId) }
         }
         return ResponseEntity.ok(predictions)
     }
