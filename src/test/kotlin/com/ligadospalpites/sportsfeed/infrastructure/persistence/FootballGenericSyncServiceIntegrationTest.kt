@@ -21,6 +21,9 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
     @Autowired
     private lateinit var matchRepository: SpringDataMatchRepository
 
+    @Autowired
+    private lateinit var leagueRepository: SpringDataLeagueRepository
+
     @MockitoBean
     private lateinit var footballDataClient: FootballDataClient
 
@@ -126,23 +129,14 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
-    fun `should call EspnSoccerClient for Libertadores league`() {
-        val espnEvent = EspnSoccerEvent(
-            id = "789",
-            date = "2026-04-11T19:00:00Z",
-            competitions = listOf(
-                EspnSoccerCompetition(
-                    id = "789",
-                    date = "2026-04-11T19:00:00Z",
-                    status = EspnSoccerStatus(EspnSoccerStatusType(state = "pre")),
-                    competitors = listOf(
-                        EspnSoccerCompetitor("1", "home", false, EspnSoccerTeam("1", displayName = "Flamengo")),
-                        EspnSoccerCompetitor("2", "away", false, EspnSoccerTeam("2", displayName = "Palmeiras"))
-                    )
-                )
-            )
+    fun `should call ApiFootball directly for Libertadores league`() {
+        val afFixture = ApiFootballFixtureWrapper(
+            fixture = ApiFootballFixture(789L, "2026-04-11T19:00:00Z", ApiFootballStatus("NS")),
+            league = ApiFootballLeague(id = 13L, name = "Copa Libertadores", round = "Group Stage - 1"),
+            teams = ApiFootballTeams(ApiFootballTeam("Flamengo"), ApiFootballTeam("Palmeiras")),
+            goals = ApiFootballGoals(null, null)
         )
-        `when`(espnSoccerClient.fetchLibertadoresMatches()).thenReturn(listOf(espnEvent))
+        `when`(apiFootballClient.fetchMatches(leagueId = 13, season = 2026)).thenReturn(listOf(afFixture))
 
         syncService.syncMatches(UUID.randomUUID(), libertadoresLeagueId)
 
@@ -151,9 +145,10 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
         assertEquals("Flamengo", saved[0].homeTeamName)
         assertEquals("Palmeiras", saved[0].awayTeamName)
         assertEquals(MatchStatus.SCHEDULED, saved[0].status)
+        assertEquals("Fase de Grupos", saved[0].phase)
 
         verifyNoInteractions(footballDataClient)
-        verify(espnSoccerClient, times(1)).fetchLibertadoresMatches()
+        verify(apiFootballClient, times(1)).fetchMatches(leagueId = 13, season = 2026)
     }
 
     @Test
@@ -194,5 +189,29 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
         assertEquals(MatchStatus.FINISHED, saved[0].status)
         assertEquals(4, saved[0].homeScore)
         assertEquals(2, saved[0].awayScore)
+    }
+
+    @Test
+    fun `should auto-update league logoUrl during sync matches`() {
+        val fdMatch = FootballDataMatch(
+            id = 999L,
+            utcDate = "2026-04-11T19:00:00Z",
+            status = "SCHEDULED",
+            stage = "REGULAR_SEASON",
+            matchday = 1,
+            homeTeam = FootballDataTeam(1L, "Flamengo", "Flamengo"),
+            awayTeam = FootballDataTeam(2L, "Palmeiras", "Palmeiras")
+        )
+        `when`(footballDataClient.fetchMatches("BSA")).thenReturn(listOf(fdMatch))
+
+        // Create league with null logoUrl in DB first
+        val footballId = UUID.fromString("f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c")
+        leagueRepository.save(LeagueJpaEntity(id = brasileiraoLeagueId, name = "Campeonato Brasileiro", sportId = footballId, isActive = true, logoUrl = null))
+
+        syncService.syncMatches(footballId, brasileiraoLeagueId)
+
+        val updatedLeague = leagueRepository.findById(brasileiraoLeagueId).orElse(null)
+        assertNotNull(updatedLeague)
+        assertEquals("https://media.api-sports.io/football/leagues/71.png", updatedLeague?.logoUrl)
     }
 }

@@ -26,7 +26,8 @@ class FootballWorldCupSyncService(
     private val newsApiClient: com.ligadospalpites.sportsfeed.infrastructure.client.NewsApiClient,
     private val redisTemplate: org.springframework.data.redis.core.StringRedisTemplate,
     private val seasonRepository: SpringDataSeasonRepository,
-    private val eventPublisher: ApplicationEventPublisher
+    private val eventPublisher: ApplicationEventPublisher,
+    private val leagueRepository: SpringDataLeagueRepository? = null
 ) : LeagueSyncService {
 
     private val objectMapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
@@ -75,6 +76,7 @@ class FootballWorldCupSyncService(
 
     override fun syncMatches(sportId: UUID, leagueId: UUID) {
         logger.info("Starting World Cup matches sync with resilience mode active.")
+        ensureLeagueLogo(worldCupLeagueId, "https://media.api-sports.io/football/leagues/1.png")
         val incomingMatches = try {
             self.fetchFromFootballData(sportId, leagueId)
         } catch (e: Exception) {
@@ -363,6 +365,24 @@ class FootballWorldCupSyncService(
             "FT", "AET", "PEN" -> MatchStatus.FINISHED
             "CAN", "PST", "ABD" -> MatchStatus.CANCELLED
             else -> MatchStatus.SCHEDULED
+        }
+    }
+
+    private fun ensureLeagueLogo(leagueId: UUID, logoUrl: String?) {
+        if (logoUrl.isNullOrBlank() || leagueRepository == null) return
+        leagueRepository.findById(leagueId).ifPresent { league ->
+            if (league.logoUrl != logoUrl) {
+                val updated = LeagueJpaEntity(
+                    id = league.id,
+                    name = league.name,
+                    sportId = league.sportId,
+                    isActive = league.isActive,
+                    logoUrl = logoUrl,
+                    createdAt = league.createdAt
+                )
+                leagueRepository.save(updated)
+                logger.info("Auto-updated logoUrl for World Cup league '${league.name}' (ID: $leagueId) to $logoUrl")
+            }
         }
     }
 }

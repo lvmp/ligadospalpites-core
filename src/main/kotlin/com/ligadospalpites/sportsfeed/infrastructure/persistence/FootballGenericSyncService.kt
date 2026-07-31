@@ -23,6 +23,7 @@ data class FootballLeagueMetadata(
     val footballDataCode: String?,
     val apiFootballId: Int,
     val defaultName: String,
+    val logoUrl: String? = null,
     val isLibertadores: Boolean = false,
     val isCopaDoBrasil: Boolean = false
 )
@@ -35,7 +36,8 @@ class FootballGenericSyncService(
     private val apiFootballClient: ApiFootballClient,
     private val espnSoccerClient: EspnSoccerClient,
     private val seasonRepository: SpringDataSeasonRepository,
-    private val eventPublisher: ApplicationEventPublisher
+    private val eventPublisher: ApplicationEventPublisher,
+    private val leagueRepository: SpringDataLeagueRepository? = null
 ) : LeagueSyncService {
 
     private val logger = LoggerFactory.getLogger(FootballGenericSyncService::class.java)
@@ -51,80 +53,93 @@ class FootballGenericSyncService(
             id = UUID.fromString("3dbd8422-9e22-4411-b0db-b06d0421da6a"),
             footballDataCode = "BSA",
             apiFootballId = 71,
-            defaultName = "Campeonato Brasileiro"
+            defaultName = "Campeonato Brasileiro",
+            logoUrl = "https://media.api-sports.io/football/leagues/71.png"
         ),
         UUID.fromString("4acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("4acdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = null,
             apiFootballId = 13,
             defaultName = "Copa Libertadores",
+            logoUrl = "https://media.api-sports.io/football/leagues/13.png",
             isLibertadores = true
         ),
         UUID.fromString("9284ca51-bb54-47c1-841f-81ab28120fa2") to FootballLeagueMetadata(
             id = UUID.fromString("9284ca51-bb54-47c1-841f-81ab28120fa2"),
             footballDataCode = "PD",
             apiFootballId = 140,
-            defaultName = "Campeonato Espanhol"
+            defaultName = "Campeonato Espanhol",
+            logoUrl = "https://media.api-sports.io/football/leagues/140.png"
         ),
         UUID.fromString("827d043c-62c2-402c-b011-3ba2849e7b23") to FootballLeagueMetadata(
             id = UUID.fromString("827d043c-62c2-402c-b011-3ba2849e7b23"),
             footballDataCode = "PL",
             apiFootballId = 39,
-            defaultName = "Campeonato Inglês"
+            defaultName = "Campeonato Inglês",
+            logoUrl = "https://media.api-sports.io/football/leagues/39.png"
         ),
         UUID.fromString("e2d03a11-b9db-44ab-ba02-411a0c0bcf14") to FootballLeagueMetadata(
             id = UUID.fromString("e2d03a11-b9db-44ab-ba02-411a0c0bcf14"),
             footballDataCode = "CL",
             apiFootballId = 2,
-            defaultName = "UEFA Champions League"
+            defaultName = "UEFA Champions League",
+            logoUrl = "https://media.api-sports.io/football/leagues/2.png"
         ),
         UUID.fromString("5acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("5acdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = "ELC",
             apiFootballId = 40,
-            defaultName = "Championship"
+            defaultName = "Championship",
+            logoUrl = "https://media.api-sports.io/football/leagues/40.png"
         ),
         UUID.fromString("6acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("6acdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = "EC",
             apiFootballId = 4,
-            defaultName = "European Championship"
+            defaultName = "European Championship",
+            logoUrl = "https://media.api-sports.io/football/leagues/4.png"
         ),
         UUID.fromString("7acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("7acdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = "FL1",
             apiFootballId = 61,
-            defaultName = "Ligue 1"
+            defaultName = "Ligue 1",
+            logoUrl = "https://media.api-sports.io/football/leagues/61.png"
         ),
         UUID.fromString("8acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("8acdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = "BL1",
             apiFootballId = 78,
-            defaultName = "Bundesliga"
+            defaultName = "Bundesliga",
+            logoUrl = "https://media.api-sports.io/football/leagues/78.png"
         ),
         UUID.fromString("9acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("9acdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = "SA",
             apiFootballId = 135,
-            defaultName = "Serie A"
+            defaultName = "Serie A",
+            logoUrl = "https://media.api-sports.io/football/leagues/135.png"
         ),
         UUID.fromString("aacdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("aacdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = "DED",
             apiFootballId = 88,
-            defaultName = "Eredivisie"
+            defaultName = "Eredivisie",
+            logoUrl = "https://media.api-sports.io/football/leagues/88.png"
         ),
         UUID.fromString("bacdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("bacdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = "PPL",
             apiFootballId = 94,
-            defaultName = "Primeira Liga"
+            defaultName = "Primeira Liga",
+            logoUrl = "https://media.api-sports.io/football/leagues/94.png"
         ),
         UUID.fromString("b3cdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("b3cdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = null,
             apiFootballId = 73,
             defaultName = "Copa do Brasil",
+            logoUrl = "https://media.api-sports.io/football/leagues/73.png",
             isCopaDoBrasil = true
         )
     )
@@ -169,14 +184,14 @@ class FootballGenericSyncService(
     override fun syncMatches(sportId: UUID, leagueId: UUID) {
         val metadata = leaguesMetadata[leagueId] ?: return
         logger.info("Starting matches sync for football league: ${metadata.defaultName}")
+        ensureLeagueLogo(leagueId, metadata.logoUrl)
 
         val incomingMatches = try {
-            if (metadata.isLibertadores) {
-                self.fetchFromEspnLibertadores(sportId, leagueId)
-            } else if (metadata.footballDataCode != null) {
+            if (metadata.footballDataCode != null) {
                 self.fetchFromFootballData(sportId, leagueId)
             } else {
-                self.fetchFromApiFootball(sportId, leagueId, IllegalStateException("No primary free client for ${metadata.defaultName}"))
+                logger.info("Ingesting matches via API-Football for league ${metadata.defaultName} (ID: ${metadata.apiFootballId})")
+                self.fetchFromApiFootball(sportId, leagueId, IllegalStateException("Primary provider for ${metadata.defaultName} is API-Football"))
             }
         } catch (e: Exception) {
             logger.error("Failed to sync matches after trying external providers: ${e.message}")
@@ -387,19 +402,21 @@ class FootballGenericSyncService(
     private fun translateStage(stage: String?, matchday: Int? = null): String {
         val stageUpper = stage?.uppercase()?.trim() ?: ""
         return when {
-            stageUpper == "GROUP_STAGE" || stageUpper == "GROUPS" -> "Fase de Grupos"
-            stageUpper == "LAST_32" || stageUpper == "ROUND_OF_32" -> "Dezesseis-avos de Final"
-            stageUpper == "LAST_16" || stageUpper == "ROUND_OF_16" -> "Oitavas de Final"
-            stageUpper == "QUARTER_FINALS" -> "Quartas de Final"
-            stageUpper == "SEMI_FINALS" -> "Semifinal"
-            stageUpper == "THIRD_PLACE" -> "Disputa do 3º Lugar"
-            stageUpper == "FINAL" || stageUpper == "GRANDE FINAL" -> "Grande Final"
+            stageUpper.startsWith("GROUP") || stageUpper.contains("FASE DE GRUPOS") || stageUpper == "GROUPS" -> "Fase de Grupos"
+            stageUpper.contains("ROUND OF 32") || stageUpper.contains("LAST_32") || stageUpper.contains("16TH") -> "Dezesseis-avos de Final"
+            stageUpper.contains("ROUND OF 16") || stageUpper.contains("LAST_16") || stageUpper.contains("8TH") || stageUpper.contains("OITAVAS") -> "Oitavas de Final"
+            stageUpper.contains("QUARTER") || stageUpper.contains("QUARTAS") -> "Quartas de Final"
+            stageUpper.contains("SEMI") -> "Semifinal"
+            stageUpper.contains("THIRD") || stageUpper.contains("3º") -> "Disputa do 3º Lugar"
+            stageUpper.contains("FINAL") -> "Grande Final"
             stageUpper.contains("REGULAR") || stageUpper.contains("TURNO") || stageUpper.contains("RODADA") -> {
                 determineTurno(stage, matchday)
             }
             else -> {
-                if (matchday != null || stageUpper.isNotBlank()) {
+                if (matchday != null) {
                     determineTurno(stage, matchday)
+                } else if (stageUpper.isNotBlank()) {
+                    stage!!.trim()
                 } else {
                     "1º Turno"
                 }
@@ -453,6 +470,24 @@ class FootballGenericSyncService(
             "in" -> MatchStatus.LIVE
             "post" -> MatchStatus.FINISHED
             else -> MatchStatus.SCHEDULED
+        }
+    }
+
+    private fun ensureLeagueLogo(leagueId: UUID, logoUrl: String?) {
+        if (logoUrl.isNullOrBlank() || leagueRepository == null) return
+        leagueRepository.findById(leagueId).ifPresent { league ->
+            if (league.logoUrl != logoUrl) {
+                val updated = LeagueJpaEntity(
+                    id = league.id,
+                    name = league.name,
+                    sportId = league.sportId,
+                    isActive = league.isActive,
+                    logoUrl = logoUrl,
+                    createdAt = league.createdAt
+                )
+                leagueRepository.save(updated)
+                logger.info("Auto-updated logoUrl for league '${league.name}' (ID: $leagueId) to $logoUrl")
+            }
         }
     }
 }

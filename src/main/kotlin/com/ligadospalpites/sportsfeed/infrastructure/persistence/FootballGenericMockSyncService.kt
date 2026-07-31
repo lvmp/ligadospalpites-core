@@ -12,7 +12,8 @@ import java.util.UUID
 @Profile("integration")
 class FootballGenericMockSyncService(
     private val matchRepository: SpringDataMatchRepository,
-    private val seasonRepository: SpringDataSeasonRepository
+    private val seasonRepository: SpringDataSeasonRepository,
+    private val leagueRepository: SpringDataLeagueRepository
 ) : LeagueSyncService {
 
     private val footballId = UUID.fromString("f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c")
@@ -40,6 +41,20 @@ class FootballGenericMockSyncService(
     override fun syncMatches(sportId: UUID, leagueId: UUID) {
         val existing = matchRepository.findByLeagueId(leagueId)
         matchRepository.deleteAll(existing)
+
+        leagueRepository.findById(leagueId).ifPresent { league ->
+            if (league.logoUrl == null) {
+                val updated = LeagueJpaEntity(
+                    id = league.id,
+                    name = league.name,
+                    sportId = league.sportId,
+                    isActive = league.isActive,
+                    logoUrl = "https://media.api-sports.io/football/leagues/71.png",
+                    createdAt = league.createdAt
+                )
+                leagueRepository.save(updated)
+            }
+        }
 
         val activeSeason = seasonRepository.findByLeagueIdAndIsActiveTrue(leagueId)
         val seasonId = activeSeason?.id ?: throw IllegalStateException("No active season for league $leagueId in integration tests.")

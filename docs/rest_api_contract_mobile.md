@@ -72,7 +72,8 @@ Retorna todas as ligas cadastradas agrupadas por Esporte. Útil para preencher a
       {
         "leagueId": "e7b0a8f9-4b2e-4b67-8890-a54b3d7c588e",
         "name": "Copa do Mundo",
-        "isActive": true
+        "isActive": true,
+        "logoUrl": "https://media.api-sports.io/football/leagues/1.png"
       }
     ]
   }

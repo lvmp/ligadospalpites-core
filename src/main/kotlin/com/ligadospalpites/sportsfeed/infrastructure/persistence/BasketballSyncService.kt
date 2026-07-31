@@ -19,7 +19,8 @@ import java.util.UUID
 data class BasketballLeagueMetadata(
     val id: UUID,
     val apiBasketballId: Int,
-    val defaultName: String
+    val defaultName: String,
+    val logoUrl: String? = null
 )
 
 @Service
@@ -29,7 +30,8 @@ class BasketballSyncService(
     private val apiBasketballClient: ApiBasketballClient,
     @Autowired(required = false) private val espnBasketballClient: EspnBasketballClient? = null,
     private val seasonRepository: SpringDataSeasonRepository,
-    private val eventPublisher: ApplicationEventPublisher
+    private val eventPublisher: ApplicationEventPublisher,
+    private val leagueRepository: SpringDataLeagueRepository
 ) : LeagueSyncService {
 
     private val logger = LoggerFactory.getLogger(BasketballSyncService::class.java)
@@ -44,12 +46,14 @@ class BasketballSyncService(
         UUID.fromString("5c1e3a11-b9db-44ab-ba02-411a0c0bcf14") to BasketballLeagueMetadata(
             id = UUID.fromString("5c1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             apiBasketballId = 12,
-            defaultName = "NBA"
+            defaultName = "NBA",
+            logoUrl = "https://media.api-sports.io/basketball/leagues/12.png"
         ),
         UUID.fromString("2dbd1112-9cde-4411-b0db-b06d0421da6a") to BasketballLeagueMetadata(
             id = UUID.fromString("2dbd1112-9cde-4411-b0db-b06d0421da6a"),
             apiBasketballId = 141,
-            defaultName = "NBB"
+            defaultName = "NBB",
+            logoUrl = "https://media.api-sports.io/basketball/leagues/141.png"
         )
     )
 
@@ -69,6 +73,7 @@ class BasketballSyncService(
     override fun syncMatches(sportId: UUID, leagueId: UUID) {
         val metadata = leaguesMetadata[leagueId] ?: return
         logger.info("Starting basketball games sync for league: ${metadata.defaultName}")
+        ensureLeagueLogo(leagueId, metadata.logoUrl)
 
         val incomingMatches = try {
             self.fetchFromApiBasketball(sportId, leagueId)
@@ -293,6 +298,24 @@ class BasketballSyncService(
                 java.time.OffsetDateTime.parse(dateStr).toInstant()
             } catch (e2: Exception) {
                 Instant.now()
+            }
+        }
+    }
+
+    private fun ensureLeagueLogo(leagueId: UUID, logoUrl: String?) {
+        if (logoUrl.isNullOrBlank()) return
+        leagueRepository.findById(leagueId).ifPresent { league ->
+            if (league.logoUrl != logoUrl) {
+                val updated = LeagueJpaEntity(
+                    id = league.id,
+                    name = league.name,
+                    sportId = league.sportId,
+                    isActive = league.isActive,
+                    logoUrl = logoUrl,
+                    createdAt = league.createdAt
+                )
+                leagueRepository.save(updated)
+                logger.info("Auto-updated logoUrl for basketball league '${league.name}' (ID: $leagueId) to $logoUrl")
             }
         }
     }

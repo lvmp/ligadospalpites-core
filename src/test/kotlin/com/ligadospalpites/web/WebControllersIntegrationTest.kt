@@ -95,7 +95,7 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
 
         // Create Sport and Leagues
         sportRepository.save(SportJpaEntity(id = footballId, name = "Futebol"))
-        leagueRepository.save(LeagueJpaEntity(id = worldCupLeagueId, name = "Copa do Mundo", sportId = footballId, isActive = true))
+        leagueRepository.save(LeagueJpaEntity(id = worldCupLeagueId, name = "Copa do Mundo", sportId = footballId, isActive = true, logoUrl = "https://media.api-sports.io/football/leagues/1.png"))
         
         // Create Active Season
         seasonRepository.save(
@@ -118,6 +118,7 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
             .andExpect(jsonPath("$", hasSize<Int>(1)))
             .andExpect(jsonPath("$[0].sportName", equalTo("Futebol")))
             .andExpect(jsonPath("$[0].leagues[0].name", equalTo("Copa do Mundo")))
+            .andExpect(jsonPath("$[0].leagues[0].logoUrl", equalTo("https://media.api-sports.io/football/leagues/1.png")))
     }
 
     @Test

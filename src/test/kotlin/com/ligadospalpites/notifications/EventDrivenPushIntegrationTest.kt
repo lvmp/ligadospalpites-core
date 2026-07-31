@@ -16,6 +16,7 @@ import com.ligadospalpites.sportsfeed.domain.events.MatchStartedEvent
 import com.ligadospalpites.sportsfeed.domain.models.MatchStatus
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.FootballWorldCupSyncService
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.MatchJpaEntity
+import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataLeagueRepository
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataMatchRepository
 import com.ligadospalpites.users.domain.models.User
 import com.ligadospalpites.users.domain.ports.UserRepository
@@ -87,6 +88,9 @@ class EventDrivenPushIntegrationTest : BaseIntegrationTest() {
 
     @Autowired
     private lateinit var eventPublisher: ApplicationEventPublisher
+
+    @Autowired
+    private lateinit var leagueRepository: SpringDataLeagueRepository
 
     @Autowired
     private lateinit var testEventCapturer: TestEventCapturer
@@ -181,7 +185,8 @@ class EventDrivenPushIntegrationTest : BaseIntegrationTest() {
             newsApiClient = mockNewsApiClient,
             redisTemplate = redisTemplate,
             seasonRepository = mockSeasonRepository,
-            eventPublisher = eventPublisher
+            eventPublisher = eventPublisher,
+            leagueRepository = leagueRepository
         )
 
         val matchId = UUID.randomUUID()
