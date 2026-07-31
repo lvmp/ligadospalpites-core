@@ -129,14 +129,24 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
-    fun `should call ApiFootball directly for Libertadores league`() {
-        val afFixture = ApiFootballFixtureWrapper(
-            fixture = ApiFootballFixture(789L, "2026-04-11T19:00:00Z", ApiFootballStatus("NS")),
-            league = ApiFootballLeague(id = 13L, name = "Copa Libertadores", round = "Group Stage - 1"),
-            teams = ApiFootballTeams(ApiFootballTeam("Flamengo"), ApiFootballTeam("Palmeiras")),
-            goals = ApiFootballGoals(null, null)
+    fun `should call EspnSoccerClient for Libertadores league`() {
+        val espnEvent = EspnSoccerEvent(
+            id = "789",
+            date = "2026-04-11T19:00:00Z",
+            competitions = listOf(
+                EspnSoccerCompetition(
+                    id = "789",
+                    date = "2026-04-11T19:00:00Z",
+                    status = EspnSoccerStatus(EspnSoccerStatusType(state = "pre")),
+                    notes = listOf(EspnSoccerNote(headline = "Group Stage - Matchday 1")),
+                    competitors = listOf(
+                        EspnSoccerCompetitor("1", "home", false, EspnSoccerTeam("1", displayName = "Flamengo")),
+                        EspnSoccerCompetitor("2", "away", false, EspnSoccerTeam("2", displayName = "Palmeiras"))
+                    )
+                )
+            )
         )
-        `when`(apiFootballClient.fetchMatches(leagueId = 13, season = 2026)).thenReturn(listOf(afFixture))
+        `when`(espnSoccerClient.fetchLibertadoresMatches(2026)).thenReturn(listOf(espnEvent))
 
         syncService.syncMatches(UUID.randomUUID(), libertadoresLeagueId)
 
@@ -148,7 +158,7 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
         assertEquals("Fase de Grupos", saved[0].phase)
 
         verifyNoInteractions(footballDataClient)
-        verify(apiFootballClient, times(1)).fetchMatches(leagueId = 13, season = 2026)
+        verify(espnSoccerClient, times(1)).fetchLibertadoresMatches(2026)
     }
 
     @Test

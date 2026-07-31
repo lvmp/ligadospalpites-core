@@ -187,7 +187,9 @@ class FootballGenericSyncService(
         ensureLeagueLogo(leagueId, metadata.logoUrl)
 
         val incomingMatches = try {
-            if (metadata.footballDataCode != null) {
+            if (metadata.isLibertadores) {
+                self.fetchFromEspnLibertadores(sportId, leagueId)
+            } else if (metadata.footballDataCode != null) {
                 self.fetchFromFootballData(sportId, leagueId)
             } else {
                 logger.info("Ingesting matches via API-Football for league ${metadata.defaultName} (ID: ${metadata.apiFootballId})")
@@ -212,8 +214,9 @@ class FootballGenericSyncService(
         logger.info("Trying primary provider (ESPN API) for Libertadores league: ${metadata.defaultName}")
         val activeSeason = seasonRepository.findByLeagueIdAndIsActiveTrue(leagueId)
         val targetSeasonId = activeSeason?.id ?: throw IllegalStateException("No active season found for league: $leagueId")
+        val seasonYear = activeSeason.externalSeasonCode
 
-        val events = espnSoccerClient.fetchLibertadoresMatches()
+        val events = espnSoccerClient.fetchLibertadoresMatches(seasonYear)
         return events.mapNotNull { event ->
             val comp = event.competitions.firstOrNull() ?: return@mapNotNull null
             val homeComp = comp.competitors.find { it.homeAway == "home" } ?: return@mapNotNull null
@@ -225,6 +228,9 @@ class FootballGenericSyncService(
             val statusState = comp.status?.type?.state ?: "pre"
             val status = mapEspnStatus(statusState)
             val kickoff = try { Instant.parse(event.date) } catch (e: Exception) { Instant.now() }
+
+            val rawStage = comp.notes.firstOrNull()?.headline ?: comp.status?.type?.description
+            val phase = translateStage(rawStage)
 
             MatchJpaEntity(
                 id = UUID.randomUUID(),
@@ -239,7 +245,7 @@ class FootballGenericSyncService(
                 status = status,
                 homeScore = homeComp.score?.toIntOrNull(),
                 awayScore = awayComp.score?.toIntOrNull(),
-                phase = comp.status?.type?.description ?: "Fase de Grupos",
+                phase = phase,
                 updatedAt = Instant.now()
             )
         }

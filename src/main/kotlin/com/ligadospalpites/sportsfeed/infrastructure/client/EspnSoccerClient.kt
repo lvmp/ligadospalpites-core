@@ -16,15 +16,16 @@ class EspnSoccerClient(
         .baseUrl(baseUrl)
         .requestFactory(SimpleClientHttpRequestFactory().apply {
             setConnectTimeout(5000)
-            setReadTimeout(10000)
+            setReadTimeout(15000)
         })
         .build()
 
-    fun fetchLibertadoresMatches(): List<EspnSoccerEvent> {
-        logger.info("Fetching Libertadores matches from ESPN Public API")
+    fun fetchLibertadoresMatches(seasonYear: Int = 2026): List<EspnSoccerEvent> {
+        val dateRange = "${seasonYear}0101-${seasonYear}1231"
+        logger.info("Fetching full-season Libertadores matches from ESPN Public API (season: $seasonYear, dates: $dateRange)")
         return try {
             val response = restClient.get()
-                .uri("/apis/site/v2/sports/soccer/conmebol.libertadores/scoreboard")
+                .uri("/apis/site/v2/sports/soccer/conmebol.libertadores/scoreboard?dates=$dateRange&limit=500")
                 .retrieve()
                 .body(EspnSoccerResponse::class.java)
             response?.events ?: emptyList()
@@ -51,7 +52,13 @@ data class EspnSoccerCompetition(
     val id: String,
     val date: String,
     val status: EspnSoccerStatus? = null,
+    val notes: List<EspnSoccerNote> = emptyList(),
     val competitors: List<EspnSoccerCompetitor> = emptyList()
+)
+
+data class EspnSoccerNote(
+    val type: String? = null,
+    val headline: String? = null
 )
 
 data class EspnSoccerStatus(
