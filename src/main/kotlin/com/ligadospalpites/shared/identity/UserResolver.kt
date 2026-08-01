@@ -2,6 +2,8 @@ package com.ligadospalpites.shared.identity
 
 import com.ligadospalpites.users.domain.models.User
 import com.ligadospalpites.users.domain.ports.UserRepository
+import org.springframework.security.access.AccessDeniedException
+import org.springframework.security.core.Authentication
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
@@ -65,5 +67,29 @@ class UserResolver(private val userRepository: UserRepository) {
             )
             return user.id
         }
+    }
+
+    @Transactional
+    fun resolveAuthenticatedUser(headerValue: String?, authentication: Authentication?): UUID {
+        val jwtPrincipal = if (authentication != null && authentication.isAuthenticated && authentication.name != "anonymousUser") {
+            authentication.name
+        } else null
+
+        if (jwtPrincipal != null && !headerValue.isNullOrBlank()) {
+            val jwtUserUuid = resolveByUidOrUuid(jwtPrincipal)
+            val headerUserUuid = resolveByUidOrUuid(headerValue)
+            if (jwtUserUuid != headerUserUuid) {
+                throw AccessDeniedException(
+                    "Acesso negado: O usuário do Token JWT não corresponde ao X-User-Id informado."
+                )
+            }
+            return jwtUserUuid
+        }
+
+        if (jwtPrincipal != null) {
+            return resolveByUidOrUuid(jwtPrincipal)
+        }
+
+        return resolveByUidOrUuid(headerValue)
     }
 }

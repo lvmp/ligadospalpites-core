@@ -53,6 +53,12 @@ class MatchJpaEntity(
     @Column(name = "period_scores_json", columnDefinition = "jsonb")
     val periodScoresJson: String? = null,
 
+    @Column(name = "number_of_games")
+    val numberOfGames: Int? = null,
+
+    @Column(name = "stream_url", length = 512)
+    val streamUrl: String? = null,
+
     @Column(name = "updated_at", nullable = false)
     val updatedAt: Instant = Instant.now()
 ) {
@@ -71,6 +77,8 @@ class MatchJpaEntity(
         homeTeamLogoUrl = homeTeamLogoUrl,
         awayTeamLogoUrl = awayTeamLogoUrl,
         periodScoresJson = periodScoresJson,
+        numberOfGames = numberOfGames,
+        streamUrl = streamUrl,
         updatedAt = updatedAt
     )
 
@@ -90,6 +98,8 @@ class MatchJpaEntity(
             homeTeamLogoUrl = match.homeTeamLogoUrl,
             awayTeamLogoUrl = match.awayTeamLogoUrl,
             periodScoresJson = match.periodScoresJson,
+            numberOfGames = match.numberOfGames,
+            streamUrl = match.streamUrl,
             updatedAt = match.updatedAt
         )
     }

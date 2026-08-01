@@ -526,6 +526,49 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `should return matches for next 7 days in dashboard`() {
+        // Save a match in 5 days (should be included)
+        matchRepository.save(
+            MatchJpaEntity(
+                id = UUID.randomUUID(),
+                sportId = footballId,
+                leagueId = worldCupLeagueId,
+                seasonId = testSeasonId,
+                homeTeamName = "França",
+                awayTeamName = "Inglaterra",
+                kickoffTime = Instant.now().plus(5, ChronoUnit.DAYS),
+                status = MatchStatus.SCHEDULED,
+                phase = "Quartas de Final"
+            )
+        )
+
+        // Save a match in 9 days (should be excluded as it's beyond 7 days)
+        matchRepository.save(
+            MatchJpaEntity(
+                id = UUID.randomUUID(),
+                sportId = footballId,
+                leagueId = worldCupLeagueId,
+                seasonId = testSeasonId,
+                homeTeamName = "Espanha",
+                awayTeamName = "Alemanha",
+                kickoffTime = Instant.now().plus(9, ChronoUnit.DAYS),
+                status = MatchStatus.SCHEDULED,
+                phase = "Semifinal"
+            )
+        )
+
+        val mvcResult = mockMvc.perform(get("/api/v1/home/dashboard")
+            .header("X-User-Id", testUserId.toString()))
+            .andExpect(request().asyncStarted())
+            .andReturn()
+
+        mockMvc.perform(asyncDispatch(mvcResult))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.nextMatches[?(@.homeTeam == 'França')]", hasSize<Int>(1)))
+            .andExpect(jsonPath("$.nextMatches[?(@.homeTeam == 'Espanha')]", hasSize<Int>(0)))
+    }
+
+    @Test
     fun `should return group ranking and points when leagueId represents a group`() {
         val groupId = UUID.randomUUID()
         groupRepository.save(GroupJpaEntity(id = groupId, name = "Grupo dos Amigos", creatorId = testUserId, scoringRulesJson = "{}"))

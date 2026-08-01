@@ -5,6 +5,7 @@ import java.util.UUID
 object ScoringEngine {
 
     val BASKETBALL_SPORT_ID: UUID = UUID.fromString("e5284bf1-d576-4740-97cc-f06bca181cb2")
+    val ESPORTS_SPORT_ID: UUID = UUID.fromString("9b1e3a11-b9db-44ab-ba02-411a0c0bcf14")
 
     fun calculateMatchPoints(
         predHome: Int, predAway: Int,
@@ -14,6 +15,9 @@ object ScoringEngine {
     ): Int {
         if (sportId == BASKETBALL_SPORT_ID) {
             return calculateBasketballMatchPoints(predHome, predAway, realHome, realAway, isFinal)
+        }
+        if (sportId == ESPORTS_SPORT_ID) {
+            return calculateEsportsMatchPoints(predHome, predAway, realHome, realAway, isFinal)
         }
 
         // Rule 1: Exact Score Match (25 points / 50 for final)
@@ -81,6 +85,40 @@ object ScoringEngine {
             else -> 10
         }
 
+        return if (isFinal) basePoints * 2 else basePoints
+    }
+
+    fun calculateEsportsMatchPoints(
+        predHome: Int, predAway: Int,
+        realHome: Int, realAway: Int,
+        isFinal: Boolean = false
+    ): Int {
+        // Exact series score match (e.g., predicted 2x1 in MD3, real 2x1) -> 25 pts (50 if isFinal)
+        if (predHome == realHome && predAway == realAway) {
+            return if (isFinal) 50 else 25
+        }
+
+        val predWinner = when {
+            predHome > predAway -> 1
+            predHome < predAway -> -1
+            else -> 0
+        }
+        val realWinner = when {
+            realHome > realAway -> 1
+            realHome < realAway -> -1
+            else -> 0
+        }
+
+        if (predWinner == 0 || predWinner != realWinner) {
+            return 0
+        }
+
+        // Correct Winner with Different Score / Saldo (e.g., predicted 2x0, real 2x1) -> 15 pts (30 if isFinal)
+        // If series winner is correct, but exact map count differed
+        val predMargin = kotlin.math.abs(predHome - predAway)
+        val realMargin = kotlin.math.abs(realHome - realAway)
+
+        val basePoints = if (kotlin.math.abs(predMargin - realMargin) <= 1) 15 else 10
         return if (isFinal) basePoints * 2 else basePoints
     }
 }

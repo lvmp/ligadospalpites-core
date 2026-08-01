@@ -25,6 +25,8 @@ data class Match(
     val homeTeamLogoUrl: String? = null,
     val awayTeamLogoUrl: String? = null,
     val periodScoresJson: String? = null,
+    val numberOfGames: Int? = null,
+    val streamUrl: String? = null,
     val updatedAt: Instant = Instant.now()
 )
 

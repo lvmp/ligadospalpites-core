@@ -85,32 +85,35 @@ class DashboardController(
             Pair(rank, score)
         }, executor)
 
-        // 2. Fetch Next Scheduled Matches (Async - Next 3 days including current date)
+        // 2. Fetch Next Scheduled Matches (Async - Next 7 days including current date)
         val nextMatchesFuture = CompletableFuture.supplyAsync({
             val zoneId = ZoneId.of("America/Sao_Paulo")
             val today = LocalDate.now(zoneId)
             val startOfToday = today.atStartOfDay(zoneId).toInstant()
-            val endOf3Days = today.plusDays(3).atStartOfDay(zoneId).toInstant()
+            val endOf7Days = today.plusDays(7).atTime(23, 59, 59, 999_999_999).atZone(zoneId).toInstant()
 
             var matches = matchRepository.findAll()
             val activeLeagueIds = leagueRepository.findByIsActiveTrue().map { it.id }.toSet()
             
             matches = matches.filter { 
                 (it.status.name == "SCHEDULED" || it.status.name == "LIVE") && 
-                activeLeagueIds.contains(it.leagueId) &&
                 !it.kickoffTime.isBefore(startOfToday) &&
-                it.kickoffTime.isBefore(endOf3Days)
-            }
-
-            if (sportId != null) {
-                matches = matches.filter { it.sportId == sportId }
+                it.kickoffTime.isBefore(endOf7Days)
             }
 
             if (leagueId != null) {
                 val isGroup = groupRepository.existsById(leagueId)
                 if (!isGroup) {
                     matches = matches.filter { it.leagueId == leagueId }
+                } else {
+                    matches = matches.filter { activeLeagueIds.contains(it.leagueId) }
                 }
+            } else {
+                matches = matches.filter { activeLeagueIds.contains(it.leagueId) }
+            }
+
+            if (sportId != null) {
+                matches = matches.filter { it.sportId == sportId }
             }
 
             matches.sortedBy { it.kickoffTime }
