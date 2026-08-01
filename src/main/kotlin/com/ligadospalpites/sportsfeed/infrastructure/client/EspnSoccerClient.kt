@@ -20,19 +20,27 @@ class EspnSoccerClient(
         })
         .build()
 
-    fun fetchLibertadoresMatches(seasonYear: Int = 2026): List<EspnSoccerEvent> {
+    fun fetchSoccerMatches(leagueCode: String, seasonYear: Int = 2026): List<EspnSoccerEvent> {
         val dateRange = "${seasonYear}0101-${seasonYear}1231"
-        logger.info("Fetching full-season Libertadores matches from ESPN Public API (season: $seasonYear, dates: $dateRange)")
+        logger.info("Fetching full-season matches for $leagueCode from ESPN Public API (season: $seasonYear, dates: $dateRange)")
         return try {
             val response = restClient.get()
-                .uri("/apis/site/v2/sports/soccer/conmebol.libertadores/scoreboard?dates=$dateRange&limit=500")
+                .uri("/apis/site/v2/sports/soccer/$leagueCode/scoreboard?dates=$dateRange&limit=500")
                 .retrieve()
                 .body(EspnSoccerResponse::class.java)
             response?.events ?: emptyList()
         } catch (e: Exception) {
-            logger.error("Error communicating with ESPN Soccer API: ${e.message}", e)
+            logger.error("Error communicating with ESPN Soccer API for $leagueCode: ${e.message}", e)
             throw e
         }
+    }
+
+    fun fetchLibertadoresMatches(seasonYear: Int = 2026): List<EspnSoccerEvent> {
+        return fetchSoccerMatches("conmebol.libertadores", seasonYear)
+    }
+
+    fun fetchCopaDoBrasilMatches(seasonYear: Int = 2026): List<EspnSoccerEvent> {
+        return fetchSoccerMatches("bra.copa_do_brasil", seasonYear)
     }
 }
 

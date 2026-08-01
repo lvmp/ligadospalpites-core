@@ -25,7 +25,8 @@ data class FootballLeagueMetadata(
     val defaultName: String,
     val logoUrl: String? = null,
     val isLibertadores: Boolean = false,
-    val isCopaDoBrasil: Boolean = false
+    val isCopaDoBrasil: Boolean = false,
+    val espnLeagueCode: String? = null
 )
 
 @Service
@@ -62,7 +63,8 @@ class FootballGenericSyncService(
             apiFootballId = 13,
             defaultName = "Copa Libertadores",
             logoUrl = "https://a.espncdn.com/i/leaguelogos/soccer/500/14.png",
-            isLibertadores = true
+            isLibertadores = true,
+            espnLeagueCode = "conmebol.libertadores"
         ),
         UUID.fromString("9284ca51-bb54-47c1-841f-81ab28120fa2") to FootballLeagueMetadata(
             id = UUID.fromString("9284ca51-bb54-47c1-841f-81ab28120fa2"),
@@ -140,7 +142,8 @@ class FootballGenericSyncService(
             apiFootballId = 73,
             defaultName = "Copa do Brasil",
             logoUrl = "https://a.espncdn.com/i/leaguelogos/soccer/500/bra.copa_do_brasil.png",
-            isCopaDoBrasil = true
+            isCopaDoBrasil = true,
+            espnLeagueCode = "bra.copa_do_brasil"
         )
     )
 
@@ -187,7 +190,7 @@ class FootballGenericSyncService(
         ensureLeagueLogo(leagueId, metadata.logoUrl)
 
         val incomingMatches = try {
-            if (metadata.isLibertadores) {
+            if (metadata.isLibertadores || metadata.isCopaDoBrasil || metadata.espnLeagueCode != null) {
                 self.fetchFromEspnLibertadores(sportId, leagueId)
             } else if (metadata.footballDataCode != null) {
                 self.fetchFromFootballData(sportId, leagueId)
@@ -207,16 +210,18 @@ class FootballGenericSyncService(
         }
     }
 
-    @CircuitBreaker(name = "espnSoccerApi", fallbackMethod = "fetchFromApiFootball")
+    @CircuitBreaker(name = "espnSoccerApi", fallbackMethod = "fetchMatchesLocalFallback")
     @Retry(name = "espnSoccerApi")
     fun fetchFromEspnLibertadores(sportId: UUID, leagueId: UUID): List<MatchJpaEntity> {
         val metadata = leaguesMetadata[leagueId] ?: throw IllegalArgumentException("Invalid league ID: $leagueId")
-        logger.info("Trying primary provider (ESPN API) for Libertadores league: ${metadata.defaultName}")
+        val espnCode = metadata.espnLeagueCode
+            ?: if (metadata.isCopaDoBrasil) "bra.copa_do_brasil" else "conmebol.libertadores"
+        logger.info("Trying primary provider (ESPN API) for league: ${metadata.defaultName} ($espnCode)")
         val activeSeason = seasonRepository.findByLeagueIdAndIsActiveTrue(leagueId)
         val targetSeasonId = activeSeason?.id ?: throw IllegalStateException("No active season found for league: $leagueId")
         val seasonYear = activeSeason.externalSeasonCode
 
-        val events = espnSoccerClient.fetchLibertadoresMatches(seasonYear)
+        val events = espnSoccerClient.fetchSoccerMatches(espnCode, seasonYear)
         return events.mapNotNull { event ->
             val comp = event.competitions.firstOrNull() ?: return@mapNotNull null
             val homeComp = comp.competitors.find { it.homeAway == "home" } ?: return@mapNotNull null
@@ -227,7 +232,7 @@ class FootballGenericSyncService(
 
             val statusState = comp.status?.type?.state ?: "pre"
             val status = mapEspnStatus(statusState)
-            val kickoff = try { Instant.parse(event.date) } catch (e: Exception) { Instant.now() }
+            val kickoff = parseIsoInstant(comp.date)
 
             val rawStage = comp.notes.firstOrNull()?.headline ?: comp.status?.type?.description
             val phase = translateStage(rawStage)
@@ -248,6 +253,24 @@ class FootballGenericSyncService(
                 phase = phase,
                 updatedAt = Instant.now()
             )
+        }
+    }
+
+    private fun parseIsoInstant(dateStr: String?): Instant {
+        if (dateStr.isNullOrBlank()) return Instant.now()
+        return try {
+            Instant.parse(dateStr)
+        } catch (e: Exception) {
+            try {
+                java.time.OffsetDateTime.parse(dateStr).toInstant()
+            } catch (e2: Exception) {
+                try {
+                    java.time.ZonedDateTime.parse(dateStr).toInstant()
+                } catch (e3: Exception) {
+                    logger.error("Failed to parse kickoff date '$dateStr': ${e3.message}")
+                    Instant.now()
+                }
+            }
         }
     }
 

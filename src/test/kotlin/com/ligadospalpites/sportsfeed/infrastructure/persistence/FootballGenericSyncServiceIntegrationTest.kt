@@ -35,6 +35,7 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
 
     private val brasileiraoLeagueId = UUID.fromString("3dbd8422-9e22-4411-b0db-b06d0421da6a")
     private val libertadoresLeagueId = UUID.fromString("4acdf011-fbde-4122-83bc-c46b1ba847de")
+    private val copaDoBrasilLeagueId = UUID.fromString("b3cdf011-fbde-4122-83bc-c46b1ba847de")
     private val brasileiraoSeasonId = UUID.fromString("e89c6fb4-2be6-4447-b2e1-87bbca8474ef")
 
     @BeforeEach
@@ -146,7 +147,7 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
                 )
             )
         )
-        `when`(espnSoccerClient.fetchLibertadoresMatches(2026)).thenReturn(listOf(espnEvent))
+        `when`(espnSoccerClient.fetchSoccerMatches("conmebol.libertadores", 2026)).thenReturn(listOf(espnEvent))
 
         syncService.syncMatches(UUID.randomUUID(), libertadoresLeagueId)
 
@@ -158,7 +159,69 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
         assertEquals("Fase de Grupos", saved[0].phase)
 
         verifyNoInteractions(footballDataClient)
-        verify(espnSoccerClient, times(1)).fetchLibertadoresMatches(2026)
+        verifyNoInteractions(apiFootballClient)
+        verify(espnSoccerClient, times(1)).fetchSoccerMatches("conmebol.libertadores", 2026)
+    }
+
+    @Test
+    fun `should call EspnSoccerClient for Copa do Brasil league without calling ApiFootballClient`() {
+        val espnEvent = EspnSoccerEvent(
+            id = "999",
+            date = "2026-05-15T21:30:00Z",
+            competitions = listOf(
+                EspnSoccerCompetition(
+                    id = "999",
+                    date = "2026-05-15T21:30:00Z",
+                    status = EspnSoccerStatus(EspnSoccerStatusType(state = "pre")),
+                    notes = listOf(EspnSoccerNote(headline = "3ª Fase")),
+                    competitors = listOf(
+                        EspnSoccerCompetitor("10", "home", false, EspnSoccerTeam("10", displayName = "São Paulo")),
+                        EspnSoccerCompetitor("20", "away", false, EspnSoccerTeam("20", displayName = "Corinthians"))
+                    )
+                )
+            )
+        )
+        `when`(espnSoccerClient.fetchSoccerMatches("bra.copa_do_brasil", 2026)).thenReturn(listOf(espnEvent))
+
+        syncService.syncMatches(UUID.randomUUID(), copaDoBrasilLeagueId)
+
+        val saved = matchRepository.findByLeagueId(copaDoBrasilLeagueId)
+        assertEquals(1, saved.size)
+        assertEquals("São Paulo", saved[0].homeTeamName)
+        assertEquals("Corinthians", saved[0].awayTeamName)
+        assertEquals(MatchStatus.SCHEDULED, saved[0].status)
+        assertEquals("3ª Fase", saved[0].phase)
+
+        verifyNoInteractions(footballDataClient)
+        verifyNoInteractions(apiFootballClient)
+        verify(espnSoccerClient, times(1)).fetchSoccerMatches("bra.copa_do_brasil", 2026)
+    }
+
+    @Test
+    fun `should correctly parse ESPN ISO date without seconds and preserve actual kickoff time`() {
+        val espnEvent = EspnSoccerEvent(
+            id = "888",
+            date = "2026-04-10T22:00Z",
+            competitions = listOf(
+                EspnSoccerCompetition(
+                    id = "888",
+                    date = "2026-04-10T22:00Z",
+                    status = EspnSoccerStatus(EspnSoccerStatusType(state = "pre")),
+                    notes = listOf(EspnSoccerNote(headline = "Fase de Grupos")),
+                    competitors = listOf(
+                        EspnSoccerCompetitor("1", "home", false, EspnSoccerTeam("1", displayName = "Flamengo")),
+                        EspnSoccerCompetitor("2", "away", false, EspnSoccerTeam("2", displayName = "Palmeiras"))
+                    )
+                )
+            )
+        )
+        `when`(espnSoccerClient.fetchSoccerMatches("conmebol.libertadores", 2026)).thenReturn(listOf(espnEvent))
+
+        syncService.syncMatches(UUID.randomUUID(), libertadoresLeagueId)
+
+        val saved = matchRepository.findByLeagueId(libertadoresLeagueId)
+        assertEquals(1, saved.size)
+        assertEquals(java.time.Instant.parse("2026-04-10T22:00:00Z"), saved[0].kickoffTime)
     }
 
     @Test
