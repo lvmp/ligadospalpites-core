@@ -46,25 +46,25 @@ class PandaScoreSyncService(
             id = UUID.fromString("7c1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             defaultName = "CBLOL",
             pandaScoreSlug = "league-of-legends-cblol",
-            logoUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/CBLOL_Logo.png/600px-CBLOL_Logo.png"
+            logoUrl = "https://www.svgrepo.com/show/353982/league-of-legends.svg"
         ),
         UUID.fromString("8c1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("8c1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             defaultName = "VCT Americas",
             pandaScoreSlug = "vct-americas",
-            logoUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d0/VCT_Americas_logo.svg/512px-VCT_Americas_logo.svg.png"
+            logoUrl = "https://www.svgrepo.com/show/354508/valorant.svg"
         ),
         UUID.fromString("9c1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("9c1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             defaultName = "CS2 Major",
             pandaScoreSlug = "cs-go-major",
-            logoUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Counter-Strike_2_logo.svg/512px-Counter-Strike_2_logo.svg.png"
+            logoUrl = "https://www.svgrepo.com/show/353613/counter-strike.svg"
         ),
         UUID.fromString("ac1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("ac1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             defaultName = "Worlds",
             pandaScoreSlug = "league-of-legends-world-championship",
-            logoUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/League_of_Legends_World_Championship_logo.svg/512px-League_of_Legends_World_Championship_logo.svg.png"
+            logoUrl = "https://www.svgrepo.com/show/353982/league-of-legends.svg"
         )
     )
 

@@ -24,10 +24,29 @@ class AdminUserController(
 
     @GetMapping
     fun getUsers(
+        @RequestParam(required = false) query: String?,
+        @RequestParam(required = false) q: String?,
+        @RequestParam(required = false) search: String?,
+        @RequestParam(required = false) name: String?,
+        @RequestParam(required = false) nome: String?,
+        @RequestParam(required = false) email: String?,
+        @RequestParam(required = false) id: String?,
+        @RequestParam(required = false) uuid: String?,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "50") size: Int
     ): ResponseEntity<AdminUsersPageResponse> {
-        val usersPage = getAdminUsersListUseCase(page, size)
+        val effectiveQuery = query ?: q ?: search
+        val effectiveName = name ?: nome
+        val effectiveId = id ?: uuid
+
+        val usersPage = getAdminUsersListUseCase(
+            query = effectiveQuery,
+            name = effectiveName,
+            email = email,
+            id = effectiveId,
+            page = page,
+            size = size
+        )
         return ResponseEntity.ok(usersPage)
     }
 

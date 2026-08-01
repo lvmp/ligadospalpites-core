@@ -148,6 +148,42 @@ class AdminModuleIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `should filter workspace users by name, email, and UUID`() {
+        val user1Id = UUID.randomUUID()
+        val user2Id = UUID.randomUUID()
+        userRepository.save(UserJpaEntity(id = user1Id, firebaseUid = "fb-$user1Id", email = "alice@example.com", name = "Alice Silva"))
+        userRepository.save(UserJpaEntity(id = user2Id, firebaseUid = "fb-$user2Id", email = "bob@test.com", name = "Bob Santos"))
+
+        // Filter by name
+        mockMvc.perform(get("/api/v1/workspace/users?name=Alice")
+            .header("X-Workspace-Api-Key", adminApiKey))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content.length()", equalTo(1)))
+            .andExpect(jsonPath("$.content[0].name", equalTo("Alice Silva")))
+
+        // Filter by email
+        mockMvc.perform(get("/api/v1/workspace/users?email=bob@test.com")
+            .header("X-Workspace-Api-Key", adminApiKey))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content.length()", equalTo(1)))
+            .andExpect(jsonPath("$.content[0].name", equalTo("Bob Santos")))
+
+        // Filter by exact UUID
+        mockMvc.perform(get("/api/v1/workspace/users?id=$user1Id")
+            .header("X-Workspace-Api-Key", adminApiKey))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content.length()", equalTo(1)))
+            .andExpect(jsonPath("$.content[0].id", equalTo(user1Id.toString())))
+
+        // General search query matching UUID
+        mockMvc.perform(get("/api/v1/workspace/users?query=$user2Id")
+            .header("X-Workspace-Api-Key", adminApiKey))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.content.length()", equalTo(1)))
+            .andExpect(jsonPath("$.content[0].id", equalTo(user2Id.toString())))
+    }
+
+    @Test
     fun `should dispatch notification and return health telemetry`() {
         val dispatchPayload = """
             {

@@ -10,6 +10,7 @@ import com.ligadospalpites.users.domain.models.EntitlementType
 import com.ligadospalpites.users.infrastructure.persistence.SpringDataUserEntitlementRepository
 import com.ligadospalpites.users.infrastructure.persistence.SpringDataUserRepository
 import com.ligadospalpites.users.infrastructure.persistence.UserEntitlementJpaEntity
+import com.ligadospalpites.users.infrastructure.persistence.UserSpecifications
 import org.springframework.stereotype.Repository
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -147,9 +148,29 @@ class AdminStatsRepositoryImpl(
         )
     }
 
-    override fun getUsers(page: Int, size: Int): com.ligadospalpites.admin.infrastructure.web.dtos.AdminUsersPageResponse {
+    override fun getUsers(
+        query: String?,
+        name: String?,
+        email: String?,
+        id: String?,
+        page: Int,
+        size: Int
+    ): com.ligadospalpites.admin.infrastructure.web.dtos.AdminUsersPageResponse {
         val pageable = org.springframework.data.domain.PageRequest.of(page, size, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"))
-        val userPage = userRepository.findAll(pageable)
+        val userIdUuid = id?.let {
+            try {
+                UUID.fromString(it.trim())
+            } catch (_: Exception) {
+                null
+            }
+        }
+        val spec = UserSpecifications.filterUsers(
+            query = query,
+            name = name,
+            email = email,
+            id = userIdUuid
+        )
+        val userPage = userRepository.findAll(spec, pageable)
         val entitlements = userEntitlementRepository.findAll()
 
         val content = userPage.content.map { user ->

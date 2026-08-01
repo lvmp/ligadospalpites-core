@@ -8,7 +8,21 @@ import org.springframework.stereotype.Service
 class GetAdminUsersListUseCase(
     private val adminStatsRepository: AdminStatsRepository
 ) {
-    operator fun invoke(page: Int = 0, size: Int = 50): AdminUsersPageResponse {
-        return adminStatsRepository.getUsers(page, size)
+    operator fun invoke(
+        query: String? = null,
+        name: String? = null,
+        email: String? = null,
+        id: String? = null,
+        page: Int = 0,
+        size: Int = 50
+    ): AdminUsersPageResponse {
+        return adminStatsRepository.getUsers(
+            query = query,
+            name = name,
+            email = email,
+            id = id,
+            page = page,
+            size = size
+        )
     }
 }
