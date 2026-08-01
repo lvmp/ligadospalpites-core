@@ -46,25 +46,25 @@ class PandaScoreSyncService(
             id = UUID.fromString("7c1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             defaultName = "CBLOL",
             pandaScoreSlug = "league-of-legends-cblol",
-            logoUrl = "https://www.svgrepo.com/show/353982/league-of-legends.svg"
+            logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/league-of-legends.png"
         ),
         UUID.fromString("8c1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("8c1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             defaultName = "VCT Americas",
             pandaScoreSlug = "vct-americas",
-            logoUrl = "https://www.svgrepo.com/show/354508/valorant.svg"
+            logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/valorant.png"
         ),
         UUID.fromString("9c1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("9c1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             defaultName = "CS2 Major",
             pandaScoreSlug = "cs-go-major",
-            logoUrl = "https://www.svgrepo.com/show/353613/counter-strike.svg"
+            logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/csgo.png"
         ),
         UUID.fromString("ac1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("ac1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             defaultName = "Worlds",
             pandaScoreSlug = "league-of-legends-world-championship",
-            logoUrl = "https://www.svgrepo.com/show/353982/league-of-legends.svg"
+            logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/league-of-legends.png"
         )
     )
 
