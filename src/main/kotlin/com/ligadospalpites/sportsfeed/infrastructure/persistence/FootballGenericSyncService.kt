@@ -54,14 +54,14 @@ class FootballGenericSyncService(
             footballDataCode = "BSA",
             apiFootballId = 71,
             defaultName = "Campeonato Brasileiro",
-            logoUrl = "https://media.api-sports.io/football/leagues/71.png"
+            logoUrl = "https://crests.football-data.org/BSA.png"
         ),
         UUID.fromString("4acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("4acdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = null,
             apiFootballId = 13,
             defaultName = "Copa Libertadores",
-            logoUrl = "https://media.api-sports.io/football/leagues/13.png",
+            logoUrl = "https://a.espncdn.com/i/leaguelogos/soccer/500/conmebol.libertadores.png",
             isLibertadores = true
         ),
         UUID.fromString("9284ca51-bb54-47c1-841f-81ab28120fa2") to FootballLeagueMetadata(
@@ -69,77 +69,77 @@ class FootballGenericSyncService(
             footballDataCode = "PD",
             apiFootballId = 140,
             defaultName = "Campeonato Espanhol",
-            logoUrl = "https://media.api-sports.io/football/leagues/140.png"
+            logoUrl = "https://crests.football-data.org/PD.png"
         ),
         UUID.fromString("827d043c-62c2-402c-b011-3ba2849e7b23") to FootballLeagueMetadata(
             id = UUID.fromString("827d043c-62c2-402c-b011-3ba2849e7b23"),
             footballDataCode = "PL",
             apiFootballId = 39,
             defaultName = "Campeonato Inglês",
-            logoUrl = "https://media.api-sports.io/football/leagues/39.png"
+            logoUrl = "https://crests.football-data.org/PL.png"
         ),
         UUID.fromString("e2d03a11-b9db-44ab-ba02-411a0c0bcf14") to FootballLeagueMetadata(
             id = UUID.fromString("e2d03a11-b9db-44ab-ba02-411a0c0bcf14"),
             footballDataCode = "CL",
             apiFootballId = 2,
             defaultName = "UEFA Champions League",
-            logoUrl = "https://media.api-sports.io/football/leagues/2.png"
+            logoUrl = "https://crests.football-data.org/CL.png"
         ),
         UUID.fromString("5acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("5acdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = "ELC",
             apiFootballId = 40,
             defaultName = "Championship",
-            logoUrl = "https://media.api-sports.io/football/leagues/40.png"
+            logoUrl = "https://crests.football-data.org/ELC.png"
         ),
         UUID.fromString("6acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("6acdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = "EC",
             apiFootballId = 4,
             defaultName = "European Championship",
-            logoUrl = "https://media.api-sports.io/football/leagues/4.png"
+            logoUrl = "https://crests.football-data.org/EC.png"
         ),
         UUID.fromString("7acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("7acdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = "FL1",
             apiFootballId = 61,
             defaultName = "Ligue 1",
-            logoUrl = "https://media.api-sports.io/football/leagues/61.png"
+            logoUrl = "https://crests.football-data.org/FL1.png"
         ),
         UUID.fromString("8acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("8acdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = "BL1",
             apiFootballId = 78,
             defaultName = "Bundesliga",
-            logoUrl = "https://media.api-sports.io/football/leagues/78.png"
+            logoUrl = "https://crests.football-data.org/BL1.png"
         ),
         UUID.fromString("9acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("9acdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = "SA",
             apiFootballId = 135,
             defaultName = "Serie A",
-            logoUrl = "https://media.api-sports.io/football/leagues/135.png"
+            logoUrl = "https://crests.football-data.org/SA.png"
         ),
         UUID.fromString("aacdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("aacdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = "DED",
             apiFootballId = 88,
             defaultName = "Eredivisie",
-            logoUrl = "https://media.api-sports.io/football/leagues/88.png"
+            logoUrl = "https://crests.football-data.org/DED.png"
         ),
         UUID.fromString("bacdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("bacdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = "PPL",
             apiFootballId = 94,
             defaultName = "Primeira Liga",
-            logoUrl = "https://media.api-sports.io/football/leagues/94.png"
+            logoUrl = "https://crests.football-data.org/PPL.png"
         ),
         UUID.fromString("b3cdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("b3cdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = null,
             apiFootballId = 73,
             defaultName = "Copa do Brasil",
-            logoUrl = "https://media.api-sports.io/football/leagues/73.png",
+            logoUrl = "https://a.espncdn.com/i/leaguelogos/soccer/500/2403.png",
             isCopaDoBrasil = true
         )
     )

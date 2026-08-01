@@ -222,6 +222,6 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
 
         val updatedLeague = leagueRepository.findById(brasileiraoLeagueId).orElse(null)
         assertNotNull(updatedLeague)
-        assertEquals("https://media.api-sports.io/football/leagues/71.png", updatedLeague?.logoUrl)
+        assertEquals("https://crests.football-data.org/BSA.png", updatedLeague?.logoUrl)
     }
 }
