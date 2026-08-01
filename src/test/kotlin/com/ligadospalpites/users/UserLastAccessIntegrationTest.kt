@@ -9,6 +9,8 @@ import org.springframework.beans.factory.annotation.Autowired
 import java.time.Instant
 import java.util.UUID
 
+import com.ligadospalpites.users.application.usecases.SyncUserProfileUseCase
+
 class UserLastAccessIntegrationTest : BaseIntegrationTest() {
 
     @Autowired
@@ -16,6 +18,9 @@ class UserLastAccessIntegrationTest : BaseIntegrationTest() {
 
     @Autowired
     private lateinit var userRepository: UserRepository
+
+    @Autowired
+    private lateinit var syncUserProfileUseCase: SyncUserProfileUseCase
 
     @Test
     fun `should initialize lastAccess on user creation and update it on next login resolution`() {
@@ -73,5 +78,59 @@ class UserLastAccessIntegrationTest : BaseIntegrationTest() {
             userAfterUuidResolve!!.lastAccess.isAfter(firstLastAccess),
             "Expected lastAccess to be updated after resolveByUidOrUuid using UUID"
         )
+    }
+
+    @Test
+    fun `should update placeholder email and name when resolve is called with real user data`() {
+        val uid = "placeholder-uid-" + UUID.randomUUID()
+
+        // 1. Auto-create user via header resolution (gets placeholder user_... name & email)
+        val createdId = userResolver.resolveByUidOrUuid(uid)
+        val placeholderUser = userRepository.findById(createdId)
+        assertNotNull(placeholderUser)
+        assertTrue(placeholderUser!!.email.contains(uid))
+        assertTrue(placeholderUser.email.endsWith("@ligadospalpites.com"))
+
+        // 2. Resolve with real user details
+        val realEmail = "realuser_${UUID.randomUUID()}@example.com"
+        val realName = "Maria Silva"
+        val resolvedUser = userResolver.resolve(uid, realEmail, realName)
+
+        // 3. Assert placeholder data was overwritten with real data
+        assertEquals(createdId, resolvedUser.id)
+        assertEquals(realEmail, resolvedUser.email)
+        assertEquals(realName, resolvedUser.name)
+
+        val updatedInDb = userRepository.findById(createdId)
+        assertEquals(realEmail, updatedInDb?.email)
+        assertEquals(realName, updatedInDb?.name)
+    }
+
+    @Test
+    fun `should update profile using SyncUserProfileUseCase`() {
+        val uid = "sync-uid-" + UUID.randomUUID()
+        val createdUser = userResolver.resolve(uid, "old_email@test.com", "Old Name")
+
+        val newEmail = "updated_email@test.com"
+        val newName = "Updated Name"
+        val newAvatar = "https://example.com/avatar.png"
+
+        val updatedUser = syncUserProfileUseCase.execute(
+            SyncUserProfileUseCase.Command(
+                userId = createdUser.id,
+                name = newName,
+                email = newEmail,
+                avatarUrl = newAvatar
+            )
+        )
+
+        assertEquals(newEmail, updatedUser.email)
+        assertEquals(newName, updatedUser.name)
+        assertEquals(newAvatar, updatedUser.avatarUrl)
+
+        val inDb = userRepository.findById(createdUser.id)
+        assertEquals(newEmail, inDb?.email)
+        assertEquals(newName, inDb?.name)
+        assertEquals(newAvatar, inDb?.avatarUrl)
     }
 }

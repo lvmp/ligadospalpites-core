@@ -54,14 +54,14 @@ class FootballGenericSyncService(
             footballDataCode = "BSA",
             apiFootballId = 71,
             defaultName = "Campeonato Brasileiro",
-            logoUrl = "https://crests.football-data.org/BSA.png"
+            logoUrl = "https://a.espncdn.com/i/leaguelogos/soccer/500/85.png"
         ),
         UUID.fromString("4acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("4acdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = null,
             apiFootballId = 13,
             defaultName = "Copa Libertadores",
-            logoUrl = "https://a.espncdn.com/i/leaguelogos/soccer/500/conmebol.libertadores.png",
+            logoUrl = "https://a.espncdn.com/i/leaguelogos/soccer/500/14.png",
             isLibertadores = true
         ),
         UUID.fromString("9284ca51-bb54-47c1-841f-81ab28120fa2") to FootballLeagueMetadata(
@@ -97,7 +97,7 @@ class FootballGenericSyncService(
             footballDataCode = "EC",
             apiFootballId = 4,
             defaultName = "European Championship",
-            logoUrl = "https://crests.football-data.org/EC.png"
+            logoUrl = "https://crests.football-data.org/EUR.png"
         ),
         UUID.fromString("7acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("7acdf011-fbde-4122-83bc-c46b1ba847de"),
@@ -125,7 +125,7 @@ class FootballGenericSyncService(
             footballDataCode = "DED",
             apiFootballId = 88,
             defaultName = "Eredivisie",
-            logoUrl = "https://crests.football-data.org/DED.png"
+            logoUrl = "https://crests.football-data.org/ED.png"
         ),
         UUID.fromString("bacdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("bacdf011-fbde-4122-83bc-c46b1ba847de"),
@@ -139,7 +139,7 @@ class FootballGenericSyncService(
             footballDataCode = null,
             apiFootballId = 73,
             defaultName = "Copa do Brasil",
-            logoUrl = "https://a.espncdn.com/i/leaguelogos/soccer/500/2403.png",
+            logoUrl = "https://a.espncdn.com/i/leaguelogos/soccer/500/bra.copa_do_brasil.png",
             isCopaDoBrasil = true
         )
     )

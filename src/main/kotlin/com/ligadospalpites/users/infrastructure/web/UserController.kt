@@ -12,9 +12,18 @@ import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import java.util.UUID
 
+import com.ligadospalpites.users.application.usecases.SyncUserProfileUseCase
+import com.ligadospalpites.users.domain.models.User
+
 data class LinkRiotProfileRequest(
     val gameName: String,
     val tagLine: String
+)
+
+data class SyncUserProfileRequest(
+    val name: String? = null,
+    val email: String? = null,
+    val avatarUrl: String? = null
 )
 
 @RestController
@@ -24,6 +33,7 @@ class UserController(
     private val getUserStateUseCase: GetUserStateUseCase,
     private val linkRiotProfileUseCase: LinkRiotProfileUseCase,
     private val getUserRiotProfileUseCase: GetUserRiotProfileUseCase,
+    private val syncUserProfileUseCase: SyncUserProfileUseCase,
     private val userResolver: UserResolver
 ) {
 
@@ -49,6 +59,27 @@ class UserController(
         val userUUID = userResolver.resolveAuthenticatedUser(userIdHeader, authentication)
         val result = getUserStateUseCase(userUUID)
         return ResponseEntity.ok(result)
+    }
+
+    @SecurityRequirement(name = "bearerAuth")
+    @SecurityRequirement(name = "X-User-Id")
+    @PutMapping("/me")
+    @PostMapping("/me/sync")
+    fun syncProfile(
+        @RequestHeader(value = "X-User-Id", required = false) userIdHeader: String?,
+        authentication: Authentication?,
+        @RequestBody request: SyncUserProfileRequest
+    ): ResponseEntity<User> {
+        val userUUID = userResolver.resolveAuthenticatedUser(userIdHeader, authentication)
+        val updatedUser = syncUserProfileUseCase.execute(
+            SyncUserProfileUseCase.Command(
+                userId = userUUID,
+                name = request.name,
+                email = request.email,
+                avatarUrl = request.avatarUrl
+            )
+        )
+        return ResponseEntity.ok(updatedUser)
     }
 
     @SecurityRequirement(name = "bearerAuth")

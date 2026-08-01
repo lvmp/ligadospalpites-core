@@ -11,12 +11,15 @@ import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.util.UUID
 
+import com.ligadospalpites.admin.application.usecases.RepairPlaceholderUsersUseCase
+
 @RestController
 @RequestMapping("/api/v1/admin/users", "/api/v1/workspace/users")
 class AdminUserController(
     private val getAdminUserStatsUseCase: GetAdminUserStatsUseCase,
     private val getAdminUsersListUseCase: GetAdminUsersListUseCase,
-    private val grantUserPlanUseCase: GrantUserPlanUseCase
+    private val grantUserPlanUseCase: GrantUserPlanUseCase,
+    private val repairPlaceholderUsersUseCase: RepairPlaceholderUsersUseCase
 ) {
 
     @GetMapping
@@ -32,6 +35,12 @@ class AdminUserController(
     fun getStats(): ResponseEntity<AdminUserStats> {
         val stats = getAdminUserStatsUseCase()
         return ResponseEntity.ok(stats)
+    }
+
+    @PostMapping("/repair-placeholders")
+    fun repairPlaceholders(): ResponseEntity<RepairPlaceholderUsersUseCase.RepairResult> {
+        val result = repairPlaceholderUsersUseCase.execute()
+        return ResponseEntity.ok(result)
     }
 
     @PostMapping("/{id}/grant-plan")

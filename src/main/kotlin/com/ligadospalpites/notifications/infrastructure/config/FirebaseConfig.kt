@@ -4,6 +4,7 @@ import com.google.auth.oauth2.GoogleCredentials
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.messaging.FirebaseMessaging
+import com.google.firebase.auth.FirebaseAuth
 import com.google.cloud.firestore.Firestore
 import com.google.firebase.cloud.FirestoreClient
 import org.slf4j.LoggerFactory
@@ -88,6 +89,17 @@ class FirebaseConfig {
             FirestoreClient.getFirestore()
         } catch (ex: Exception) {
             log.error("O serviço de banco de dados Firestore não pôde ser inicializado: {}. Consultas reais do Firestore serão simuladas.", ex.message, ex)
+            null
+        }
+    }
+
+    @Bean
+    fun firebaseAuth(): FirebaseAuth? {
+        return try {
+            initializeFirebase()
+            FirebaseAuth.getInstance()
+        } catch (ex: Exception) {
+            log.warn("O serviço Firebase Auth não pôde ser inicializado: {}. Consultas ao Firebase Auth serão simuladas.", ex.message)
             null
         }
     }
