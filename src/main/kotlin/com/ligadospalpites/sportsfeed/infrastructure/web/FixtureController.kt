@@ -255,7 +255,10 @@ data class MatchResponse(
     val scoreAway: Int?,
     val phase: String? = null,
     val homeTeamLogoUrl: String? = null,
-    val awayTeamLogoUrl: String? = null
+    val awayTeamLogoUrl: String? = null,
+    val periodScoresJson: String? = null,
+    val numberOfGames: Int? = null,
+    val streamUrl: String? = null
 ) {
     companion object {
         fun fromEntity(entity: MatchJpaEntity) = MatchResponse(
@@ -270,7 +273,10 @@ data class MatchResponse(
             scoreAway = entity.awayScore,
             phase = formatMatchPhase(entity.phase),
             homeTeamLogoUrl = entity.homeTeamLogoUrl,
-            awayTeamLogoUrl = entity.awayTeamLogoUrl
+            awayTeamLogoUrl = entity.awayTeamLogoUrl,
+            periodScoresJson = entity.periodScoresJson,
+            numberOfGames = entity.numberOfGames,
+            streamUrl = entity.streamUrl
         )
     }
 }
