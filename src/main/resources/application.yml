@@ -34,10 +34,13 @@ logging:
   level:
     org.springframework: INFO
     com.ligadospalpites: DEBUG
+    org.zalando.logbook: TRACE
 
 logbook:
   exclude:
     - /actuator/**
+    - /swagger-ui/**
+    - /v3/api-docs/**
   filter:
     enabled: true
   secure: true
