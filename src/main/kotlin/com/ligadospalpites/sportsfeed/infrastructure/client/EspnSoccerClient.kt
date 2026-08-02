@@ -40,7 +40,7 @@ class EspnSoccerClient(
     }
 
     fun fetchCopaDoBrasilMatches(seasonYear: Int = 2026): List<EspnSoccerEvent> {
-        return fetchSoccerMatches("bra.copa_do_brasil", seasonYear)
+        return fetchSoccerMatches("bra.copa_do_brazil", seasonYear)
     }
 }
 

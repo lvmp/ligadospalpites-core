@@ -181,7 +181,7 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
                 )
             )
         )
-        `when`(espnSoccerClient.fetchSoccerMatches("bra.copa_do_brasil", 2026)).thenReturn(listOf(espnEvent))
+        `when`(espnSoccerClient.fetchSoccerMatches("bra.copa_do_brazil", 2026)).thenReturn(listOf(espnEvent))
 
         syncService.syncMatches(UUID.randomUUID(), copaDoBrasilLeagueId)
 
@@ -194,7 +194,7 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
 
         verifyNoInteractions(footballDataClient)
         verifyNoInteractions(apiFootballClient)
-        verify(espnSoccerClient, times(1)).fetchSoccerMatches("bra.copa_do_brasil", 2026)
+        verify(espnSoccerClient, times(1)).fetchSoccerMatches("bra.copa_do_brazil", 2026)
     }
 
     @Test

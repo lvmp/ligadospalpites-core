@@ -145,9 +145,9 @@ class FootballGenericSyncService(
             footballDataCode = null,
             apiFootballId = 73,
             defaultName = "Copa do Brasil",
-            logoUrl = "https://a.espncdn.com/i/leaguelogos/soccer/500/bra.copa_do_brasil.png",
+            logoUrl = "https://a.espncdn.com/i/leaguelogos/soccer/500/528.png",
             isCopaDoBrasil = true,
-            espnLeagueCode = "bra.copa_do_brasil",
+            espnLeagueCode = "bra.copa_do_brazil",
             format = "KNOCKOUT"
         )
     )
@@ -220,7 +220,7 @@ class FootballGenericSyncService(
     fun fetchFromEspnLibertadores(sportId: UUID, leagueId: UUID): List<MatchJpaEntity> {
         val metadata = leaguesMetadata[leagueId] ?: throw IllegalArgumentException("Invalid league ID: $leagueId")
         val espnCode = metadata.espnLeagueCode
-            ?: if (metadata.isCopaDoBrasil) "bra.copa_do_brasil" else "conmebol.libertadores"
+            ?: if (metadata.isCopaDoBrasil) "bra.copa_do_brazil" else "conmebol.libertadores"
         logger.info("Trying primary provider (ESPN API) for league: ${metadata.defaultName} ($espnCode)")
         val activeSeason = seasonRepository.findByLeagueIdAndIsActiveTrue(leagueId)
         val targetSeasonId = activeSeason?.id ?: throw IllegalStateException("No active season found for league: $leagueId")
