@@ -26,7 +26,8 @@ data class FootballLeagueMetadata(
     val logoUrl: String? = null,
     val isLibertadores: Boolean = false,
     val isCopaDoBrasil: Boolean = false,
-    val espnLeagueCode: String? = null
+    val espnLeagueCode: String? = null,
+    val format: String = "POINTS"
 )
 
 @Service
@@ -64,7 +65,8 @@ class FootballGenericSyncService(
             defaultName = "Copa Libertadores",
             logoUrl = "https://a.espncdn.com/i/leaguelogos/soccer/500/14.png",
             isLibertadores = true,
-            espnLeagueCode = "conmebol.libertadores"
+            espnLeagueCode = "conmebol.libertadores",
+            format = "GROUPS_AND_KNOCKOUT"
         ),
         UUID.fromString("9284ca51-bb54-47c1-841f-81ab28120fa2") to FootballLeagueMetadata(
             id = UUID.fromString("9284ca51-bb54-47c1-841f-81ab28120fa2"),
@@ -85,7 +87,8 @@ class FootballGenericSyncService(
             footballDataCode = "CL",
             apiFootballId = 2,
             defaultName = "UEFA Champions League",
-            logoUrl = "https://crests.football-data.org/CL.png"
+            logoUrl = "https://crests.football-data.org/CL.png",
+            format = "GROUPS_AND_KNOCKOUT"
         ),
         UUID.fromString("5acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("5acdf011-fbde-4122-83bc-c46b1ba847de"),
@@ -99,7 +102,8 @@ class FootballGenericSyncService(
             footballDataCode = "EC",
             apiFootballId = 4,
             defaultName = "European Championship",
-            logoUrl = "https://crests.football-data.org/EUR.png"
+            logoUrl = "https://crests.football-data.org/EUR.png",
+            format = "GROUPS_AND_KNOCKOUT"
         ),
         UUID.fromString("7acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("7acdf011-fbde-4122-83bc-c46b1ba847de"),
@@ -143,7 +147,8 @@ class FootballGenericSyncService(
             defaultName = "Copa do Brasil",
             logoUrl = "https://a.espncdn.com/i/leaguelogos/soccer/500/bra.copa_do_brasil.png",
             isCopaDoBrasil = true,
-            espnLeagueCode = "bra.copa_do_brasil"
+            espnLeagueCode = "bra.copa_do_brasil",
+            format = "KNOCKOUT"
         )
     )
 
@@ -431,6 +436,10 @@ class FootballGenericSyncService(
     private fun translateStage(stage: String?, matchday: Int? = null): String {
         val stageUpper = stage?.uppercase()?.trim() ?: ""
         return when {
+            stageUpper.matches(Regex("GROUP\\s+[A-H]")) -> {
+                val letter = stageUpper.takeLast(1)
+                "Grupo $letter"
+            }
             stageUpper.startsWith("GROUP") || stageUpper.contains("FASE DE GRUPOS") || stageUpper == "GROUPS" -> "Fase de Grupos"
             stageUpper.contains("ROUND OF 32") || stageUpper.contains("LAST_32") || stageUpper.contains("16TH") -> "Dezesseis-avos de Final"
             stageUpper.contains("ROUND OF 16") || stageUpper.contains("LAST_16") || stageUpper.contains("8TH") || stageUpper.contains("OITAVAS") -> "Oitavas de Final"
@@ -444,10 +453,10 @@ class FootballGenericSyncService(
             else -> {
                 if (matchday != null) {
                     determineTurno(stage, matchday)
-                } else if (stageUpper.isNotBlank()) {
+                } else if (stageUpper.isNotBlank() && !stageUpper.startsWith("STATUS:") && stageUpper != "SCHEDULED") {
                     stage!!.trim()
                 } else {
-                    "1º Turno"
+                    "Fase de Grupos"
                 }
             }
         }
@@ -505,17 +514,20 @@ class FootballGenericSyncService(
     private fun ensureLeagueLogo(leagueId: UUID, logoUrl: String?) {
         if (logoUrl.isNullOrBlank() || leagueRepository == null) return
         leagueRepository.findById(leagueId).ifPresent { league ->
-            if (league.logoUrl != logoUrl) {
+            val metadata = leaguesMetadata[leagueId]
+            val targetFormat = metadata?.format ?: league.format
+            if (league.logoUrl != logoUrl || league.format != targetFormat) {
                 val updated = LeagueJpaEntity(
                     id = league.id,
                     name = league.name,
                     sportId = league.sportId,
                     isActive = league.isActive,
                     logoUrl = logoUrl,
+                    format = targetFormat,
                     createdAt = league.createdAt
                 )
                 leagueRepository.save(updated)
-                logger.info("Auto-updated logoUrl for league '${league.name}' (ID: $leagueId) to $logoUrl")
+                logger.info("Auto-updated logoUrl/format for league '${league.name}' (ID: $leagueId) to $logoUrl / $targetFormat")
             }
         }
     }

@@ -22,6 +22,9 @@ class LeagueJpaEntity(
     @Column(name = "logo_url", nullable = true, length = 512)
     val logoUrl: String? = null,
 
+    @Column(name = "format", nullable = false, length = 50)
+    val format: String = "POINTS",
+
     @Column(name = "created_at", nullable = false)
     val createdAt: Instant = Instant.now()
 )
