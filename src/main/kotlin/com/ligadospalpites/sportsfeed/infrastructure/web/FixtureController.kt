@@ -5,6 +5,7 @@ import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataLeagu
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataMatchRepository
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataSeasonRepository
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.MatchJpaEntity
+import com.ligadospalpites.sportsfeed.domain.models.MatchStatus
 import com.ligadospalpites.sportsfeed.domain.models.formatMatchPhase
 import com.ligadospalpites.users.infrastructure.persistence.SpringDataUserEntitlementRepository
 import com.ligadospalpites.shared.identity.UserResolver
@@ -136,9 +137,14 @@ class FixtureController(
     fun getStandings(@RequestParam leagueId: UUID): ResponseEntity<List<StandingRow>> {
         val league = leagueRepository.findById(leagueId).orElse(null)
         val format = league?.format ?: "POINTS"
+        val activeSeason = seasonRepository.findByLeagueIdAndIsActiveTrue(leagueId)
+        val matches = if (activeSeason != null) {
+            matchRepository.findBySeasonId(activeSeason.id)
+        } else {
+            matchRepository.findByLeagueId(leagueId)
+        }
 
         if (format == "GROUPS_AND_KNOCKOUT") {
-            val matches = matchRepository.findByLeagueId(leagueId)
             val groupMatches = matches.filter { it.phase?.startsWith("Grupo") == true || it.phase == "Fase de Grupos" }
             if (groupMatches.isNotEmpty()) {
                 val groupNames = groupMatches.mapNotNull { it.phase }.filter { it.startsWith("Grupo") }.distinct().ifEmpty { listOf("Grupo A", "Grupo B") }
@@ -146,24 +152,67 @@ class FixtureController(
                 groupNames.forEach { grp ->
                     val grpMatches = groupMatches.filter { it.phase == grp }
                     val teams = (grpMatches.map { it.homeTeamName } + grpMatches.map { it.awayTeamName }).distinct()
-                    teams.forEachIndexed { idx, teamName ->
-                        rows.add(
-                            StandingRow(
-                                position = idx + 1,
-                                teamId = UUID.nameUUIDFromBytes(teamName.toByteArray()),
-                                teamName = teamName,
-                                points = (3 - idx).coerceAtLeast(0) * 3,
-                                played = 3,
-                                won = (3 - idx).coerceAtLeast(0),
-                                drawn = 0,
-                                lost = idx,
-                                goalsFor = (5 - idx).coerceAtLeast(0),
-                                goalsAgainst = 2 + idx,
-                                goalDifference = (5 - idx).coerceAtLeast(0) - (2 + idx),
-                                groupName = grp
-                            )
+                    val finishedGrpMatches = grpMatches.filter { it.status == MatchStatus.FINISHED }
+
+                    val computedGrpRows = teams.map { teamName ->
+                        var played = 0
+                        var won = 0
+                        var drawn = 0
+                        var lost = 0
+                        var goalsFor = 0
+                        var goalsAgainst = 0
+
+                        finishedGrpMatches.forEach { m ->
+                            if (m.homeTeamName == teamName) {
+                                played++
+                                val hScore = m.homeScore ?: 0
+                                val aScore = m.awayScore ?: 0
+                                goalsFor += hScore
+                                goalsAgainst += aScore
+                                when {
+                                    hScore > aScore -> won++
+                                    hScore == aScore -> drawn++
+                                    else -> lost++
+                                }
+                            } else if (m.awayTeamName == teamName) {
+                                played++
+                                val aScore = m.awayScore ?: 0
+                                val hScore = m.homeScore ?: 0
+                                goalsFor += aScore
+                                goalsAgainst += hScore
+                                when {
+                                    aScore > hScore -> won++
+                                    aScore == hScore -> drawn++
+                                    else -> lost++
+                                }
+                            }
+                        }
+                        val points = won * 3 + drawn
+                        val goalDifference = goalsFor - goalsAgainst
+                        StandingRow(
+                            position = 0,
+                            teamId = UUID.nameUUIDFromBytes(teamName.toByteArray()),
+                            teamName = teamName,
+                            points = points,
+                            played = played,
+                            won = won,
+                            drawn = drawn,
+                            lost = lost,
+                            goalsFor = goalsFor,
+                            goalsAgainst = goalsAgainst,
+                            goalDifference = goalDifference,
+                            groupName = grp
                         )
                     }
+
+                    val sortedGrpRows = computedGrpRows.sortedWith(
+                        compareByDescending<StandingRow> { it.points }
+                            .thenByDescending { it.goalDifference }
+                            .thenByDescending { it.goalsFor }
+                            .thenBy { it.teamName }
+                    ).mapIndexed { idx, r -> r.copy(position = idx + 1) }
+
+                    rows.addAll(sortedGrpRows)
                 }
                 if (rows.isNotEmpty()) return ResponseEntity.ok(rows)
             }
@@ -179,25 +228,67 @@ class FixtureController(
         }
 
         // Standard Points Corridos Standings
-        val matches = matchRepository.findByLeagueId(leagueId)
         val teams = (matches.map { it.homeTeamName } + matches.map { it.awayTeamName }).distinct()
         if (teams.isNotEmpty()) {
-            val rows = teams.mapIndexed { idx, teamName ->
+            val finishedMatches = matches.filter { it.status == MatchStatus.FINISHED }
+            val computedRows = teams.map { teamName ->
+                var played = 0
+                var won = 0
+                var drawn = 0
+                var lost = 0
+                var goalsFor = 0
+                var goalsAgainst = 0
+
+                finishedMatches.forEach { m ->
+                    if (m.homeTeamName == teamName) {
+                        played++
+                        val hScore = m.homeScore ?: 0
+                        val aScore = m.awayScore ?: 0
+                        goalsFor += hScore
+                        goalsAgainst += aScore
+                        when {
+                            hScore > aScore -> won++
+                            hScore == aScore -> drawn++
+                            else -> lost++
+                        }
+                    } else if (m.awayTeamName == teamName) {
+                        played++
+                        val aScore = m.awayScore ?: 0
+                        val hScore = m.homeScore ?: 0
+                        goalsFor += aScore
+                        goalsAgainst += hScore
+                        when {
+                            aScore > hScore -> won++
+                            aScore == hScore -> drawn++
+                            else -> lost++
+                        }
+                    }
+                }
+                val points = won * 3 + drawn
+                val goalDifference = goalsFor - goalsAgainst
                 StandingRow(
-                    position = idx + 1,
+                    position = 0,
                     teamId = UUID.nameUUIDFromBytes(teamName.toByteArray()),
                     teamName = teamName,
-                    points = (teams.size - idx) * 3,
-                    played = teams.size - 1,
-                    won = teams.size - 1 - idx,
-                    drawn = 0,
-                    lost = idx,
-                    goalsFor = (teams.size - idx) * 2,
-                    goalsAgainst = idx * 2,
-                    goalDifference = (teams.size - idx) * 2 - (idx * 2)
+                    points = points,
+                    played = played,
+                    won = won,
+                    drawn = drawn,
+                    lost = lost,
+                    goalsFor = goalsFor,
+                    goalsAgainst = goalsAgainst,
+                    goalDifference = goalDifference
                 )
             }
-            return ResponseEntity.ok(rows)
+
+            val sortedRows = computedRows.sortedWith(
+                compareByDescending<StandingRow> { it.points }
+                    .thenByDescending { it.goalDifference }
+                    .thenByDescending { it.goalsFor }
+                    .thenBy { it.teamName }
+            ).mapIndexed { idx, r -> r.copy(position = idx + 1) }
+
+            return ResponseEntity.ok(sortedRows)
         }
 
         val rows = listOf(
@@ -210,7 +301,12 @@ class FixtureController(
     // 4. Bracket Match Tree for Knockout
     @GetMapping("/brackets")
     fun getBrackets(@RequestParam leagueId: UUID): ResponseEntity<BracketResponse> {
-        val matches = matchRepository.findByLeagueId(leagueId)
+        val activeSeason = seasonRepository.findByLeagueIdAndIsActiveTrue(leagueId)
+        val matches = if (activeSeason != null) {
+            matchRepository.findBySeasonId(activeSeason.id)
+        } else {
+            matchRepository.findByLeagueId(leagueId)
+        }
         // Group matches into phases for the Flutter BracketBloc
         val stages = mapOf(
             "DECIMOSEXTO" to matches.filter { it.phase == "roundOf32" || it.phase == "Dezesseis-avos de Final" || it.homeTeamName.contains("Dezesseis") || it.awayTeamName.contains("Dezesseis") }.map { MatchResponse.fromEntity(it) },
@@ -285,15 +381,30 @@ data class StandingRow(
     val position: Int,
     val teamId: UUID,
     val teamName: String,
-    val points: Int,
-    val played: Int,
-    val won: Int,
-    val drawn: Int,
-    val lost: Int,
-    val goalsFor: Int,
-    val goalsAgainst: Int,
-    val goalDifference: Int,
-    val groupName: String? = null
+    val points: Int? = null,
+    val played: Int? = null,
+    val won: Int? = null,
+    val drawn: Int? = null,
+    val lost: Int? = null,
+    val goalsFor: Int? = null,
+    val goalsAgainst: Int? = null,
+    val goalDifference: Int? = null,
+    val groupName: String? = null,
+    val winRate: Double? = null,
+    val gamesBehind: String? = null,
+    val streak: String? = null,
+    val seriesWon: Int? = null,
+    val seriesLost: Int? = null,
+    val mapsWon: Int? = null,
+    val mapsLost: Int? = null,
+    val podiums: Int? = null,
+    val fastestLaps: Int? = null,
+    val constructorName: String? = null,
+    val conferenceRecord: String? = null,
+    val divisionRecord: String? = null,
+    val tournamentsPlayed: Int? = null,
+    val titlesWon: Int? = null,
+    val teamLogoUrl: String? = null
 )
 
 data class BracketResponse(

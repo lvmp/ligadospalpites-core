@@ -52,7 +52,7 @@ class FootballWorldCupSyncServiceIntegrationTest : BaseIntegrationTest() {
             awayTeam = FootballDataTeam(2L, "France", "France"),
             score = FootballDataScore(FootballDataTeamScore(2, 1))
         )
-        `when`(footballDataClient.fetchMatches("WC")).thenReturn(listOf(fdMatch))
+        `when`(footballDataClient.fetchMatches("WC", 2026)).thenReturn(listOf(fdMatch))
 
         syncService.syncMatches(UUID.randomUUID(), worldCupLeagueId)
 
@@ -65,13 +65,13 @@ class FootballWorldCupSyncServiceIntegrationTest : BaseIntegrationTest() {
         assertEquals(1, saved[0].awayScore)
         assertEquals("Fase de Grupos", saved[0].phase)
 
-        verify(footballDataClient, times(1)).fetchMatches("WC")
+        verify(footballDataClient, times(1)).fetchMatches("WC", 2026)
         verifyNoInteractions(apiFootballClient)
     }
 
     @Test
     fun `should fallback to ApiFootball when primary provider fails`() {
-        `when`(footballDataClient.fetchMatches("WC")).thenThrow(RuntimeException("Football-Data is offline"))
+        `when`(footballDataClient.fetchMatches("WC", 2026)).thenThrow(RuntimeException("Football-Data is offline"))
 
         val afFixture = ApiFootballFixtureWrapper(
             fixture = ApiFootballFixture(456L, "2026-06-11T19:00:00Z", ApiFootballStatus("FT")),
@@ -91,7 +91,7 @@ class FootballWorldCupSyncServiceIntegrationTest : BaseIntegrationTest() {
         assertEquals(2, saved[0].awayScore)
         assertEquals("Fase de Grupos", saved[0].phase)
 
-        verify(footballDataClient, times(1)).fetchMatches("WC")
+        verify(footballDataClient, times(1)).fetchMatches("WC", 2026)
         verify(apiFootballClient, times(1)).fetchMatches(1, 2026)
     }
 
@@ -121,7 +121,7 @@ class FootballWorldCupSyncServiceIntegrationTest : BaseIntegrationTest() {
             awayTeam = FootballDataTeam(2L, "France", "France"),
             score = FootballDataScore(FootballDataTeamScore(4, 2))
         )
-        `when`(footballDataClient.fetchMatches("WC")).thenReturn(listOf(fdMatch))
+        `when`(footballDataClient.fetchMatches("WC", 2026)).thenReturn(listOf(fdMatch))
 
         syncService.syncMatches(UUID.randomUUID(), worldCupLeagueId)
 

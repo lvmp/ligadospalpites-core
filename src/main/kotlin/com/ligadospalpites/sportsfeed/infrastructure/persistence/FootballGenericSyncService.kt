@@ -288,8 +288,9 @@ class FootballGenericSyncService(
         logger.info("Trying primary provider (Football-Data API) for league: ${metadata.defaultName}")
         val activeSeason = seasonRepository.findByLeagueIdAndIsActiveTrue(leagueId)
         val targetSeasonId = activeSeason?.id ?: throw IllegalStateException("No active season found for league: $leagueId")
+        val seasonYear = activeSeason.externalSeasonCode
 
-        val externalMatches = footballDataClient.fetchMatches(code)
+        val externalMatches = footballDataClient.fetchMatches(code, seasonYear)
         return externalMatches.map { match ->
             val homeTranslated = translateTeamName(match.homeTeam.shortName ?: match.homeTeam.name ?: "A definir")
             val awayTranslated = translateTeamName(match.awayTeam.shortName ?: match.awayTeam.name ?: "A definir")

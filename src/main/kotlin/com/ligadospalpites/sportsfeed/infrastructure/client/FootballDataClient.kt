@@ -23,11 +23,17 @@ class FootballDataClient(
         .defaultHeader("X-Auth-Token", apiKey)
         .build()
 
-    fun fetchMatches(competitionCode: String = "WC"): List<FootballDataMatch> {
-        logger.info("Fetching matches from Football-Data API for competition: $competitionCode")
+    @JvmOverloads
+    fun fetchMatches(competitionCode: String = "WC", seasonYear: Int? = null): List<FootballDataMatch> {
+        val uriStr = if (seasonYear != null) {
+            "/v4/competitions/$competitionCode/matches?season=$seasonYear"
+        } else {
+            "/v4/competitions/$competitionCode/matches"
+        }
+        logger.info("Fetching matches from Football-Data API for competition: $competitionCode, season: ${seasonYear ?: "default"}")
         return try {
             val response = restClient.get()
-                .uri("/v4/competitions/$competitionCode/matches")
+                .uri(uriStr)
                 .retrieve()
                 .body(FootballDataResponse::class.java)
             response?.matches ?: emptyList()

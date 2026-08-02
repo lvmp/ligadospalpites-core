@@ -110,7 +110,8 @@ class FootballWorldCupSyncService(
         logger.info("Trying primary provider: Football-Data API")
         val activeSeason = seasonRepository.findByLeagueIdAndIsActiveTrue(worldCupLeagueId)
         val targetSeasonId = activeSeason?.id ?: worldCupSeasonId
-        val externalMatches = footballDataClient.fetchMatches("WC")
+        val seasonYear = activeSeason?.externalSeasonCode ?: 2026
+        val externalMatches = footballDataClient.fetchMatches("WC", seasonYear)
         return externalMatches.map { match ->
             val homeTranslated = translateTeamName(match.homeTeam.shortName ?: match.homeTeam.name ?: "A definir")
             val awayTranslated = translateTeamName(match.awayTeam.shortName ?: match.awayTeam.name ?: "A definir")

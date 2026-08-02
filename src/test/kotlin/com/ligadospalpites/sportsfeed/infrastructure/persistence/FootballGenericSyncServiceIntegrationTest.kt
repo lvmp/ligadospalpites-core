@@ -54,7 +54,7 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
             awayTeam = FootballDataTeam(2L, "Palmeiras", "Palmeiras"),
             score = FootballDataScore(FootballDataTeamScore(2, 1))
         )
-        `when`(footballDataClient.fetchMatches("BSA")).thenReturn(listOf(fdMatch))
+        `when`(footballDataClient.fetchMatches("BSA", 2026)).thenReturn(listOf(fdMatch))
 
         syncService.syncMatches(UUID.randomUUID(), brasileiraoLeagueId)
 
@@ -66,7 +66,7 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
         assertEquals(2, saved[0].homeScore)
         assertEquals(1, saved[0].awayScore)
 
-        verify(footballDataClient, times(1)).fetchMatches("BSA")
+        verify(footballDataClient, times(1)).fetchMatches("BSA", 2026)
         verifyNoInteractions(apiFootballClient)
     }
 
@@ -90,7 +90,7 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
             homeTeam = FootballDataTeam(2L, "Fluminense", "Fluminense"),
             awayTeam = FootballDataTeam(1L, "Flamengo", "Flamengo")
         )
-        `when`(footballDataClient.fetchMatches("BSA")).thenReturn(listOf(matchTurno1, matchTurno2))
+        `when`(footballDataClient.fetchMatches("BSA", 2026)).thenReturn(listOf(matchTurno1, matchTurno2))
 
         syncService.syncMatches(UUID.randomUUID(), brasileiraoLeagueId)
 
@@ -106,7 +106,7 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
 
     @Test
     fun `should fallback to ApiFootball when primary provider fails`() {
-        `when`(footballDataClient.fetchMatches("BSA")).thenThrow(RuntimeException("Football-Data is offline"))
+        `when`(footballDataClient.fetchMatches("BSA", 2026)).thenThrow(RuntimeException("Football-Data is offline"))
 
         val afFixture = ApiFootballFixtureWrapper(
             fixture = ApiFootballFixture(456L, "2026-04-11T19:00:00Z", ApiFootballStatus("FT")),
@@ -125,7 +125,7 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
         assertEquals(3, saved[0].homeScore)
         assertEquals(2, saved[0].awayScore)
 
-        verify(footballDataClient, times(1)).fetchMatches("BSA")
+        verify(footballDataClient, times(1)).fetchMatches("BSA", 2026)
         verify(apiFootballClient, times(1)).fetchMatches(leagueId = 71, season = 2026)
     }
 
@@ -250,7 +250,7 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
             awayTeam = FootballDataTeam(2L, "Palmeiras", "Palmeiras"),
             score = FootballDataScore(FootballDataTeamScore(4, 2))
         )
-        `when`(footballDataClient.fetchMatches("BSA")).thenReturn(listOf(fdMatch))
+        `when`(footballDataClient.fetchMatches("BSA", 2026)).thenReturn(listOf(fdMatch))
 
         syncService.syncMatches(UUID.randomUUID(), brasileiraoLeagueId)
 
@@ -275,7 +275,7 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
             homeTeam = FootballDataTeam(1L, "Flamengo", "Flamengo"),
             awayTeam = FootballDataTeam(2L, "Palmeiras", "Palmeiras")
         )
-        `when`(footballDataClient.fetchMatches("BSA")).thenReturn(listOf(fdMatch))
+        `when`(footballDataClient.fetchMatches("BSA", 2026)).thenReturn(listOf(fdMatch))
 
         // Create league with null logoUrl in DB first
         val footballId = UUID.fromString("f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c")
