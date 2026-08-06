@@ -130,7 +130,7 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
-    fun `should call EspnSoccerClient for Libertadores league`() {
+    fun `should call EspnSoccerClient for Libertadores league with isEuropeanCalendar false`() {
         val espnEvent = EspnSoccerEvent(
             id = "789",
             date = "2026-04-11T19:00:00Z",
@@ -147,7 +147,7 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
                 )
             )
         )
-        `when`(espnSoccerClient.fetchSoccerMatches("conmebol.libertadores", 2026)).thenReturn(listOf(espnEvent))
+        `when`(espnSoccerClient.fetchSoccerMatches("conmebol.libertadores", 2026, false)).thenReturn(listOf(espnEvent))
 
         syncService.syncMatches(UUID.randomUUID(), libertadoresLeagueId)
 
@@ -160,7 +160,38 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
 
         verifyNoInteractions(footballDataClient)
         verifyNoInteractions(apiFootballClient)
-        verify(espnSoccerClient, times(1)).fetchSoccerMatches("conmebol.libertadores", 2026)
+        verify(espnSoccerClient, times(1)).fetchSoccerMatches("conmebol.libertadores", 2026, false)
+    }
+
+    @Test
+    fun `should call EspnSoccerClient for Champions League with isEuropeanCalendar true`() {
+        val championsLeagueId = UUID.fromString("e2d03a11-b9db-44ab-ba02-411a0c0bcf14")
+        val espnEvent = EspnSoccerEvent(
+            id = "777",
+            date = "2026-09-16T19:00:00Z",
+            competitions = listOf(
+                EspnSoccerCompetition(
+                    id = "777",
+                    date = "2026-09-16T19:00:00Z",
+                    status = EspnSoccerStatus(EspnSoccerStatusType(state = "pre")),
+                    notes = listOf(EspnSoccerNote(headline = "League Phase")),
+                    competitors = listOf(
+                        EspnSoccerCompetitor("101", "home", false, EspnSoccerTeam("101", displayName = "Real Madrid")),
+                        EspnSoccerCompetitor("102", "away", false, EspnSoccerTeam("102", displayName = "Barcelona"))
+                    )
+                )
+            )
+        )
+        `when`(espnSoccerClient.fetchSoccerMatches("uefa.champions", 2026, true)).thenReturn(listOf(espnEvent))
+
+        syncService.syncMatches(UUID.randomUUID(), championsLeagueId)
+
+        val saved = matchRepository.findByLeagueId(championsLeagueId)
+        assertEquals(1, saved.size)
+        assertEquals("Real Madrid", saved[0].homeTeamName)
+        assertEquals("Barcelona", saved[0].awayTeamName)
+
+        verify(espnSoccerClient, times(1)).fetchSoccerMatches("uefa.champions", 2026, true)
     }
 
     @Test
@@ -181,7 +212,7 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
                 )
             )
         )
-        `when`(espnSoccerClient.fetchSoccerMatches("bra.copa_do_brazil", 2026)).thenReturn(listOf(espnEvent))
+        `when`(espnSoccerClient.fetchSoccerMatches("bra.copa_do_brazil", 2026, false)).thenReturn(listOf(espnEvent))
 
         syncService.syncMatches(UUID.randomUUID(), copaDoBrasilLeagueId)
 
@@ -194,7 +225,7 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
 
         verifyNoInteractions(footballDataClient)
         verifyNoInteractions(apiFootballClient)
-        verify(espnSoccerClient, times(1)).fetchSoccerMatches("bra.copa_do_brazil", 2026)
+        verify(espnSoccerClient, times(1)).fetchSoccerMatches("bra.copa_do_brazil", 2026, false)
     }
 
     @Test
@@ -215,7 +246,7 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
                 )
             )
         )
-        `when`(espnSoccerClient.fetchSoccerMatches("conmebol.libertadores", 2026)).thenReturn(listOf(espnEvent))
+        `when`(espnSoccerClient.fetchSoccerMatches("conmebol.libertadores", 2026, false)).thenReturn(listOf(espnEvent))
 
         syncService.syncMatches(UUID.randomUUID(), libertadoresLeagueId)
 

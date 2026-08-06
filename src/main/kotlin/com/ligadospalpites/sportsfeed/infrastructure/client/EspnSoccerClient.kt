@@ -20,9 +20,17 @@ class EspnSoccerClient(
         })
         .build()
 
-    fun fetchSoccerMatches(leagueCode: String, seasonYear: Int = 2026): List<EspnSoccerEvent> {
-        val dateRange = "${seasonYear}0101-${seasonYear}1231"
-        logger.info("Fetching full-season matches for $leagueCode from ESPN Public API (season: $seasonYear, dates: $dateRange)")
+    fun fetchSoccerMatches(
+        leagueCode: String,
+        seasonYear: Int = 2026,
+        isEuropeanCalendar: Boolean = false
+    ): List<EspnSoccerEvent> {
+        val dateRange = if (isEuropeanCalendar) {
+            "${seasonYear}0801-${seasonYear + 1}0731"
+        } else {
+            "${seasonYear}0101-${seasonYear}1231"
+        }
+        logger.info("Fetching full-season matches for $leagueCode from ESPN Public API (season: $seasonYear, dates: $dateRange, EuropeanCalendar: $isEuropeanCalendar)")
         return try {
             val response = restClient.get()
                 .uri("/apis/site/v2/sports/soccer/$leagueCode/scoreboard?dates=$dateRange&limit=500")

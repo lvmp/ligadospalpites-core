@@ -70,4 +70,18 @@ class EspnSoccerClientTest {
         )
         assertEquals("CONMEBOL Libertadores, Group C", comp.altGameNote)
     }
+
+    @Test
+    fun `should construct correct date ranges for european vs civil calendar`() {
+        val client = EspnSoccerClient("https://site.api.espn.com")
+        // Default (isEuropeanCalendar = false): 20260101-20261231
+        // European (isEuropeanCalendar = true): 20260801-20270731
+        val isEuropean = true
+        val seasonYear = 2026
+        val dateRangeEuropean = if (isEuropean) "${seasonYear}0801-${seasonYear + 1}0731" else "${seasonYear}0101-${seasonYear}1231"
+        val dateRangeCivil = if (!isEuropean) "${seasonYear}0801-${seasonYear + 1}0731" else "${seasonYear}0101-${seasonYear}1231"
+
+        assertEquals("20260801-20270731", dateRangeEuropean)
+        assertEquals("20260101-20261231", dateRangeCivil)
+    }
 }

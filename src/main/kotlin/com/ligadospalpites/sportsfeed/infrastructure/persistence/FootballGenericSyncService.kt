@@ -27,26 +27,24 @@ data class FootballLeagueMetadata(
     val isLibertadores: Boolean = false,
     val isCopaDoBrasil: Boolean = false,
     val espnLeagueCode: String? = null,
-    val format: String = "POINTS"
+    val format: String = "POINTS",
+    val isEuropeanCalendar: Boolean = false
 )
 
 @Service
 @Profile("!integration")
 class FootballGenericSyncService(
     private val matchRepository: SpringDataMatchRepository,
+    private val seasonRepository: SpringDataSeasonRepository,
+    private val leagueRepository: SpringDataLeagueRepository,
     private val footballDataClient: FootballDataClient,
     private val apiFootballClient: ApiFootballClient,
     private val espnSoccerClient: EspnSoccerClient,
-    private val seasonRepository: SpringDataSeasonRepository,
     private val eventPublisher: ApplicationEventPublisher,
-    private val leagueRepository: SpringDataLeagueRepository? = null
+    private val self: FootballGenericSyncService
 ) : LeagueSyncService {
 
     private val logger = LoggerFactory.getLogger(FootballGenericSyncService::class.java)
-
-    @Autowired
-    @org.springframework.context.annotation.Lazy
-    private lateinit var self: FootballGenericSyncService
 
     private val footballId = UUID.fromString("f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c")
 
@@ -74,7 +72,8 @@ class FootballGenericSyncService(
             apiFootballId = 140,
             espnLeagueCode = "esp.1",
             defaultName = "Campeonato Espanhol",
-            logoUrl = "https://crests.football-data.org/PD.png"
+            logoUrl = "https://crests.football-data.org/PD.png",
+            isEuropeanCalendar = true
         ),
         UUID.fromString("827d043c-62c2-402c-b011-3ba2849e7b23") to FootballLeagueMetadata(
             id = UUID.fromString("827d043c-62c2-402c-b011-3ba2849e7b23"),
@@ -82,7 +81,8 @@ class FootballGenericSyncService(
             apiFootballId = 39,
             espnLeagueCode = "eng.1",
             defaultName = "Campeonato Inglês",
-            logoUrl = "https://crests.football-data.org/PL.png"
+            logoUrl = "https://crests.football-data.org/PL.png",
+            isEuropeanCalendar = true
         ),
         UUID.fromString("e2d03a11-b9db-44ab-ba02-411a0c0bcf14") to FootballLeagueMetadata(
             id = UUID.fromString("e2d03a11-b9db-44ab-ba02-411a0c0bcf14"),
@@ -91,7 +91,8 @@ class FootballGenericSyncService(
             espnLeagueCode = "uefa.champions",
             defaultName = "UEFA Champions League",
             logoUrl = "https://crests.football-data.org/CL.png",
-            format = "GROUPS_AND_KNOCKOUT"
+            format = "GROUPS_AND_KNOCKOUT",
+            isEuropeanCalendar = true
         ),
         UUID.fromString("5acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("5acdf011-fbde-4122-83bc-c46b1ba847de"),
@@ -99,7 +100,8 @@ class FootballGenericSyncService(
             apiFootballId = 40,
             espnLeagueCode = "eng.2",
             defaultName = "Championship",
-            logoUrl = "https://crests.football-data.org/ELC.png"
+            logoUrl = "https://crests.football-data.org/ELC.png",
+            isEuropeanCalendar = true
         ),
         UUID.fromString("6acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("6acdf011-fbde-4122-83bc-c46b1ba847de"),
@@ -108,7 +110,8 @@ class FootballGenericSyncService(
             espnLeagueCode = "uefa.euro",
             defaultName = "European Championship",
             logoUrl = "https://crests.football-data.org/EUR.png",
-            format = "GROUPS_AND_KNOCKOUT"
+            format = "GROUPS_AND_KNOCKOUT",
+            isEuropeanCalendar = true
         ),
         UUID.fromString("7acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("7acdf011-fbde-4122-83bc-c46b1ba847de"),
@@ -116,7 +119,8 @@ class FootballGenericSyncService(
             apiFootballId = 61,
             espnLeagueCode = "fra.1",
             defaultName = "Ligue 1",
-            logoUrl = "https://crests.football-data.org/FL1.png"
+            logoUrl = "https://crests.football-data.org/FL1.png",
+            isEuropeanCalendar = true
         ),
         UUID.fromString("8acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("8acdf011-fbde-4122-83bc-c46b1ba847de"),
@@ -124,7 +128,8 @@ class FootballGenericSyncService(
             apiFootballId = 78,
             espnLeagueCode = "ger.1",
             defaultName = "Bundesliga",
-            logoUrl = "https://crests.football-data.org/BL1.png"
+            logoUrl = "https://crests.football-data.org/BL1.png",
+            isEuropeanCalendar = true
         ),
         UUID.fromString("9acdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("9acdf011-fbde-4122-83bc-c46b1ba847de"),
@@ -132,7 +137,8 @@ class FootballGenericSyncService(
             apiFootballId = 135,
             espnLeagueCode = "ita.1",
             defaultName = "Serie A",
-            logoUrl = "https://crests.football-data.org/SA.png"
+            logoUrl = "https://crests.football-data.org/SA.png",
+            isEuropeanCalendar = true
         ),
         UUID.fromString("aacdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("aacdf011-fbde-4122-83bc-c46b1ba847de"),
@@ -140,7 +146,8 @@ class FootballGenericSyncService(
             apiFootballId = 88,
             espnLeagueCode = "ned.1",
             defaultName = "Eredivisie",
-            logoUrl = "https://crests.football-data.org/ED.png"
+            logoUrl = "https://crests.football-data.org/ED.png",
+            isEuropeanCalendar = true
         ),
         UUID.fromString("bacdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("bacdf011-fbde-4122-83bc-c46b1ba847de"),
@@ -148,7 +155,8 @@ class FootballGenericSyncService(
             apiFootballId = 94,
             espnLeagueCode = "por.1",
             defaultName = "Primeira Liga",
-            logoUrl = "https://crests.football-data.org/PPL.png"
+            logoUrl = "https://crests.football-data.org/PPL.png",
+            isEuropeanCalendar = true
         ),
         UUID.fromString("b3cdf011-fbde-4122-83bc-c46b1ba847de") to FootballLeagueMetadata(
             id = UUID.fromString("b3cdf011-fbde-4122-83bc-c46b1ba847de"),
@@ -236,7 +244,11 @@ class FootballGenericSyncService(
         val targetSeasonId = activeSeason?.id ?: throw IllegalStateException("No active season found for league: $leagueId")
         val seasonYear = activeSeason.externalSeasonCode
 
-        val events = espnSoccerClient.fetchSoccerMatches(espnCode, seasonYear)
+        val events = espnSoccerClient.fetchSoccerMatches(
+            leagueCode = espnCode,
+            seasonYear = seasonYear,
+            isEuropeanCalendar = metadata.isEuropeanCalendar
+        )
         return events.mapNotNull { event ->
             val comp = event.competitions.firstOrNull() ?: return@mapNotNull null
             val homeComp = comp.competitors.find { it.homeAway == "home" } ?: return@mapNotNull null
@@ -531,7 +543,7 @@ class FootballGenericSyncService(
     }
 
     private fun ensureLeagueLogo(leagueId: UUID, logoUrl: String?) {
-        if (logoUrl.isNullOrBlank() || leagueRepository == null) return
+        if (logoUrl.isNullOrBlank()) return
         leagueRepository.findById(leagueId).ifPresent { league ->
             val metadata = leaguesMetadata[leagueId]
             val targetFormat = metadata?.format ?: league.format
