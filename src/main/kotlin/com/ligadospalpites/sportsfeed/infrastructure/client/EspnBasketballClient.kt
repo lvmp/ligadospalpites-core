@@ -57,13 +57,26 @@ class EspnBasketballClient(
                 .body(EspnNbaStandingsResponse::class.java)
 
             val rows = mutableListOf<com.ligadospalpites.sportsfeed.infrastructure.web.StandingRow>()
-            response?.children?.forEach { conf ->
+
+            fun collectConferences(confList: List<EspnNbaConference>?): List<EspnNbaConference> {
+                val list = mutableListOf<EspnNbaConference>()
+                confList?.forEach { conf ->
+                    if (!conf.standings?.entries.isNullOrEmpty()) {
+                        list.add(conf)
+                    }
+                    conf.children?.let { list.addAll(collectConferences(it)) }
+                }
+                return list
+            }
+
+            val conferences = collectConferences(response?.children)
+            conferences.forEach { conf ->
                 val confName = conf.name ?: "NBA"
                 val entries = conf.standings?.entries ?: emptyList()
                 entries.forEachIndexed { idx, entry ->
                     val teamName = entry.team?.displayName ?: entry.team?.name ?: "Time"
                     val logo = entry.team?.logo ?: entry.team?.logos?.firstOrNull()?.href
-                    val statMap = entry.stats.associate { (it.name ?: "") to (it.displayValue ?: "") }
+                    val statMap = (entry.stats ?: emptyList()).associate { (it.name ?: "") to (it.displayValue ?: "") }
                     val wins = statMap["wins"]?.toIntOrNull() ?: 0
                     val losses = statMap["losses"]?.toIntOrNull() ?: 0
                     val winPercentStr = statMap["winPercent"]
@@ -122,15 +135,15 @@ class EspnBasketballClient(
     }
 
     private fun parseEspnEvent(event: EspnEvent, leagueSlug: String): EspnBasketballGame? {
-        val competition = event.competitions.firstOrNull() ?: return null
-        val homeCompetitor = competition.competitors.find { it.homeAway == "home" } ?: return null
+        val competition = event.competitions?.firstOrNull() ?: return null
+        val homeCompetitor = competition.competitors?.find { it.homeAway == "home" } ?: return null
         val awayCompetitor = competition.competitors.find { it.homeAway == "away" } ?: return null
 
-        val homeName = homeCompetitor.team.displayName ?: homeCompetitor.team.name ?: "Home"
-        val awayName = awayCompetitor.team.displayName ?: awayCompetitor.team.name ?: "Away"
+        val homeName = homeCompetitor.team?.displayName ?: homeCompetitor.team?.name ?: "Home"
+        val awayName = awayCompetitor.team?.displayName ?: awayCompetitor.team?.name ?: "Away"
 
-        val homeLogo = homeCompetitor.team.logo ?: homeCompetitor.team.logos?.firstOrNull()?.href
-        val awayLogo = awayCompetitor.team.logo ?: awayCompetitor.team.logos?.firstOrNull()?.href
+        val homeLogo = homeCompetitor.team?.logo ?: homeCompetitor.team?.logos?.firstOrNull()?.href
+        val awayLogo = awayCompetitor.team?.logo ?: awayCompetitor.team?.logos?.firstOrNull()?.href
 
         val homeScore = homeCompetitor.score?.toIntOrNull()
         val awayScore = awayCompetitor.score?.toIntOrNull()
@@ -185,7 +198,7 @@ class EspnBasketballClient(
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 private data class EspnScoreboardResponse(
-    val events: List<EspnEvent> = emptyList()
+    val events: List<EspnEvent>? = emptyList()
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -193,7 +206,7 @@ private data class EspnEvent(
     val id: String = "",
     val date: String? = null,
     val status: EspnStatus? = null,
-    val competitions: List<EspnCompetition> = emptyList()
+    val competitions: List<EspnCompetition>? = emptyList()
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -210,14 +223,14 @@ private data class EspnStatusType(
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 private data class EspnCompetition(
-    val competitors: List<EspnCompetitor> = emptyList()
+    val competitors: List<EspnCompetitor>? = emptyList()
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 private data class EspnCompetitor(
     val homeAway: String = "",
     val score: String? = null,
-    val team: EspnTeam = EspnTeam(),
+    val team: EspnTeam? = EspnTeam(),
     val linescores: List<EspnLinescore>? = null
 )
 
@@ -241,24 +254,25 @@ private data class EspnLinescore(
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 private data class EspnNbaStandingsResponse(
-    val children: List<EspnNbaConference> = emptyList()
+    val children: List<EspnNbaConference>? = emptyList()
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 private data class EspnNbaConference(
     val name: String? = null,
-    val standings: EspnNbaStandingsWrapper? = null
+    val standings: EspnNbaStandingsWrapper? = null,
+    val children: List<EspnNbaConference>? = null
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 private data class EspnNbaStandingsWrapper(
-    val entries: List<EspnNbaEntry> = emptyList()
+    val entries: List<EspnNbaEntry>? = emptyList()
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 private data class EspnNbaEntry(
     val team: EspnTeam? = null,
-    val stats: List<EspnNbaStat> = emptyList()
+    val stats: List<EspnNbaStat>? = emptyList()
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
