@@ -48,6 +48,54 @@ class EspnBasketballClient(
         return fetchScoreboardForSport("nba")
     }
 
+    fun fetchNbaStandings(): List<com.ligadospalpites.sportsfeed.infrastructure.web.StandingRow> {
+        logger.info("Fetching official NBA Standings from ESPN Public API")
+        return try {
+            val response = restClient.get()
+                .uri("/nba/standings")
+                .retrieve()
+                .body(EspnNbaStandingsResponse::class.java)
+
+            val rows = mutableListOf<com.ligadospalpites.sportsfeed.infrastructure.web.StandingRow>()
+            response?.children?.forEach { conf ->
+                val confName = conf.name ?: "NBA"
+                val entries = conf.standings?.entries ?: emptyList()
+                entries.forEachIndexed { idx, entry ->
+                    val teamName = entry.team?.displayName ?: entry.team?.name ?: "Time"
+                    val logo = entry.team?.logo ?: entry.team?.logos?.firstOrNull()?.href
+                    val statMap = entry.stats.associate { (it.name ?: "") to (it.displayValue ?: "") }
+                    val wins = statMap["wins"]?.toIntOrNull() ?: 0
+                    val losses = statMap["losses"]?.toIntOrNull() ?: 0
+                    val winPercentStr = statMap["winPercent"]
+                    val winRate = winPercentStr?.toDoubleOrNull() ?: if (wins + losses > 0) Math.round((wins.toDouble() / (wins + losses)) * 1000.0) / 1000.0 else 0.0
+                    val gb = statMap["gamesBehind"] ?: "-"
+                    val streak = statMap["streak"] ?: ""
+
+                    rows.add(
+                        com.ligadospalpites.sportsfeed.infrastructure.web.StandingRow(
+                            position = idx + 1,
+                            teamId = java.util.UUID.nameUUIDFromBytes(teamName.toByteArray()),
+                            teamName = teamName,
+                            played = wins + losses,
+                            won = wins,
+                            lost = losses,
+                            winRate = winRate,
+                            gamesBehind = gb,
+                            streak = streak,
+                            groupName = confName,
+                            teamLogoUrl = logo
+                        )
+                    )
+                }
+            }
+            logger.info("ESPN Public API returned ${rows.size} standing rows for NBA")
+            rows
+        } catch (e: Exception) {
+            logger.error("Failed to fetch ESPN NBA standings: ${e.message}", e)
+            emptyList()
+        }
+    }
+
     fun fetchWnbaScoreboard(): List<EspnBasketballGame> {
         return fetchScoreboardForSport("wnba")
     }
@@ -189,4 +237,32 @@ private data class EspnLogo(
 @JsonIgnoreProperties(ignoreUnknown = true)
 private data class EspnLinescore(
     val value: Double? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+private data class EspnNbaStandingsResponse(
+    val children: List<EspnNbaConference> = emptyList()
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+private data class EspnNbaConference(
+    val name: String? = null,
+    val standings: EspnNbaStandingsWrapper? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+private data class EspnNbaStandingsWrapper(
+    val entries: List<EspnNbaEntry> = emptyList()
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+private data class EspnNbaEntry(
+    val team: EspnTeam? = null,
+    val stats: List<EspnNbaStat> = emptyList()
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+private data class EspnNbaStat(
+    val name: String? = null,
+    val displayValue: String? = null
 )

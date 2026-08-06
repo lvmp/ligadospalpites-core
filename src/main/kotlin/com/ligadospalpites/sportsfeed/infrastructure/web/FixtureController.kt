@@ -23,7 +23,8 @@ class FixtureController(
     private val matchRepository: SpringDataMatchRepository,
     private val seasonRepository: SpringDataSeasonRepository,
     private val entitlementRepository: SpringDataUserEntitlementRepository,
-    private val userResolver: UserResolver
+    private val userResolver: UserResolver,
+    @org.springframework.beans.factory.annotation.Autowired(required = false) private val espnBasketballClient: com.ligadospalpites.sportsfeed.infrastructure.client.EspnBasketballClient? = null
 ) {
 
     // 1. Get leagues grouped by sport
@@ -249,6 +250,14 @@ class FixtureController(
 
         // 1. Basquete (NBA / NBB / EuroLeague)
         if (sportName.contains("basquete") || sportName.contains("nba") || sportName.contains("nbb") || sportName.contains("euroleague")) {
+            val isNba = (league?.name ?: "").contains("NBA", ignoreCase = true) || leagueId == UUID.fromString("5c1e3a11-b9db-44ab-ba02-411a0c0bcf14")
+            if (isNba && espnBasketballClient != null) {
+                val officialNbaStandings = espnBasketballClient.fetchNbaStandings()
+                if (officialNbaStandings.isNotEmpty()) {
+                    return ResponseEntity.ok(officialNbaStandings)
+                }
+            }
+
             val teams = (matches.map { it.homeTeamName } + matches.map { it.awayTeamName }).distinct()
             if (teams.isNotEmpty()) {
                 val finishedMatches = matches.filter { it.status == MatchStatus.FINISHED }
@@ -275,32 +284,122 @@ class FixtureController(
                         lost = lost,
                         winRate = winRate,
                         gamesBehind = "0.0",
-                        streak = if (won > 0) "W$won" else "L$lost"
+                        streak = if (won > 0) "W$won" else if (lost > 0) "L$lost" else "-"
                     )
                 }.sortedWith(compareByDescending<StandingRow> { it.winRate ?: 0.0 }.thenByDescending { it.won ?: 0 })
-                    .mapIndexed { idx, r -> r.copy(position = idx + 1) }
+
+                val leaderWon = computedRows.firstOrNull()?.won ?: 0
+                val leaderLost = computedRows.firstOrNull()?.lost ?: 0
+                val withGb = computedRows.mapIndexed { idx, r ->
+                    val gbVal = if (idx == 0) "-" else {
+                        val rWon = r.won ?: 0
+                        val rLost = r.lost ?: 0
+                        val diff = ((leaderWon - rWon) + (rLost - leaderLost)) / 2.0
+                        if (diff <= 0) "0.0" else if (diff % 1.0 == 0.0) "${diff.toInt()}.0" else "$diff"
+                    }
+                    r.copy(position = idx + 1, gamesBehind = gbVal)
+                }
+
+                return ResponseEntity.ok(withGb)
+            }
+
+            // Fallback para Basquete (NBB ou NBA)
+            val isNbb = (league?.name ?: "").contains("NBB", ignoreCase = true) || leagueId == UUID.fromString("2dbd1112-9cde-4411-b0db-b06d0421da6a")
+            val basketballFallback = if (isNbb) {
+                listOf(
+                    StandingRow(1, UUID.randomUUID(), "Flamengo", played = 20, won = 17, lost = 3, winRate = 0.850, gamesBehind = "-", streak = "W5"),
+                    StandingRow(2, UUID.randomUUID(), "Franca", played = 20, won = 16, lost = 4, winRate = 0.800, gamesBehind = "1.0", streak = "W2"),
+                    StandingRow(3, UUID.randomUUID(), "Minas", played = 20, won = 15, lost = 5, winRate = 0.750, gamesBehind = "2.0", streak = "W1"),
+                    StandingRow(4, UUID.randomUUID(), "São Paulo", played = 20, won = 13, lost = 7, winRate = 0.650, gamesBehind = "4.0", streak = "L1"),
+                    StandingRow(5, UUID.randomUUID(), "Corinthians", played = 20, won = 11, lost = 9, winRate = 0.550, gamesBehind = "6.0", streak = "W1"),
+                    StandingRow(6, UUID.randomUUID(), "Bauru", played = 20, won = 10, lost = 10, winRate = 0.500, gamesBehind = "7.0", streak = "L2")
+                )
+            } else {
+                listOf(
+                    StandingRow(1, UUID.randomUUID(), "Boston Celtics", played = 82, won = 64, lost = 18, winRate = 0.780, gamesBehind = "-", streak = "W5", groupName = "Eastern Conference"),
+                    StandingRow(2, UUID.randomUUID(), "New York Knicks", played = 82, won = 50, lost = 32, winRate = 0.610, gamesBehind = "14.0", streak = "W1", groupName = "Eastern Conference"),
+                    StandingRow(1, UUID.randomUUID(), "Oklahoma City Thunder", played = 82, won = 57, lost = 25, winRate = 0.695, gamesBehind = "-", streak = "W3", groupName = "Western Conference"),
+                    StandingRow(2, UUID.randomUUID(), "Denver Nuggets", played = 82, won = 57, lost = 25, winRate = 0.695, gamesBehind = "-", streak = "W2", groupName = "Western Conference")
+                )
+            }
+            return ResponseEntity.ok(basketballFallback)
+        }
+
+        // 2. eSports (LoL / CS / Valorant / Dota 2)
+        if (sportName.contains("esports") || sportName.contains("league of legends") || sportName.contains("counter-strike") || sportName.contains("valorant") || sportName.contains("cblol") || sportName.contains("worlds")) {
+            val teams = (matches.map { it.homeTeamName } + matches.map { it.awayTeamName }).distinct()
+            if (teams.isNotEmpty()) {
+                val finishedMatches = matches.filter { it.status == MatchStatus.FINISHED }
+                val computedRows = teams.map { teamName ->
+                    var sWon = 0
+                    var sLost = 0
+                    var mWon = 0
+                    var mLost = 0
+                    finishedMatches.forEach { m ->
+                        if (m.homeTeamName == teamName || m.awayTeamName == teamName) {
+                            val isHome = m.homeTeamName == teamName
+                            val myScore = if (isHome) m.homeScore ?: 0 else m.awayScore ?: 0
+                            val oppScore = if (isHome) m.awayScore ?: 0 else m.homeScore ?: 0
+                            mWon += myScore
+                            mLost += oppScore
+                            if (myScore > oppScore) sWon++ else if (myScore < oppScore) sLost++
+                        }
+                    }
+                    StandingRow(
+                        position = 0,
+                        teamId = UUID.nameUUIDFromBytes(teamName.toByteArray()),
+                        teamName = teamName,
+                        seriesWon = sWon,
+                        seriesLost = sLost,
+                        mapsWon = mWon,
+                        mapsLost = mLost,
+                        streak = if (sWon > 0) "W$sWon" else if (sLost > 0) "L$sLost" else "-"
+                    )
+                }.sortedWith(
+                    compareByDescending<StandingRow> { it.seriesWon ?: 0 }
+                        .thenBy { it.seriesLost ?: Int.MAX_VALUE }
+                        .thenByDescending { (it.mapsWon ?: 0) - (it.mapsLost ?: 0) }
+                ).mapIndexed { idx, r -> r.copy(position = idx + 1) }
 
                 return ResponseEntity.ok(computedRows)
             }
 
-            // Fallback para Basquete (ex: NBA / NBB)
-            val basketballFallback = listOf(
-                StandingRow(1, UUID.randomUUID(), "Boston Celtics", played = 82, won = 64, lost = 18, winRate = 0.780, gamesBehind = "-", streak = "W5"),
-                StandingRow(2, UUID.randomUUID(), "New York Knicks", played = 82, won = 50, lost = 32, winRate = 0.610, gamesBehind = "14.0", streak = "W1"),
-                StandingRow(3, UUID.randomUUID(), "Milwaukee Bucks", played = 82, won = 49, lost = 33, winRate = 0.598, gamesBehind = "15.0", streak = "L2"),
-                StandingRow(4, UUID.randomUUID(), "Cleveland Cavaliers", played = 82, won = 48, lost = 34, winRate = 0.585, gamesBehind = "16.0", streak = "W2")
-            )
-            return ResponseEntity.ok(basketballFallback)
-        }
-
-        // 2. eSports (LoL / CS / Valorant)
-        if (sportName.contains("esports") || sportName.contains("league of legends") || sportName.contains("counter-strike") || sportName.contains("valorant") || sportName.contains("cblol")) {
-            val esportsFallback = listOf(
-                StandingRow(1, UUID.randomUUID(), "LOUD", seriesWon = 7, seriesLost = 1, mapsWon = 15, mapsLost = 4, streak = "W6"),
-                StandingRow(2, UUID.randomUUID(), "PAIN Gaming", seriesWon = 6, seriesLost = 2, mapsWon = 13, mapsLost = 6, streak = "W2"),
-                StandingRow(3, UUID.randomUUID(), "FURIA Esports", seriesWon = 4, seriesLost = 4, mapsWon = 10, mapsLost = 9, streak = "L1"),
-                StandingRow(4, UUID.randomUUID(), "RED Canids", seriesWon = 3, seriesLost = 5, mapsWon = 7, mapsLost = 11, streak = "L2")
-            )
+            // Fallbacks específicos por liga de eSports
+            val leagueNameLower = (league?.name ?: "").lowercase()
+            val esportsFallback = when {
+                leagueNameLower.contains("vct") || leagueNameLower.contains("valorant") || leagueId == UUID.fromString("8c1e3a11-b9db-44ab-ba02-411a0c0bcf14") -> listOf(
+                    StandingRow(1, UUID.randomUUID(), "Sentinels", seriesWon = 8, seriesLost = 2, mapsWon = 18, mapsLost = 7, streak = "W4"),
+                    StandingRow(2, UUID.randomUUID(), "LOUD", seriesWon = 7, seriesLost = 3, mapsWon = 16, mapsLost = 8, streak = "W2"),
+                    StandingRow(3, UUID.randomUUID(), "Paper Rex", seriesWon = 6, seriesLost = 4, mapsWon = 14, mapsLost = 10, streak = "L1"),
+                    StandingRow(4, UUID.randomUUID(), "Fnatic", seriesWon = 6, seriesLost = 4, mapsWon = 13, mapsLost = 11, streak = "W1"),
+                    StandingRow(5, UUID.randomUUID(), "Cloud9", seriesWon = 5, seriesLost = 5, mapsWon = 11, mapsLost = 12, streak = "L2"),
+                    StandingRow(6, UUID.randomUUID(), "KRÜ Esports", seriesWon = 4, seriesLost = 6, mapsWon = 9, mapsLost = 14, streak = "W1")
+                )
+                leagueNameLower.contains("cs") || leagueNameLower.contains("major") || leagueId == UUID.fromString("9c1e3a11-b9db-44ab-ba02-411a0c0bcf14") -> listOf(
+                    StandingRow(1, UUID.randomUUID(), "FaZe Clan", seriesWon = 9, seriesLost = 1, mapsWon = 20, mapsLost = 5, streak = "W5"),
+                    StandingRow(2, UUID.randomUUID(), "Natus Vincere", seriesWon = 8, seriesLost = 2, mapsWon = 18, mapsLost = 6, streak = "W3"),
+                    StandingRow(3, UUID.randomUUID(), "Team Vitality", seriesWon = 7, seriesLost = 3, mapsWon = 16, mapsLost = 9, streak = "L1"),
+                    StandingRow(4, UUID.randomUUID(), "G2 Esports", seriesWon = 6, seriesLost = 4, mapsWon = 14, mapsLost = 10, streak = "W1"),
+                    StandingRow(5, UUID.randomUUID(), "MOUZ", seriesWon = 5, seriesLost = 5, mapsWon = 12, mapsLost = 12, streak = "L2"),
+                    StandingRow(6, UUID.randomUUID(), "Virtus.pro", seriesWon = 4, seriesLost = 6, mapsWon = 10, mapsLost = 14, streak = "W1")
+                )
+                leagueNameLower.contains("worlds") || leagueId == UUID.fromString("ac1e3a11-b9db-44ab-ba02-411a0c0bcf14") -> listOf(
+                    StandingRow(1, UUID.randomUUID(), "T1", seriesWon = 6, seriesLost = 1, mapsWon = 15, mapsLost = 4, streak = "W4"),
+                    StandingRow(2, UUID.randomUUID(), "Gen.G", seriesWon = 5, seriesLost = 2, mapsWon = 13, mapsLost = 6, streak = "W2"),
+                    StandingRow(3, UUID.randomUUID(), "Bilibili Gaming", seriesWon = 5, seriesLost = 2, mapsWon = 12, mapsLost = 7, streak = "L1"),
+                    StandingRow(4, UUID.randomUUID(), "Top Esports", seriesWon = 4, seriesLost = 3, mapsWon = 10, mapsLost = 8, streak = "W1"),
+                    StandingRow(5, UUID.randomUUID(), "Hanwha Life", seriesWon = 3, seriesLost = 4, mapsWon = 8, mapsLost = 10, streak = "L2"),
+                    StandingRow(6, UUID.randomUUID(), "G2 Esports", seriesWon = 2, seriesLost = 5, mapsWon = 6, mapsLost = 12, streak = "L1")
+                )
+                else -> listOf(
+                    StandingRow(1, UUID.randomUUID(), "LOUD", seriesWon = 7, seriesLost = 1, mapsWon = 15, mapsLost = 4, streak = "W6"),
+                    StandingRow(2, UUID.randomUUID(), "PAIN Gaming", seriesWon = 6, seriesLost = 2, mapsWon = 13, mapsLost = 6, streak = "W2"),
+                    StandingRow(3, UUID.randomUUID(), "FURIA Esports", seriesWon = 4, seriesLost = 4, mapsWon = 10, mapsLost = 9, streak = "L1"),
+                    StandingRow(4, UUID.randomUUID(), "RED Canids", seriesWon = 3, seriesLost = 5, mapsWon = 7, mapsLost = 11, streak = "L2"),
+                    StandingRow(5, UUID.randomUUID(), "Vivo Keyd Stars", seriesWon = 3, seriesLost = 5, mapsWon = 8, mapsLost = 12, streak = "W1"),
+                    StandingRow(6, UUID.randomUUID(), "Fluxo", seriesWon = 2, seriesLost = 6, mapsWon = 5, mapsLost = 13, streak = "L3")
+                )
+            }
             return ResponseEntity.ok(esportsFallback)
         }
 

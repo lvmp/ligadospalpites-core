@@ -27,4 +27,10 @@ class EspnBasketballClientTest {
         assertEquals(0, read.homeOvertime)
         assertEquals(0, read.awayOvertime)
     }
+
+    @Test
+    fun `should instantiate EspnBasketballClient correctly`() {
+        val client = EspnBasketballClient("https://site.api.espn.com/apis/site/v2/sports/basketball", objectMapper)
+        assertNotNull(client)
+    }
 }

@@ -280,11 +280,12 @@ class BasketballSyncService(
     }
 
     private fun mapBasketballStatus(shortStatus: String): MatchStatus {
-        return when (shortStatus.uppercase()) {
-            "NS", "TBD" -> MatchStatus.SCHEDULED
-            "Q1", "Q2", "Q3", "Q4", "OT", "BT", "HT", "LIVE" -> MatchStatus.LIVE
-            "FT", "AOT" -> MatchStatus.FINISHED
-            "CAN", "CANC", "PST", "POST", "ABD" -> MatchStatus.CANCELLED
+        val upper = shortStatus.uppercase().trim()
+        return when {
+            upper == "NS" || upper == "TBD" || upper == "PRE" || upper == "SCHEDULED" -> MatchStatus.SCHEDULED
+            upper.startsWith("Q") || upper == "OT" || upper == "BT" || upper == "HT" || upper == "LIVE" || upper == "IN" -> MatchStatus.LIVE
+            upper.contains("FINAL") || upper == "FT" || upper == "AOT" || upper == "POST" || upper.contains("END") -> MatchStatus.FINISHED
+            upper.contains("CANCEL") || upper.contains("POSTPONED") || upper == "CAN" || upper == "PST" || upper == "ABD" -> MatchStatus.CANCELLED
             else -> MatchStatus.SCHEDULED
         }
     }
