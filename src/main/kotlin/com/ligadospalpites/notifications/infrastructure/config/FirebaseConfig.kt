@@ -20,32 +20,14 @@ class FirebaseConfig {
     private fun initializeFirebase() {
         if (FirebaseApp.getApps().isEmpty()) {
             try {
-                // Support both custom FIREBASE_CREDENTIALS env variable (JSON string or Base64 encoded JSON) and App Default Credentials
-                val firebaseCredentialsJson = System.getenv("FIREBASE_CREDENTIALS") 
+                val firebaseCredentialsEnv = System.getenv("FIREBASE_CREDENTIALS") 
                     ?: System.getenv("FIREBASE_CREDENTIALS_JSON")
 
-                val credentials = if (!firebaseCredentialsJson.isNullOrBlank()) {
-                    val trimmed = firebaseCredentialsJson.trim()
-                    
-                    // Remove all white spaces and line breaks that command line encoders generate (e.g. wrapping every 76 chars)
-                    val cleaned = trimmed.replace(Regex("\\s+"), "")
-
-                    val jsonBytes = if (!trimmed.startsWith("{")) {
-                        log.info("Detectada credencial criptografada/Base64. Decodificando...")
-                        try {
-                            java.util.Base64.getDecoder().decode(cleaned)
-                        } catch (e: Exception) {
-                            log.warn("A string não inicia com '{' mas falhou ao decodificar Base64. Usando dados originais: {}", e.message)
-                            firebaseCredentialsJson.toByteArray()
-                        }
-                    } else {
-                        log.info("Carregando credenciais do Firebase a partir de texto JSON bruto.")
-                        firebaseCredentialsJson.toByteArray()
-                    }
-                    GoogleCredentials.fromStream(ByteArrayInputStream(jsonBytes))
+                val credentials = if (!firebaseCredentialsEnv.isNullOrBlank()) {
+                    tryLoadCustomCredentials(firebaseCredentialsEnv)
+                        ?: loadApplicationDefaultCredentials()
                 } else {
-                    log.info("Carregando credenciais padrão do Google Cloud Application Default.")
-                    GoogleCredentials.getApplicationDefault()
+                    loadApplicationDefaultCredentials()
                 }
 
                 val projectId = System.getenv("FIREBASE_PROJECT_ID")
@@ -69,6 +51,66 @@ class FirebaseConfig {
                 throw ex
             }
         }
+    }
+
+    private fun loadApplicationDefaultCredentials(): GoogleCredentials {
+        log.info("Carregando credenciais padrão do Google Cloud Application Default Credentials (ADC).")
+        return GoogleCredentials.getApplicationDefault()
+    }
+
+    private fun tryLoadCustomCredentials(rawInput: String): GoogleCredentials? {
+        return try {
+            val jsonBytes = extractJsonBytes(rawInput) ?: return null
+            GoogleCredentials.fromStream(ByteArrayInputStream(jsonBytes))
+        } catch (ex: Exception) {
+            log.warn("Falha ao analisar a variável de ambiente de credenciais do Firebase: {}. Retornando para Application Default Credentials.", ex.message)
+            null
+        }
+    }
+
+    private fun extractJsonBytes(rawInput: String): ByteArray? {
+        var input = rawInput.trim().removePrefix("\uFEFF")
+
+        if ((input.startsWith("\"") && input.endsWith("\"")) || (input.startsWith("'") && input.endsWith("'"))) {
+            input = input.substring(1, input.length - 1).trim()
+        }
+
+        if (input.contains("\\n") || input.contains("\\\"")) {
+            input = input.replace("\\n", "\n")
+                .replace("\\r", "\r")
+                .replace("\\\"", "\"")
+                .replace("\\\\", "\\")
+        }
+
+        input = input.trim()
+
+        if (input.startsWith("{")) {
+            log.info("Carregando credenciais do Firebase a partir de texto JSON bruto.")
+            return input.toByteArray(Charsets.UTF_8)
+        }
+
+        log.info("Detectada credencial criptografada/Base64. Decodificando...")
+        val cleanedBase64 = input.replace(Regex("\\s+"), "")
+
+        val decodedBytes = try {
+            java.util.Base64.getDecoder().decode(cleanedBase64)
+        } catch (e: Exception) {
+            try {
+                java.util.Base64.getMimeDecoder().decode(cleanedBase64)
+            } catch (e2: Exception) {
+                log.warn("A string de credenciais não inicia com '{' e falhou ao decodificar Base64: {}", e.message)
+                return null
+            }
+        }
+
+        val decodedString = String(decodedBytes, Charsets.UTF_8).trim().removePrefix("\uFEFF")
+        if (decodedString.startsWith("{")) {
+            log.info("Credenciais decodificadas do Base64 com sucesso.")
+            return decodedBytes
+        }
+
+        log.warn("Conteúdo decodificado de Base64 não é um JSON válido (não inicia com '{').")
+        return null
     }
 
     @Bean
