@@ -446,9 +446,9 @@ class FootballGenericSyncService(
 
     private fun translateStage(stage: String?, matchday: Int? = null): String {
         val stageUpper = stage?.uppercase()?.trim() ?: ""
-        val groupMatch = Regex("GROUP\\s+([A-H])").find(stageUpper)
+        val groupMatch = Regex("(?:GROUP|GRUPO)\\s+([A-H])", RegexOption.IGNORE_CASE).find(stageUpper)
         if (groupMatch != null) {
-            val letter = groupMatch.groupValues[1]
+            val letter = groupMatch.groupValues[1].uppercase()
             return "Grupo $letter"
         }
         return when {
