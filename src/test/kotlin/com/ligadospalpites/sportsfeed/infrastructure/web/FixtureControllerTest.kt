@@ -117,5 +117,12 @@ class FixtureControllerTest {
         assertEquals("Grupo F", palmeirasRow?.groupName)
         assertEquals(3, palmeirasRow?.points)
         assertEquals(1, palmeirasRow?.played)
+
+        // Validate each group has exactly 4 teams and total rows is exactly 32
+        assertEquals(32, rows.size, "Total standings rows for Libertadores must be exactly 32")
+        expectedGroups.forEach { grp ->
+            val teamsInGrp = rows.filter { it.groupName == grp }
+            assertEquals(4, teamsInGrp.size, "Each group must contain exactly 4 teams, but $grp had ${teamsInGrp.size}")
+        }
     }
 }

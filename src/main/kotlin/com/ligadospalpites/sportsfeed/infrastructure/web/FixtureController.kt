@@ -210,8 +210,12 @@ class FixtureController(
 
             fun resolveGroup(m: MatchJpaEntity): String? {
                 if (m.phase?.startsWith("Grupo") == true) return m.phase
-                return libertadoresTeamGroupMap[m.homeTeamName]
-                    ?: libertadoresTeamGroupMap[m.awayTeamName]
+                val homeGrp = libertadoresTeamGroupMap[m.homeTeamName]
+                val awayGrp = libertadoresTeamGroupMap[m.awayTeamName]
+                if (homeGrp != null && awayGrp != null && homeGrp == awayGrp) {
+                    return homeGrp
+                }
+                return null
             }
 
             val groupMatches = matches.filter {
