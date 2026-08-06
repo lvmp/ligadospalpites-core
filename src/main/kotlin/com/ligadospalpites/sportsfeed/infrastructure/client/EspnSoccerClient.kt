@@ -61,6 +61,7 @@ data class EspnSoccerCompetition(
     val date: String,
     val status: EspnSoccerStatus? = null,
     val notes: List<EspnSoccerNote> = emptyList(),
+    val altGameNote: String? = null,
     val competitors: List<EspnSoccerCompetitor> = emptyList()
 )
 

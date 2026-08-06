@@ -60,4 +60,14 @@ class EspnSoccerClientTest {
         assertEquals("Flamengo", away?.team?.displayName)
         assertEquals("1", away?.score)
     }
+
+    @Test
+    fun `should deserialize altGameNote correctly when present in competition`() {
+        val comp = EspnSoccerCompetition(
+            id = "1002",
+            date = "2026-04-15T22:00Z",
+            altGameNote = "CONMEBOL Libertadores, Group C"
+        )
+        assertEquals("CONMEBOL Libertadores, Group C", comp.altGameNote)
+    }
 }

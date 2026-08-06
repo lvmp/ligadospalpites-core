@@ -116,6 +116,7 @@ class SyncOrchestrator(
         val activeLeagues = leagueRepository.findByIsActiveTrue()
         val results = mutableListOf<Map<String, Any>>()
         val objectMapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
+        val sportArticlesMap = mutableMapOf<UUID, MutableList<Map<String, String>>>()
 
         for (league in activeLeagues) {
             val sportId = league.sportId
@@ -133,11 +134,9 @@ class SyncOrchestrator(
                 logger.info("Sincronizando notícias da liga '$leagueName' ($leagueId) usando query: '$query'")
                 val articles = newsApiClient.fetchNews(query = query, language = "pt")
 
-                // 1. Tenta recuperar o histórico existente do cache
+                // 1. Tenta recuperar o histórico existente do cache exclusivo da liga
                 val cacheKeyLeague = "news:$sportId:$leagueId"
-                val cacheKeySport = "news:$sportId"
                 val existingNewsJson = redisTemplate.opsForValue().get(cacheKeyLeague)
-                    ?: redisTemplate.opsForValue().get(cacheKeySport)
 
                 val existingNews: List<Map<String, String>> = if (!existingNewsJson.isNullOrBlank()) {
                     try {
@@ -193,9 +192,11 @@ class SyncOrchestrator(
 
                 val json = objectMapper.writeValueAsString(combinedAndFiltered)
                 
-                // Salva no Redis com as duas chaves (específica por liga e genérica por esporte para manter compatibilidade)
+                // Salva no Redis na chave específica da liga
                 redisTemplate.opsForValue().set(cacheKeyLeague, json)
-                redisTemplate.opsForValue().set(cacheKeySport, json) // Fallback compatível
+
+                // Coleta para a agregação do esporte
+                sportArticlesMap.getOrPut(sportId) { mutableListOf() }.addAll(combinedAndFiltered)
 
                 results.add(mapOf(
                     "leagueId" to leagueId,
@@ -213,6 +214,25 @@ class SyncOrchestrator(
                 ))
             }
         }
+
+        // Consolida e atualiza a chave genérica por esporte ("news:$sportId") ao final
+        sportArticlesMap.forEach { (sportId, allArticles) ->
+            val cacheKeySport = "news:$sportId"
+            val consolidated = allArticles
+                .distinctBy { it["url"]?.trim()?.lowercase() ?: it["title"]?.trim()?.lowercase() }
+                .sortedByDescending { art ->
+                    val publishedAtStr = art["publishedAt"]
+                    try {
+                        if (!publishedAtStr.isNullOrBlank()) Instant.parse(publishedAtStr) else Instant.MIN
+                    } catch (e: Exception) {
+                        Instant.MIN
+                    }
+                }
+                .take(20)
+            val jsonSport = objectMapper.writeValueAsString(consolidated)
+            redisTemplate.opsForValue().set(cacheKeySport, jsonSport)
+        }
+
         return results
     }
 }

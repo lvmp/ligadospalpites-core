@@ -72,6 +72,7 @@ class FootballGenericSyncService(
             id = UUID.fromString("9284ca51-bb54-47c1-841f-81ab28120fa2"),
             footballDataCode = "PD",
             apiFootballId = 140,
+            espnLeagueCode = "esp.1",
             defaultName = "Campeonato Espanhol",
             logoUrl = "https://crests.football-data.org/PD.png"
         ),
@@ -79,6 +80,7 @@ class FootballGenericSyncService(
             id = UUID.fromString("827d043c-62c2-402c-b011-3ba2849e7b23"),
             footballDataCode = "PL",
             apiFootballId = 39,
+            espnLeagueCode = "eng.1",
             defaultName = "Campeonato Inglês",
             logoUrl = "https://crests.football-data.org/PL.png"
         ),
@@ -86,6 +88,7 @@ class FootballGenericSyncService(
             id = UUID.fromString("e2d03a11-b9db-44ab-ba02-411a0c0bcf14"),
             footballDataCode = "CL",
             apiFootballId = 2,
+            espnLeagueCode = "uefa.champions",
             defaultName = "UEFA Champions League",
             logoUrl = "https://crests.football-data.org/CL.png",
             format = "GROUPS_AND_KNOCKOUT"
@@ -94,6 +97,7 @@ class FootballGenericSyncService(
             id = UUID.fromString("5acdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = "ELC",
             apiFootballId = 40,
+            espnLeagueCode = "eng.2",
             defaultName = "Championship",
             logoUrl = "https://crests.football-data.org/ELC.png"
         ),
@@ -101,6 +105,7 @@ class FootballGenericSyncService(
             id = UUID.fromString("6acdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = "EC",
             apiFootballId = 4,
+            espnLeagueCode = "uefa.euro",
             defaultName = "European Championship",
             logoUrl = "https://crests.football-data.org/EUR.png",
             format = "GROUPS_AND_KNOCKOUT"
@@ -109,6 +114,7 @@ class FootballGenericSyncService(
             id = UUID.fromString("7acdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = "FL1",
             apiFootballId = 61,
+            espnLeagueCode = "fra.1",
             defaultName = "Ligue 1",
             logoUrl = "https://crests.football-data.org/FL1.png"
         ),
@@ -116,6 +122,7 @@ class FootballGenericSyncService(
             id = UUID.fromString("8acdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = "BL1",
             apiFootballId = 78,
+            espnLeagueCode = "ger.1",
             defaultName = "Bundesliga",
             logoUrl = "https://crests.football-data.org/BL1.png"
         ),
@@ -123,6 +130,7 @@ class FootballGenericSyncService(
             id = UUID.fromString("9acdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = "SA",
             apiFootballId = 135,
+            espnLeagueCode = "ita.1",
             defaultName = "Serie A",
             logoUrl = "https://crests.football-data.org/SA.png"
         ),
@@ -130,6 +138,7 @@ class FootballGenericSyncService(
             id = UUID.fromString("aacdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = "DED",
             apiFootballId = 88,
+            espnLeagueCode = "ned.1",
             defaultName = "Eredivisie",
             logoUrl = "https://crests.football-data.org/ED.png"
         ),
@@ -137,6 +146,7 @@ class FootballGenericSyncService(
             id = UUID.fromString("bacdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = "PPL",
             apiFootballId = 94,
+            espnLeagueCode = "por.1",
             defaultName = "Primeira Liga",
             logoUrl = "https://crests.football-data.org/PPL.png"
         ),
@@ -239,7 +249,7 @@ class FootballGenericSyncService(
             val status = mapEspnStatus(statusState)
             val kickoff = parseIsoInstant(comp.date)
 
-            val rawStage = comp.notes.firstOrNull()?.headline ?: comp.status?.type?.description
+            val rawStage = comp.altGameNote ?: comp.notes.firstOrNull()?.headline ?: comp.status?.type?.description
             val phase = translateStage(rawStage)
 
             MatchJpaEntity(
@@ -303,7 +313,7 @@ class FootballGenericSyncService(
                 awayTeamName = awayTranslated,
                 homeTeamLogoUrl = match.homeTeam.crest,
                 awayTeamLogoUrl = match.awayTeam.crest,
-                kickoffTime = Instant.parse(match.utcDate),
+                kickoffTime = parseIsoInstant(match.utcDate),
                 status = mapFootballDataStatus(match.status),
                 homeScore = match.score?.fullTime?.home,
                 awayScore = match.score?.fullTime?.away,
@@ -336,7 +346,7 @@ class FootballGenericSyncService(
                 awayTeamName = awayTranslated,
                 homeTeamLogoUrl = wrapper.teams.home.logo,
                 awayTeamLogoUrl = wrapper.teams.away.logo,
-                kickoffTime = Instant.parse(wrapper.fixture.date),
+                kickoffTime = parseIsoInstant(wrapper.fixture.date),
                 status = mapApiFootballStatus(wrapper.fixture.status.short),
                 homeScore = wrapper.goals.home,
                 awayScore = wrapper.goals.away,
@@ -436,12 +446,20 @@ class FootballGenericSyncService(
 
     private fun translateStage(stage: String?, matchday: Int? = null): String {
         val stageUpper = stage?.uppercase()?.trim() ?: ""
+        val groupMatch = Regex("GROUP\\s+([A-H])").find(stageUpper)
+        if (groupMatch != null) {
+            val letter = groupMatch.groupValues[1]
+            return "Grupo $letter"
+        }
         return when {
-            stageUpper.matches(Regex("GROUP\\s+[A-H]")) -> {
-                val letter = stageUpper.takeLast(1)
-                "Grupo $letter"
-            }
+            stageUpper.contains("LEAGUE PHASE") || stageUpper.contains("LEAGUE_STAGE") || stageUpper.contains("FASE DE LIGA") -> "Fase de Liga"
             stageUpper.startsWith("GROUP") || stageUpper.contains("FASE DE GRUPOS") || stageUpper == "GROUPS" -> "Fase de Grupos"
+            stageUpper.contains("KNOCKOUT ROUND PLAYOFFS") || stageUpper.contains("PLAYOFF") -> "Playoffs Mata-Mata"
+            stageUpper.contains("FIRST ROUND") || stageUpper.contains("1ST ROUND") -> "Primeira Fase"
+            stageUpper.contains("SECOND ROUND") || stageUpper.contains("2ND ROUND") -> "Segunda Fase"
+            stageUpper.contains("THIRD ROUND") || stageUpper.contains("3RD ROUND") -> "Terceira Fase"
+            stageUpper.contains("FOURTH ROUND") || stageUpper.contains("4TH ROUND") -> "Quarta Fase"
+            stageUpper.contains("FIFTH ROUND") || stageUpper.contains("5TH ROUND") -> "Quinta Fase"
             stageUpper.contains("ROUND OF 32") || stageUpper.contains("LAST_32") || stageUpper.contains("16TH") -> "Dezesseis-avos de Final"
             stageUpper.contains("ROUND OF 16") || stageUpper.contains("LAST_16") || stageUpper.contains("8TH") || stageUpper.contains("OITAVAS") -> "Oitavas de Final"
             stageUpper.contains("QUARTER") || stageUpper.contains("QUARTAS") -> "Quartas de Final"
