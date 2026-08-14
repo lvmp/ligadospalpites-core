@@ -40,6 +40,7 @@ jobs:
             API_FOOTBALL_API_KEY=${{ secrets.API_FOOTBALL_API_KEY }}
             BALLDONTLIE_API_KEY=${{ secrets.BALLDONTLIE_API_KEY }}
             NEWS_API_KEY=${{ secrets.NEWS_API_KEY }}
+            PANDASCORE_API_KEY=${{ secrets.PANDASCORE_API_KEY }}
             FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}
             FIREBASE_CREDENTIALS=${{ secrets.FIREBASE_CREDENTIALS }}
             ADMIN_API_KEY=${{ secrets.ADMIN_API_KEY }}

@@ -76,6 +76,9 @@ app:
     espn:
       basketball:
         url: "${ESPN_BASKETBALL_URL:https://site.api.espn.com/apis/site/v2/sports/basketball}"
+    pandascore:
+      url: "${PANDASCORE_URL:https://api.pandascore.co}"
+      token: "${PANDASCORE_API_KEY:${PANDASCORE_TOKEN:}}"
 
 resilience4j:
   circuitbreaker:
@@ -128,6 +131,14 @@ resilience4j:
         slowCallDurationThreshold: 5s
         waitDurationInOpenState: 30s
         permittedNumberOfCallsInHalfOpenState: 2
+      pandaScoreApi:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 6
+        failureRateThreshold: 50
+        slowCallRateThreshold: 50
+        slowCallDurationThreshold: 5s
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 2
   retry:
     instances:
       footballDataApi:
@@ -155,6 +166,12 @@ resilience4j:
           enabled: true
           multiplier: 2
       espnSoccerApi:
+        maxAttempts: 3
+        waitDuration: 1s
+        exponentialBackoff:
+          enabled: true
+          multiplier: 2
+      pandaScoreApi:
         maxAttempts: 3
         waitDuration: 1s
         exponentialBackoff:
