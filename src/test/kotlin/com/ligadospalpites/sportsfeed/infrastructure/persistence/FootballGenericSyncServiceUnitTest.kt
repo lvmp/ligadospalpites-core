@@ -126,11 +126,11 @@ class FootballGenericSyncServiceUnitTest {
                 )
             )
         )
-        `when`(espnSoccerClient.fetchSoccerMatches(eq("conmebol.libertadores"), eq(2026), eq(false))).thenReturn(listOf(espnEvent))
+        `when`(espnSoccerClient.fetchSoccerMatches("conmebol.libertadores", 2026, false)).thenReturn(listOf(espnEvent))
 
         syncService.syncMatches(footballId, libertadoresId)
 
-        verify(espnSoccerClient, times(1)).fetchSoccerMatches(eq("conmebol.libertadores"), eq(2026), eq(false))
+        verify(espnSoccerClient, times(1)).fetchSoccerMatches("conmebol.libertadores", 2026, false)
         verifyNoInteractions(footballDataClient)
     }
 
@@ -151,11 +151,11 @@ class FootballGenericSyncServiceUnitTest {
                 )
             )
         )
-        `when`(espnSoccerClient.fetchSoccerMatches(eq("bra.copa_do_brazil"), eq(2026), eq(false))).thenReturn(listOf(espnEvent))
+        `when`(espnSoccerClient.fetchSoccerMatches("bra.copa_do_brazil", 2026, false)).thenReturn(listOf(espnEvent))
 
         syncService.syncMatches(footballId, copaDoBrasilId)
 
-        verify(espnSoccerClient, times(1)).fetchSoccerMatches(eq("bra.copa_do_brazil"), eq(2026), eq(false))
+        verify(espnSoccerClient, times(1)).fetchSoccerMatches("bra.copa_do_brazil", 2026, false)
         verifyNoInteractions(footballDataClient)
     }
 }
