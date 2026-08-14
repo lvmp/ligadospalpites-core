@@ -313,7 +313,17 @@ class FootballGenericSyncService(
         val targetSeasonId = activeSeason?.id ?: throw IllegalStateException("No active season found for league: $leagueId")
         val seasonYear = activeSeason.externalSeasonCode
 
-        val externalMatches = footballDataClient.fetchMatches(code, seasonYear)
+        val externalMatches = try {
+            footballDataClient.fetchMatches(code, seasonYear)
+        } catch (e: Exception) {
+            logger.warn("Football-Data fetch with season=$seasonYear failed for league $code (${e.message}). Attempting fetch without season parameter...")
+            try {
+                footballDataClient.fetchMatches(code, null)
+            } catch (e2: Exception) {
+                logger.error("Football-Data fetch without season parameter also failed for $code: ${e2.message}")
+                throw e2
+            }
+        }
         return externalMatches.map { match ->
             val homeTranslated = translateTeamName(match.homeTeam.shortName ?: match.homeTeam.name ?: "A definir")
             val awayTranslated = translateTeamName(match.awayTeam.shortName ?: match.awayTeam.name ?: "A definir")

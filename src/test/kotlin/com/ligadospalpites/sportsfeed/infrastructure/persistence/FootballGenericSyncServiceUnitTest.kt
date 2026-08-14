@@ -110,6 +110,26 @@ class FootballGenericSyncServiceUnitTest {
     }
 
     @Test
+    fun `should retry FootballDataClient without season parameter if season fetch throws 404 exception`() {
+        val dummyFdMatch = FootballDataMatch(
+            id = 55L,
+            utcDate = "2026-08-15T15:00:00Z",
+            status = "SCHEDULED",
+            stage = "REGULAR_SEASON",
+            homeTeam = FootballDataTeam(10L, "Arsenal", "Arsenal"),
+            awayTeam = FootballDataTeam(20L, "Chelsea", "Chelsea")
+        )
+        `when`(footballDataClient.fetchMatches("PL", 2026)).thenThrow(RuntimeException("404 Not Found"))
+        `when`(footballDataClient.fetchMatches("PL", null)).thenReturn(listOf(dummyFdMatch))
+
+        syncService.syncMatches(footballId, premierLeagueId)
+
+        verify(footballDataClient, times(1)).fetchMatches("PL", 2026)
+        verify(footballDataClient, times(1)).fetchMatches("PL", null)
+        verifyNoInteractions(espnSoccerClient)
+    }
+
+    @Test
     fun `should route Copa Libertadores to EspnSoccerClient`() {
         val espnEvent = EspnSoccerEvent(
             id = "100",
