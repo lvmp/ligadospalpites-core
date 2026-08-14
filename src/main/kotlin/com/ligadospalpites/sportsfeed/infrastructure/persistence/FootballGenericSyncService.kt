@@ -13,6 +13,7 @@ import io.github.resilience4j.retry.annotation.Retry
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.context.ApplicationEventPublisher
+import org.springframework.context.annotation.Lazy
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Service
 import java.time.Instant
@@ -41,7 +42,7 @@ class FootballGenericSyncService(
     private val apiFootballClient: ApiFootballClient,
     private val espnSoccerClient: EspnSoccerClient,
     private val eventPublisher: ApplicationEventPublisher,
-    private val self: FootballGenericSyncService
+    @Lazy private val self: FootballGenericSyncService
 ) : LeagueSyncService {
 
     private val logger = LoggerFactory.getLogger(FootballGenericSyncService::class.java)
