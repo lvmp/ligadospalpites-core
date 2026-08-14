@@ -213,10 +213,10 @@ class FootballGenericSyncService(
         ensureLeagueLogo(leagueId, metadata.logoUrl)
 
         val incomingMatches = try {
-            if (metadata.isLibertadores || metadata.isCopaDoBrasil || metadata.espnLeagueCode != null) {
-                self.fetchFromEspnLibertadores(sportId, leagueId)
-            } else if (metadata.footballDataCode != null) {
+            if (metadata.footballDataCode != null) {
                 self.fetchFromFootballData(sportId, leagueId)
+            } else if (metadata.isLibertadores || metadata.isCopaDoBrasil || metadata.espnLeagueCode != null) {
+                self.fetchFromEspnLibertadores(sportId, leagueId)
             } else {
                 logger.info("Ingesting matches via API-Football for league ${metadata.defaultName} (ID: ${metadata.apiFootballId})")
                 self.fetchFromApiFootball(sportId, leagueId, IllegalStateException("Primary provider for ${metadata.defaultName} is API-Football"))

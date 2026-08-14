@@ -68,6 +68,9 @@ app:
     news-api:
       url: "https://newsapi.org"
       api-key: "${NEWS_API_KEY:mock-key-news}"
+    balldontlie:
+      url: "${BALLDONTLIE_URL:https://api.balldontlie.io}"
+      api-key: "${BALLDONTLIE_API_KEY:mock-key-bdl}"
     espn-soccer:
       url: "${ESPN_SOCCER_URL:https://site.api.espn.com}"
     espn:
@@ -94,6 +97,14 @@ resilience4j:
         waitDurationInOpenState: 30s
         permittedNumberOfCallsInHalfOpenState: 2
       apiBasketballApi:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 6
+        failureRateThreshold: 50
+        slowCallRateThreshold: 50
+        slowCallDurationThreshold: 5s
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 2
+      balldontlieApi:
         slidingWindowType: COUNT_BASED
         slidingWindowSize: 6
         failureRateThreshold: 50

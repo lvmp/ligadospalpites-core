@@ -5,6 +5,7 @@ import com.ligadospalpites.sportsfeed.domain.models.MatchStatus
 import com.ligadospalpites.sportsfeed.domain.events.MatchStartedEvent
 import com.ligadospalpites.sportsfeed.domain.events.MatchFinishedEvent
 import com.ligadospalpites.sportsfeed.infrastructure.client.ApiBasketballClient
+import com.ligadospalpites.sportsfeed.infrastructure.client.BalldontlieClient
 import com.ligadospalpites.sportsfeed.infrastructure.client.EspnBasketballClient
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
 import io.github.resilience4j.retry.annotation.Retry
@@ -29,6 +30,7 @@ class BasketballSyncService(
     private val matchRepository: SpringDataMatchRepository,
     private val apiBasketballClient: ApiBasketballClient,
     @Autowired(required = false) private val espnBasketballClient: EspnBasketballClient? = null,
+    @Autowired(required = false) private val balldontlieClient: BalldontlieClient? = null,
     private val seasonRepository: SpringDataSeasonRepository,
     private val eventPublisher: ApplicationEventPublisher,
     private val leagueRepository: SpringDataLeagueRepository
@@ -104,27 +106,60 @@ class BasketballSyncService(
         val targetSeasonId = activeSeason?.id ?: throw IllegalStateException("No active season found for league: $leagueId")
         val seasonYear = activeSeason.externalSeasonCode
 
-        if (metadata.defaultName.equals("NBA", ignoreCase = true) && espnBasketballClient != null) {
-            val espnGames = espnBasketballClient.fetchNbaScoreboard()
-            if (espnGames.isNotEmpty()) {
-                return espnGames.map { game ->
-                    MatchJpaEntity(
-                        id = UUID.randomUUID(),
-                        sportId = basketballId,
-                        leagueId = leagueId,
-                        seasonId = targetSeasonId,
-                        homeTeamName = translateTeamName(game.homeTeamName),
-                        awayTeamName = translateTeamName(game.awayTeamName),
-                        homeTeamLogoUrl = game.homeTeamLogoUrl,
-                        awayTeamLogoUrl = game.awayTeamLogoUrl,
-                        kickoffTime = parseIsoInstant(game.date),
-                        status = mapBasketballStatus(game.statusShort),
-                        homeScore = game.homeScore,
-                        awayScore = game.awayScore,
-                        phase = game.phase,
-                        periodScoresJson = game.periodScoresJson,
-                        updatedAt = Instant.now()
-                    )
+        if (metadata.defaultName.equals("NBA", ignoreCase = true)) {
+            if (balldontlieClient != null) {
+                try {
+                    val bdlGames = balldontlieClient.fetchNbaGames()
+                    if (bdlGames.isNotEmpty()) {
+                        logger.info("Using balldontlie.io as primary NBA data provider")
+                        return bdlGames.map { game ->
+                            MatchJpaEntity(
+                                id = UUID.randomUUID(),
+                                sportId = basketballId,
+                                leagueId = leagueId,
+                                seasonId = targetSeasonId,
+                                homeTeamName = translateTeamName(game.homeTeamName),
+                                awayTeamName = translateTeamName(game.awayTeamName),
+                                homeTeamLogoUrl = game.homeTeamLogoUrl,
+                                awayTeamLogoUrl = game.awayTeamLogoUrl,
+                                kickoffTime = parseIsoInstant(game.date),
+                                status = mapBasketballStatus(game.statusShort),
+                                homeScore = game.homeScore,
+                                awayScore = game.awayScore,
+                                phase = game.phase,
+                                periodScoresJson = null,
+                                updatedAt = Instant.now()
+                            )
+                        }
+                    }
+                } catch (e: Exception) {
+                    logger.warn("Primary balldontlie.io API failed for NBA, trying secondary ESPN fallback: ${e.message}")
+                }
+            }
+
+            if (espnBasketballClient != null) {
+                val espnGames = espnBasketballClient.fetchNbaScoreboard()
+                if (espnGames.isNotEmpty()) {
+                    logger.info("Using ESPN Public API as secondary NBA fallback provider")
+                    return espnGames.map { game ->
+                        MatchJpaEntity(
+                            id = UUID.randomUUID(),
+                            sportId = basketballId,
+                            leagueId = leagueId,
+                            seasonId = targetSeasonId,
+                            homeTeamName = translateTeamName(game.homeTeamName),
+                            awayTeamName = translateTeamName(game.awayTeamName),
+                            homeTeamLogoUrl = game.homeTeamLogoUrl,
+                            awayTeamLogoUrl = game.awayTeamLogoUrl,
+                            kickoffTime = parseIsoInstant(game.date),
+                            status = mapBasketballStatus(game.statusShort),
+                            homeScore = game.homeScore,
+                            awayScore = game.awayScore,
+                            phase = game.phase,
+                            periodScoresJson = game.periodScoresJson,
+                            updatedAt = Instant.now()
+                        )
+                    }
                 }
             }
         }

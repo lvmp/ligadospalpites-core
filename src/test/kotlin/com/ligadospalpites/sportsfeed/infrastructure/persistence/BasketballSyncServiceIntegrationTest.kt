@@ -27,12 +27,16 @@ class BasketballSyncServiceIntegrationTest : BaseIntegrationTest() {
     @MockitoBean
     private lateinit var espnBasketballClient: EspnBasketballClient
 
+    @MockitoBean
+    private lateinit var balldontlieClient: BalldontlieClient
+
     private val nbaLeagueId = UUID.fromString("5c1e3a11-b9db-44ab-ba02-411a0c0bcf14")
     private val nbaSeasonId = UUID.fromString("8a6a4c33-3112-4fb2-a6bc-cd8a0cbf42ef")
 
     @BeforeEach
     fun setUp() {
         matchRepository.deleteAll()
+        `when`(balldontlieClient.fetchNbaGames()).thenReturn(emptyList())
         `when`(espnBasketballClient.fetchNbaScoreboard()).thenReturn(emptyList())
     }
 
@@ -126,5 +130,34 @@ class BasketballSyncServiceIntegrationTest : BaseIntegrationTest() {
         assertEquals(100, saved[0].awayScore)
         assertNotNull(saved[0].periodScoresJson)
         assertTrue(saved[0].periodScoresJson!!.contains("28, 30, 22, 30") || saved[0].periodScoresJson!!.contains("28,30,22,30"))
+    }
+
+    @Test
+    fun `should sync from BalldontlieClient as primary provider for NBA`() {
+        val bdlGame = BalldontlieNbaGame(
+            externalId = "101",
+            date = "2026-10-21T00:00:00Z",
+            homeTeamName = "Boston Celtics",
+            awayTeamName = "Miami Heat",
+            homeTeamLogoUrl = null,
+            awayTeamLogoUrl = null,
+            homeScore = 115,
+            awayScore = 108,
+            statusShort = "FT",
+            phase = "Temporada Regular"
+        )
+        `when`(balldontlieClient.fetchNbaGames()).thenReturn(listOf(bdlGame))
+
+        syncService.syncMatches(UUID.randomUUID(), nbaLeagueId)
+
+        val saved = matchRepository.findByLeagueId(nbaLeagueId)
+        assertEquals(1, saved.size)
+        assertEquals("Boston Celtics", saved[0].homeTeamName)
+        assertEquals("Miami Heat", saved[0].awayTeamName)
+        assertEquals(MatchStatus.FINISHED, saved[0].status)
+        assertEquals(115, saved[0].homeScore)
+        assertEquals(108, saved[0].awayScore)
+        verify(balldontlieClient, times(1)).fetchNbaGames()
+        verify(espnBasketballClient, never()).fetchNbaScoreboard()
     }
 }

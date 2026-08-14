@@ -164,25 +164,17 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
-    fun `should call EspnSoccerClient for Champions League with isEuropeanCalendar true`() {
+    fun `should call FootballDataClient for Champions League with code CL`() {
         val championsLeagueId = UUID.fromString("e2d03a11-b9db-44ab-ba02-411a0c0bcf14")
-        val espnEvent = EspnSoccerEvent(
-            id = "777",
-            date = "2026-09-16T19:00:00Z",
-            competitions = listOf(
-                EspnSoccerCompetition(
-                    id = "777",
-                    date = "2026-09-16T19:00:00Z",
-                    status = EspnSoccerStatus(EspnSoccerStatusType(state = "pre")),
-                    notes = listOf(EspnSoccerNote(headline = "League Phase")),
-                    competitors = listOf(
-                        EspnSoccerCompetitor("101", "home", false, EspnSoccerTeam("101", displayName = "Real Madrid")),
-                        EspnSoccerCompetitor("102", "away", false, EspnSoccerTeam("102", displayName = "Barcelona"))
-                    )
-                )
-            )
+        val fdMatch = FootballDataMatch(
+            id = 777L,
+            utcDate = "2026-09-16T19:00:00Z",
+            status = "SCHEDULED",
+            stage = "LEAGUE_STAGE",
+            homeTeam = FootballDataTeam(101L, "Real Madrid", "Real Madrid"),
+            awayTeam = FootballDataTeam(102L, "Barcelona", "Barcelona")
         )
-        `when`(espnSoccerClient.fetchSoccerMatches("uefa.champions", 2026, true)).thenReturn(listOf(espnEvent))
+        `when`(footballDataClient.fetchMatches("CL", 2026)).thenReturn(listOf(fdMatch))
 
         syncService.syncMatches(UUID.randomUUID(), championsLeagueId)
 
@@ -191,7 +183,33 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
         assertEquals("Real Madrid", saved[0].homeTeamName)
         assertEquals("Barcelona", saved[0].awayTeamName)
 
-        verify(espnSoccerClient, times(1)).fetchSoccerMatches("uefa.champions", 2026, true)
+        verify(footballDataClient, times(1)).fetchMatches("CL", 2026)
+        verifyNoInteractions(espnSoccerClient)
+    }
+
+    @Test
+    fun `should call FootballDataClient for Premier League with code PL`() {
+        val premierLeagueId = UUID.fromString("827d043c-62c2-402c-b011-3ba2849e7b23")
+        val fdMatch = FootballDataMatch(
+            id = 888L,
+            utcDate = "2026-08-15T14:00:00Z",
+            status = "SCHEDULED",
+            stage = "REGULAR_SEASON",
+            matchday = 1,
+            homeTeam = FootballDataTeam(201L, "Arsenal", "Arsenal"),
+            awayTeam = FootballDataTeam(202L, "Chelsea", "Chelsea")
+        )
+        `when`(footballDataClient.fetchMatches("PL", 2026)).thenReturn(listOf(fdMatch))
+
+        syncService.syncMatches(UUID.randomUUID(), premierLeagueId)
+
+        val saved = matchRepository.findByLeagueId(premierLeagueId)
+        assertEquals(1, saved.size)
+        assertEquals("Arsenal", saved[0].homeTeamName)
+        assertEquals("Chelsea", saved[0].awayTeamName)
+
+        verify(footballDataClient, times(1)).fetchMatches("PL", 2026)
+        verifyNoInteractions(espnSoccerClient)
     }
 
     @Test
