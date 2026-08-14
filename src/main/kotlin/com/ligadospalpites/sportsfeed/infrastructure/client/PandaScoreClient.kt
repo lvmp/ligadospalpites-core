@@ -35,7 +35,7 @@ class PandaScoreClient(
 
         return try {
             val uri = if (!leagueSlug.isNullOrBlank()) {
-                "/matches?filter[league_slug]=$leagueSlug&page[number]=$page&page[size]=$size&sort=-begin_at"
+                "/leagues/$leagueSlug/matches?page[number]=$page&page[size]=$size&sort=-begin_at"
             } else {
                 "/matches?page[number]=$page&page[size]=$size&sort=-begin_at"
             }
