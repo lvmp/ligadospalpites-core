@@ -1,6 +1,6 @@
 # Spec-0002: Serverless Cloud Deployment Config
 
-This specification details the configurations required to package, containerize, and deploy the modular monolith backend to **Google Cloud Run** using serverless instances of **Neon** and **Upstash**, running on **Spring Boot 4.1.0** and **Java 17/21**.
+This specification details the configurations required to package, containerize, and deploy the modular monolith backend to **Google Cloud Run** using serverless instances of **Supabase** and **Upstash**, running on **Spring Boot 4.1.0** and **Java 17/21**.
 
 ---
 
@@ -33,11 +33,11 @@ ENTRYPOINT ["java", "-XX:+UseG1GC", "-XX:MaxRAMPercentage=75.0", "-jar", "app.ja
 
 ## 2. Google Cloud Run Service Properties
 
-To stay within the **GCP Free Tier** limits and prevent Neon Postgres connection pool starvation, apply the following service configurations in the Cloud Run service console:
+To stay within the **GCP Free Tier** limits and prevent Supabase Postgres connection pool starvation, apply the following service configurations in the Cloud Run service console:
 
 | Property | Config Value | Rationale |
 | :--- | :--- | :--- |
-| **Max Instances** | `3` | Prevents the system from autoscaling too wide, safeguarding Neon’s free tier connection limits (max 10-20 connections). |
+| **Max Instances** | `3` | Prevents the system from autoscaling too wide, safeguarding Supabase’s free tier connection limits (max 10-20 connections). |
 | **Min Instances** | `0` | Essential for **Scale-to-Zero**, resulting in $0 cost when idle. |
 | **Concurrency** | `80` | Number of concurrent requests a single instance can handle before scaling up. |
 | **CPU Allocation** | *Only during request processing* | GCP only charges when requests are active, keeping idle cost at exactly $0. |
@@ -48,7 +48,7 @@ To stay within the **GCP Free Tier** limits and prevent Neon Postgres connection
 
 ## 3. Production Profile Properties (`application-prod.yml`)
 
-Configure the production-grade parameters to hook into Neon's PgBouncer pooler and Upstash's secure Redis port:
+Configure the production-grade parameters to hook into Supabase's Supavisor pooler and Upstash's secure Redis port:
 
 ```yaml
 spring:
@@ -57,7 +57,7 @@ spring:
       on-profile: prod
 
   datasource:
-    # Always use the pooled connection string (port 5432, -pooler suffix) provided by Neon
+    # Always use the pooled connection string (port 6543 / Supavisor pooler) provided by Supabase
     url: ${DATABASE_URL}
     username: ${DATABASE_USERNAME}
     password: ${DATABASE_PASSWORD}

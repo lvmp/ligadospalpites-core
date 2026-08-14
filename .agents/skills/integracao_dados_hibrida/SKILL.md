@@ -1,11 +1,11 @@
 ---
 name: integracao_dados_hibrida
-description: Diretrizes para integrar Firebase (Auth, FCM), PostgreSQL (Neon) e Redis (Upstash) de forma assíncrona com Spring Boot e Kotlin.
+description: Diretrizes para integrar Firebase (Auth, FCM), PostgreSQL (Supabase) e Redis (Upstash) de forma assíncrona com Spring Boot e Kotlin.
 ---
 
 # Integração de Dados Híbrida: Firebase + PostgreSQL + Redis
 
-Esta skill orienta o agente sobre como gerenciar dados na arquitetura híbrida do projeto **Liga dos Palpites**, garantindo alta performance, consistência eventual e custo zero no ecossistema serverless (Cloud Run + Neon + Upstash).
+Esta skill orienta o agente sobre como gerenciar dados na arquitetura híbrida do projeto **Liga dos Palpites**, garantindo alta performance, consistência eventual e custo zero no ecossistema serverless (Cloud Run + Supabase + Upstash).
 
 ---
 

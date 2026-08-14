@@ -34,7 +34,7 @@ graph TD
     B -->|Copa Libertadores| D[ESPN Soccer Client]
     B -->|Copa do Brasil| E[Admin Panel / Seed Ingestion]
     
-    C & D & E --> F[PostgreSQL / Neon]
+    C & D & E --> F[PostgreSQL / Supabase]
     C & D & E --> G[Upstash Redis Cache]
 ```
 

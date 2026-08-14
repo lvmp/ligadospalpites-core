@@ -4,7 +4,7 @@ Esta especificação define a arquitetura, modelos de dados, endpoints REST e l�
 
 ---
 
-## 1. Modelo de Dados e Migrações (Neon PostgreSQL)
+## 1. Modelo de Dados e Migrações (Supabase PostgreSQL)
 
 ### A. Tabela de Assinaturas (`tbl_subscriptions`)
 Mantém o registro operacional e o histórico das assinaturas ativas adquiridas via lojas nativas.

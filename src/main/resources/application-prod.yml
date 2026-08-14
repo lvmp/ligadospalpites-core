@@ -8,6 +8,7 @@ spring:
   jmx:
     enabled: false
 
+  # Supabase PostgreSQL configuration (pooled endpoint: jdbc:postgresql://aws-0-<region>.pooler.supabase.com:6543/postgres?sslmode=require)
   datasource:
     url: ${DATABASE_URL}
     username: ${DATABASE_USERNAME}

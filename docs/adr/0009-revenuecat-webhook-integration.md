@@ -39,7 +39,7 @@ sequenceDiagram
     participant Store as App Store / Google Play
     participant RC_Server as RevenueCat Server
     participant Backend as Spring Boot Backend
-    participant DB as PostgreSQL (Neon)
+    participant DB as PostgreSQL (Supabase)
 
     User->>Flutter: Inicia Compra (Premium Hub)
     Flutter->>RC_SDK: Executa Compra do Plano

@@ -36,7 +36,7 @@ flowchart TD
         Observer[EventListener / Observer]
     end
 
-    subgraph Relational Database (Neon)
+    subgraph Relational Database (Supabase)
         Postgres[(PostgreSQL)]
     end
 
@@ -59,7 +59,7 @@ flowchart TD
 - **Firebase Cloud Messaging (FCM)**: Used strictly for dispatching push notifications. 
 - **Firebase Storage**: Used for hosting raw media assets (e.g., news banner images, team badge PNGs, user avatars).
 
-### 2. What Migrates to PostgreSQL (Neon)
+### 2. What Migrates to PostgreSQL (Supabase)
 All core transactional and operational entities will reside in PostgreSQL tables:
 - **`tbl_users`**: Maps Firebase UID (as a string) to local user profiles, configurations, and favorite sports/leagues.
 - **`tbl_matches` (Partidas)**: Ingested fixture schedules, team names, kickoff dates, current status, and final scores.
@@ -88,7 +88,7 @@ To keep database transactions short and avoid blocking user prediction lookups d
 ### Positive (Benefits)
 * **High Write Throughput**: PostgreSQL handles high prediction submission peaks (e.g., 5,000 requests/sec) much better than Firestore, with low transaction latency.
 * **Instant Leaderboard Renders**: Redis ZSETs completely eliminate heavy SQL aggregate queries (`SUM(...) GROUP BY ... ORDER BY ...`), allowing immediate leaderboard scrolling on mobile devices.
-* **Minimal Cost**: Relational database operations and Redis commands fit comfortably within the free tier thresholds of Neon and Upstash.
+* **Minimal Cost**: Relational database operations and Redis commands fit comfortably within the free tier thresholds of Supabase and Upstash.
 * **Secure and Standard Login**: Leverages Firebase Auth's robust security without needing to implement security protocols (OAuth, MFA) on the backend.
 
 ### Negative (Trade-offs)

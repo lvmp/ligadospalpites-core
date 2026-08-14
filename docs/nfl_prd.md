@@ -58,7 +58,7 @@ graph TD
     A[External Scheduler / Cloud Run] -->|POST /api/v1/internal/scheduler/process?sportId=american_football| B[SyncOrchestrator]
     B --> C[AmericanFootballSyncService]
     C -->|Fetch NFL & NCAA| D[ESPN Public REST API]
-    C -->|Persist Fixtures & Team Logos| E[(PostgreSQL / Neon)]
+    C -->|Persist Fixtures & Team Logos| E[(PostgreSQL / Supabase)]
     C -->|Cache Live Quarter Scores & Ranks| F[(Redis / Upstash ZSET)]
 ```
 

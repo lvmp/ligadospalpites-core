@@ -77,7 +77,7 @@ graph TD
     A[External Scheduler / Cloud Run] -->|POST /api/v1/internal/scheduler/process?sportId=esports| B[SyncOrchestrator]
     B --> C[PandaScoreSyncService]
     C -->|Fetch Fixtures & Results| D[PandaScore REST API]
-    C -->|Save Fixtures & Teams| E[(PostgreSQL / Neon)]
+    C -->|Save Fixtures & Teams| E[(PostgreSQL / Supabase)]
     C -->|Update Live Scores & Leaderboards| F[(Redis / Upstash ZSET)]
 ```
 

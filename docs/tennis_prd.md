@@ -57,7 +57,7 @@ graph TD
     A[External Scheduler / Cloud Run] -->|POST /api/v1/internal/scheduler/process?sportId=tennis| B[SyncOrchestrator]
     B --> C[TennisSyncService]
     C -->|Fetch ATP, WTA & Grand Slams| D[ESPN Public REST API]
-    C -->|Persist Fixtures & Players| E[(PostgreSQL / Neon)]
+    C -->|Persist Fixtures & Players| E[(PostgreSQL / Supabase)]
     C -->|Cache Live Set Scores & Rankings| F[(Redis / Upstash ZSET)]
 ```
 

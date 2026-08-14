@@ -161,7 +161,7 @@ Separates transient user preferences and profiles from relational database detai
                  │                                             │
                  ▼                                             ▼
 ┌─────────────────────────────────┐           ┌─────────────────────────────────┐
-│   Firebase Firestore            │           │  PostgreSQL (Neon)              │
+│   Firebase Firestore            │           │  PostgreSQL (Supabase)          │
 │   (Read/Write Preferences)      │           │  (Transactional Operations)     │
 ├─────────────────────────────────┤           ├─────────────────────────────────┤
 │ Path: users/{firebaseUid}       │           │ - tbl_users (UID local map)     │

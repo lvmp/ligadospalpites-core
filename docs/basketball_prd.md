@@ -69,7 +69,7 @@ graph TD
     C -->|Fetch NBA / WNBA| D[ESPN Public REST API]
     C -->|Fetch EuroLeague| E[EuroLeague JSON API]
     C -->|Fetch NBB| F[LNB Portal JSON API]
-    C -->|Persist Fixtures & Teams| G[(PostgreSQL / Neon)]
+    C -->|Persist Fixtures & Teams| G[(PostgreSQL / Supabase)]
     C -->|Cache Live Quarter Scores & Ranks| H[(Redis / Upstash ZSET)]
 ```
 

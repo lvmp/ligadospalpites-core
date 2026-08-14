@@ -23,7 +23,7 @@ Esta documentação serve como guia obrigatório de comportamento e tomadas de d
 ## 💾 2. Diretrizes Técnicas e Tecnologias
 
 * **Stack**: Kotlin e **Spring Boot 4.1.0** (versão estável definida no PRD). Nunca proponha bibliotecas obsoletas ou anotações depreciadas.
-* **Persistência**: Neon PostgreSQL (operacional/relacional) e Upstash Redis (Sorted Sets para rankings/leaderboards e cache). O Firestore **não** deve ser usado para dados operacionais ou leaderboards.
+* **Persistência**: Supabase PostgreSQL (operacional/relacional) e Upstash Redis (Sorted Sets para rankings/leaderboards e cache). O Firestore **não** deve ser usado para dados operacionais ou leaderboards.
 * **Autenticação**: Firebase Auth via JWT Claims decodificados no Spring Security.
 * **Notificações**: Módulo `notifications` construído sob o padrão Strategy (abstraindo múltiplos remetentes - push, in-app, email).
 * **Testes**: Testes de integração devem obrigatoriamente usar **Testcontainers** com `@ServiceConnection` herdando da classe de testes compartilhada (`BaseIntegrationTest`).

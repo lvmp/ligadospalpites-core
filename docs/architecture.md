@@ -175,7 +175,7 @@ When the `sports-feed` module registers a final score from the third-party Sport
 
 - **Programming Language**: Kotlin 1.9+ (utilizing coroutines, inline value classes, functional expressions).
 - **Core Framework**: Spring Boot 4.1.0 (MVC, JPA).
-- **Primary Database**: PostgreSQL (relational storage hosted on Neon serverless PostgreSQL, with PgBouncer connection pooling).
+- **Primary Database**: PostgreSQL (relational storage hosted on Supabase PostgreSQL, with Supavisor connection pooling).
 - **Caching & Leaderboards**: Redis (active ranking tables stored in Redis ZSETs and session storage hosted on Upstash serverless Redis).
 - **Third-Party Services**: 
   - Firebase Authentication (identity validation via JWT).
@@ -359,7 +359,7 @@ To support **Scale-to-Zero** in a serverless environment (Google Cloud Run), the
 
 To reduce heavy PostgreSQL write throughput and utilize Firebase's native synchronization:
 - **Firebase Firestore**: Stores user profiles (`displayName`, `avatarUrl`) and application preferences (favorite sports, league subscriptions, notifications settings). The mobile client reads/writes directly to Firestore.
-- **PostgreSQL (Neon)**: Acts as the primary transactional repository. Stores user local IDs mapping (`firebase_uid` -> `userId`), billing entitlements, predictions, and group memberships.
+- **PostgreSQL (Supabase)**: Acts as the primary transactional repository. Stores user local IDs mapping (`firebase_uid` -> `userId`), billing entitlements, predictions, and group memberships.
 - **Redis (Upstash)**: Caches phase-based group rankings using Sorted Sets (ZSET) partitioned by:
   - `overall`
   - `group-stage`

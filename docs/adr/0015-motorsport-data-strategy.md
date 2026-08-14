@@ -31,7 +31,7 @@ graph TD
     B -->|Formula E| D[Formula E Client]
     B -->|Stock Car| E[Stock Car Brasil Client / Seed]
     
-    C & D & E --> F[PostgreSQL / Neon]
+    C & D & E --> F[PostgreSQL / Supabase]
     C & D & E --> G[Upstash Redis Cache]
 ```
 

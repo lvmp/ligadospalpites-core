@@ -38,7 +38,7 @@ graph TD
     B -->|EuroLeague| F[EuroLeague Open Client]
     B -->|NBB Brasil| G[LNB Portal Client / Admin]
     
-    C & D & E & F & G --> H[PostgreSQL / Neon]
+    C & D & E & F & G --> H[PostgreSQL / Supabase]
     C & D & E & F & G --> I[Upstash Redis Cache]
 ```
 

@@ -65,7 +65,7 @@ graph TD
     C -->|Fetch F1 & F2| D[Jolpica Ergast API]
     C -->|Fetch Formula E| E[Formula E API]
     C -->|Fetch Stock Car| F[Stock Car Brasil API]
-    C -->|Persist Races & Driver Standings| G[(PostgreSQL / Neon)]
+    C -->|Persist Races & Driver Standings| G[(PostgreSQL / Supabase)]
     C -->|Cache Live Positions & Ranks| H[(Redis / Upstash ZSET)]
 ```
 

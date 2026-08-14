@@ -1,4 +1,4 @@
-# ADR-0002: Serverless Cloud Deployment Strategy utilizing GCP Free-Tier, Neon, and Upstash
+# ADR-0002: Serverless Cloud Deployment Strategy utilizing GCP Free-Tier, Supabase, and Upstash
 
 ## Status
 Accepted
@@ -30,10 +30,9 @@ We will adopt a **Serverless Stack** combining Google Cloud Platform (GCP) compu
 - **Scale to Zero**: When no requests are incoming, Cloud Run scales down to 0 instances. In this state, we pay absolutely nothing.
 - **Scaling Up**: During prediction surges (e.g., right before a major match kickoff), Cloud Run automatically scales up horizontally to handle thousands of requests per second.
 
-### 2. Database: Neon Serverless PostgreSQL (`neon.tech`)
-- **Why**: Neon provides serverless PostgreSQL. Its free tier offers 1 project, 10 branches, 0.5 GB of storage, and 100 active compute hours per month.
-- **Scale to Zero**: Neon compute endpoints automatically suspend after 5 minutes of inactivity. When suspended, it consumes no active compute hours.
-- **Connection Pooling**: Neon includes a built-in PgBouncer pooler. When Spring Boot scales horizontally in Cloud Run, we will connect to Neon’s pooled endpoint (`-pooler` suffix) to prevent "Too many connections" errors.
+### 2. Database: Supabase Managed PostgreSQL (`supabase.com`)
+- **Why**: Supabase provides managed PostgreSQL. Its free tier offers 500 MB of database storage and 2 free projects.
+- **Connection Pooling**: Supabase includes built-in Supavisor connection pooling. When Spring Boot scales horizontally in Cloud Run, we connect to Supabase’s pooled endpoint (`.pooler.supabase.com:6543` or `db.<project_ref>.supabase.co:5432`) to prevent "Too many connections" errors.
 
 ### 3. Caching & Leaderboards: Upstash Serverless Redis (`upstash.com`)
 - **Why**: Upstash is a serverless Redis database designed for serverless architectures. The free tier offers up to **500,000 commands per day** and 256 MB of storage.
@@ -41,7 +40,7 @@ We will adopt a **Serverless Stack** combining Google Cloud Platform (GCP) compu
 
 ### 4. Configuration & Secret Management
 We will inject connection parameters via environment variables inside the Cloud Run configuration:
-- `SPRING_DATASOURCE_URL`: Neon pooled connection string (e.g., `jdbc:postgresql://ep-project-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require`).
+- `SPRING_DATASOURCE_URL`: Supabase pooled JDBC connection string (e.g., `jdbc:postgresql://aws-0-sa-east-1.pooler.supabase.com:6543/postgres?sslmode=require`).
 - `SPRING_DATA_REDIS_HOST` & `SPRING_DATA_REDIS_PORT` & `SPRING_DATA_REDIS_PASSWORD`: Upstash Redis credentials.
 
 ## Consequences
@@ -49,12 +48,11 @@ We will inject connection parameters via environment variables inside the Cloud 
 ### Positive (Benefits)
 * **True Zero-Cost Infrastructure**: With low-to-moderate traffic, the system runs completely free of charge indefinitely.
 * **Automatic Elastic Scaling**: The system naturally absorbs huge traffic peaks (e.g. 5,000 rps before a game) by scaling Cloud Run instances, and scales down to zero when the game is live or overnight.
-* **No Database Maintenance**: Both Neon and Upstash are fully managed serverless platforms. Backups, updates, and indexing are handled automatically.
+* **No Database Maintenance**: Both Supabase and Upstash are fully managed serverless/cloud platforms. Backups, updates, and indexing are handled automatically.
 
 ### Negative (Trade-offs)
 * **Cold Starts**: 
   - **Application Cold Start**: If the application has scaled to 0, the first request will experience a bootstrap latency of 3-7 seconds while Spring Boot starts up.
-  - **Database Cold Start**: If the Neon database has suspended, the first connection query will have an additional 2-3 second delay to wake up the database compute instance.
   - *Mitigation*: We will optimize Spring Boot startup configurations (e.g., lazy initialization of non-critical beans, JVM memory optimizations).
-* **Dependency on Multiple Providers**: The stack is split across GCP, Neon, and Upstash, requiring separate dashboards for billing monitoring.
+* **Dependency on Multiple Providers**: The stack is split across GCP, Supabase, and Upstash, requiring separate dashboards for billing monitoring.
 * **Free Tier Limits**: If the application gains large popularity (e.g., exceeding 2 million requests or 500k Redis commands daily), we will transition to pay-as-you-go, which will be funded by the app's ad revenue.
