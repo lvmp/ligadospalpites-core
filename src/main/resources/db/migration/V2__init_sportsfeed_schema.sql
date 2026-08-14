@@ -1,4 +1,4 @@
-CREATE TABLE tbl_matches (
+CREATE TABLE IF NOT EXISTS tbl_matches (
     id UUID PRIMARY KEY,
     sport_id UUID NOT NULL,
     league_id UUID NOT NULL,
@@ -10,5 +10,5 @@ CREATE TABLE tbl_matches (
     away_score INTEGER,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
-CREATE INDEX idx_matches_status ON tbl_matches(status);
-CREATE INDEX idx_matches_kickoff ON tbl_matches(kickoff_time);
+CREATE INDEX IF NOT EXISTS idx_matches_status ON tbl_matches(status);
+CREATE INDEX IF NOT EXISTS idx_matches_kickoff ON tbl_matches(kickoff_time);

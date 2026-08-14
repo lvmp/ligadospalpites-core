@@ -1,4 +1,4 @@
-CREATE TABLE tbl_subscriptions (
+CREATE TABLE IF NOT EXISTS tbl_subscriptions (
     id UUID PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES tbl_users(id) ON DELETE CASCADE,
     store VARCHAR(50) NOT NULL, -- ex: APPLE_APP_STORE, GOOGLE_PLAY, STRIPE
@@ -10,7 +10,7 @@ CREATE TABLE tbl_subscriptions (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-CREATE TABLE tbl_revenuecat_events (
+CREATE TABLE IF NOT EXISTS tbl_revenuecat_events (
     id VARCHAR(100) PRIMARY KEY, -- event.id vindo do RevenueCat
     type VARCHAR(100) NOT NULL, -- event.type (ex: INITIAL_PURCHASE)
     app_user_id VARCHAR(128) NOT NULL,
@@ -19,4 +19,4 @@ CREATE TABLE tbl_revenuecat_events (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-CREATE INDEX idx_subscriptions_user ON tbl_subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON tbl_subscriptions(user_id);

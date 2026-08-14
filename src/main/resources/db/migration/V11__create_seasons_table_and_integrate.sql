@@ -1,6 +1,6 @@
 -- Migration V11: Create seasons table and integrate with existing matches
 
-CREATE TABLE tbl_seasons (
+CREATE TABLE IF NOT EXISTS tbl_seasons (
     id UUID PRIMARY KEY,
     league_id UUID NOT NULL REFERENCES tbl_leagues(id) ON DELETE CASCADE,
     name VARCHAR(50) NOT NULL,
@@ -12,13 +12,13 @@ CREATE TABLE tbl_seasons (
 );
 
 -- Partial unique index to ensure at most one active season per league
-CREATE UNIQUE INDEX uq_active_season_per_league ON tbl_seasons(league_id) WHERE (is_active = true);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_active_season_per_league ON tbl_seasons(league_id) WHERE (is_active = true);
 
 -- Add season_id column to tbl_matches as temporarily nullable
-ALTER TABLE tbl_matches ADD COLUMN season_id UUID REFERENCES tbl_seasons(id);
+ALTER TABLE tbl_matches ADD COLUMN IF NOT EXISTS season_id UUID REFERENCES tbl_seasons(id);
 
 -- Create index for performance
-CREATE INDEX idx_matches_season ON tbl_matches(season_id);
+CREATE INDEX IF NOT EXISTS idx_matches_season ON tbl_matches(season_id);
 
 -- Seed initial World Cup 2026 Season
 -- Parent League ID: 'e7b0a8f9-4b2e-4b67-8890-a54b3d7c588e'
@@ -31,7 +31,8 @@ VALUES (
     '2026-07-31 23:59:59+00',
     true,
     2026
-);
+)
+ON CONFLICT (id) DO NOTHING;
 
 -- Update existing matches to reference the new World Cup 2026 season
 UPDATE tbl_matches

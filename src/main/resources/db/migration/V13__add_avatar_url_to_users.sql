@@ -1,1 +1,1 @@
-ALTER TABLE tbl_users ADD COLUMN avatar_url VARCHAR(512);
+ALTER TABLE tbl_users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(512);

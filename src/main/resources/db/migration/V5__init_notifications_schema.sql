@@ -1,4 +1,4 @@
-CREATE TABLE tbl_devices (
+CREATE TABLE IF NOT EXISTS tbl_devices (
     id UUID PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES tbl_users(id) ON DELETE CASCADE,
     device_id UUID NOT NULL UNIQUE,
@@ -6,10 +6,10 @@ CREATE TABLE tbl_devices (
     device_type VARCHAR(20) NOT NULL, -- ANDROID, IOS
     registered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
-CREATE INDEX idx_devices_user ON tbl_devices(user_id);
-CREATE INDEX idx_devices_fcm_token ON tbl_devices(fcm_token);
+CREATE INDEX IF NOT EXISTS idx_devices_user ON tbl_devices(user_id);
+CREATE INDEX IF NOT EXISTS idx_devices_fcm_token ON tbl_devices(fcm_token);
 
-CREATE TABLE tbl_in_app_notifications (
+CREATE TABLE IF NOT EXISTS tbl_in_app_notifications (
     id UUID PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES tbl_users(id) ON DELETE CASCADE,
     title VARCHAR(200) NOT NULL,
@@ -17,4 +17,4 @@ CREATE TABLE tbl_in_app_notifications (
     is_read BOOLEAN DEFAULT FALSE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
-CREATE INDEX idx_in_app_notifications_user_unread ON tbl_in_app_notifications(user_id, is_read) WHERE is_read = FALSE;
+CREATE INDEX IF NOT EXISTS idx_in_app_notifications_user_unread ON tbl_in_app_notifications(user_id, is_read) WHERE is_read = FALSE;
