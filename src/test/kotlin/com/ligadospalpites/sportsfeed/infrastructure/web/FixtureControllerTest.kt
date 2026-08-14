@@ -125,4 +125,81 @@ class FixtureControllerTest {
             assertEquals(4, teamsInGrp.size, "Each group must contain exactly 4 teams, but $grp had ${teamsInGrp.size}")
         }
     }
+
+    @Test
+    fun `should return eSports standings fallback for CS2 Major and never return Libertadores football teams`() {
+        val cs2LeagueId = UUID.fromString("9c1e3a11-b9db-44ab-ba02-411a0c0bcf14")
+        val esportsSportId = UUID.fromString("9b1e3a11-b9db-44ab-ba02-411a0c0bcf14")
+        val cs2LeagueEntity = LeagueJpaEntity(
+            id = cs2LeagueId,
+            name = "Counter-Strike 2 - Major",
+            sportId = esportsSportId,
+            isActive = true,
+            format = "GROUPS_AND_KNOCKOUT"
+        )
+        val esportsSportEntity = SportJpaEntity(id = esportsSportId, name = "eSports")
+
+        `when`(leagueRepository.findById(cs2LeagueId)).thenReturn(Optional.of(cs2LeagueEntity))
+        `when`(sportRepository.findById(esportsSportId)).thenReturn(Optional.of(esportsSportEntity))
+        `when`(matchRepository.findByLeagueId(cs2LeagueId)).thenReturn(emptyList())
+
+        val response = controller.getStandings(cs2LeagueId)
+
+        assertEquals(200, response.statusCode.value())
+        val rows = response.body
+        assertNotNull(rows)
+        assertTrue(rows!!.isNotEmpty())
+
+        val teamNames = rows.map { it.teamName }
+        assertTrue(teamNames.contains("FaZe Clan"), "CS2 standings must contain FaZe Clan")
+        assertTrue(teamNames.contains("Natus Vincere"), "CS2 standings must contain Natus Vincere")
+        assertFalse(teamNames.contains("Flamengo"), "CS2 standings must NEVER contain football team Flamengo")
+        assertFalse(teamNames.contains("Palmeiras"), "CS2 standings must NEVER contain football team Palmeiras")
+    }
+
+    @Test
+    fun `should compute eSports standings dynamically when matches are present`() {
+        val cs2LeagueId = UUID.fromString("9c1e3a11-b9db-44ab-ba02-411a0c0bcf14")
+        val esportsSportId = UUID.fromString("9b1e3a11-b9db-44ab-ba02-411a0c0bcf14")
+        val cs2LeagueEntity = LeagueJpaEntity(
+            id = cs2LeagueId,
+            name = "Counter-Strike 2 - Major",
+            sportId = esportsSportId,
+            isActive = true,
+            format = "GROUPS_AND_KNOCKOUT"
+        )
+        val esportsSportEntity = SportJpaEntity(id = esportsSportId, name = "eSports")
+
+        val cs2Matches = listOf(
+            MatchJpaEntity(
+                id = UUID.randomUUID(),
+                sportId = esportsSportId,
+                leagueId = cs2LeagueId,
+                seasonId = UUID.randomUUID(),
+                homeTeamName = "FURIA",
+                awayTeamName = "Natus Vincere",
+                kickoffTime = Instant.now(),
+                status = MatchStatus.FINISHED,
+                homeScore = 2,
+                awayScore = 1,
+                phase = "Stage 1"
+            )
+        )
+
+        `when`(leagueRepository.findById(cs2LeagueId)).thenReturn(Optional.of(cs2LeagueEntity))
+        `when`(sportRepository.findById(esportsSportId)).thenReturn(Optional.of(esportsSportEntity))
+        `when`(matchRepository.findByLeagueId(cs2LeagueId)).thenReturn(cs2Matches)
+
+        val response = controller.getStandings(cs2LeagueId)
+
+        assertEquals(200, response.statusCode.value())
+        val rows = response.body
+        assertNotNull(rows)
+        val furiaRow = rows!!.find { it.teamName == "FURIA" }
+        assertNotNull(furiaRow)
+        assertEquals(1, furiaRow?.seriesWon)
+        assertEquals(0, furiaRow?.seriesLost)
+        assertEquals(2, furiaRow?.mapsWon)
+        assertEquals(1, furiaRow?.mapsLost)
+    }
 }

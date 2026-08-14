@@ -44,25 +44,25 @@ class PandaScoreSyncService(
     private val leaguesMetadata = mapOf(
         UUID.fromString("7c1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("7c1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
-            defaultName = "CBLOL",
+            defaultName = "League of Legends - CBLOL",
             pandaScoreSlug = "league-of-legends-cblol",
             logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/league-of-legends.png"
         ),
         UUID.fromString("8c1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("8c1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
-            defaultName = "VCT Americas",
+            defaultName = "Valorant - VCT Americas",
             pandaScoreSlug = "vct-americas",
             logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/valorant.png"
         ),
         UUID.fromString("9c1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("9c1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
-            defaultName = "CS2 Major",
+            defaultName = "Counter-Strike 2 - Major",
             pandaScoreSlug = "cs-go-major",
             logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/csgo.png"
         ),
         UUID.fromString("ac1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("ac1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
-            defaultName = "Worlds",
+            defaultName = "League of Legends - Worlds",
             pandaScoreSlug = "league-of-legends-world-championship",
             logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/league-of-legends.png"
         )
@@ -148,20 +148,20 @@ class PandaScoreSyncService(
         val targetSeasonId = activeSeason?.id ?: UUID.randomUUID()
         val now = Instant.now()
 
-        val fixtures = when (metadata.defaultName) {
-            "CBLOL" -> listOf(
+        val fixtures = when {
+            metadata.defaultName.contains("CBLOL") -> listOf(
                 Tuple4("LOUD", "paiN Gaming", 2 to 1, 3),
                 Tuple4("FURIA", "RED Canids", 0 to 2, 3),
                 Tuple4("Kabum!", "Vivo Keyd", null to null, 3),
                 Tuple4("Fluxo", "INTZ", null to null, 1)
             )
-            "VCT Americas" -> listOf(
+            metadata.defaultName.contains("VCT") -> listOf(
                 Tuple4("LOUD", "Sentinels", 2 to 0, 3),
                 Tuple4("NRG", "100 Thieves", 1 to 2, 3),
                 Tuple4("Cloud9", "KRÜ Esports", null to null, 3),
                 Tuple4("Leviatán", "FURIA", null to null, 3)
             )
-            "CS2 Major" -> listOf(
+            metadata.defaultName.contains("CS2") || metadata.defaultName.contains("Major") -> listOf(
                 Tuple4("FURIA", "Natus Vincere", 1 to 2, 3),
                 Tuple4("FaZe Clan", "G2 Esports", 2 to 0, 3),
                 Tuple4("MOUZ", "Vitality", null to null, 3),

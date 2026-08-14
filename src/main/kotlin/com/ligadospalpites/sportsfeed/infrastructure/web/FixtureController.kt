@@ -149,7 +149,17 @@ class FixtureController(
             matchRepository.findByLeagueId(leagueId)
         }
 
-        if (format == "GROUPS_AND_KNOCKOUT") {
+        val sport = league?.let { sportRepository.findById(it.sportId).orElse(null) }
+        val sportName = (sport?.name ?: league?.name ?: "").lowercase()
+        val isEsports = (league?.sportId == UUID.fromString("9b1e3a11-b9db-44ab-ba02-411a0c0bcf14")) ||
+                sportName.contains("esports") ||
+                sportName.contains("league of legends") ||
+                sportName.contains("counter-strike") ||
+                sportName.contains("valorant") ||
+                sportName.contains("cblol") ||
+                sportName.contains("worlds")
+
+        if (format == "GROUPS_AND_KNOCKOUT" && !isEsports) {
             val isLibertadores = leagueId == UUID.fromString("4acdf011-fbde-4122-83bc-c46b1ba847de") ||
                     (league?.name?.contains("Libertadores", ignoreCase = true) == true)
 
@@ -382,12 +392,7 @@ class FixtureController(
                 }
                 if (rows.isNotEmpty()) return ResponseEntity.ok(rows)
             }
-
-            return ResponseEntity.ok(defaultGroupRows)
         }
-
-        val sport = league?.let { sportRepository.findById(it.sportId).orElse(null) }
-        val sportName = (sport?.name ?: league?.name ?: "").lowercase()
 
         // 1. Basquete (NBA / NBB / EuroLeague)
         if (sportName.contains("basquete") || sportName.contains("nba") || sportName.contains("nbb") || sportName.contains("euroleague")) {
