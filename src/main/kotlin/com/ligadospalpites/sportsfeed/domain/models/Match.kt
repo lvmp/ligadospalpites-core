@@ -6,6 +6,7 @@ import java.util.UUID
 enum class MatchStatus {
     SCHEDULED,
     LIVE,
+    HALF_TIME,
     FINISHED,
     CANCELLED
 }

@@ -5,6 +5,7 @@ import com.ligadospalpites.notifications.domain.models.NotificationChannel
 import com.ligadospalpites.notifications.domain.models.NotificationTarget
 import com.ligadospalpites.predictions.infrastructure.persistence.PredictionJpaEntity
 import com.ligadospalpites.predictions.infrastructure.persistence.SpringDataPredictionRepository
+import com.ligadospalpites.sportsfeed.domain.events.MatchHalfTimeEvent
 import com.ligadospalpites.sportsfeed.domain.events.MatchStartedEvent
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.LeagueJpaEntity
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataLeagueRepository
@@ -116,6 +117,29 @@ class MatchNotificationListenersTest {
             targetId = userId,
             title = "⚽ JOGO INICIADO: Time A x Time B",
             content = "A bola está rolando! Fique ligado no seu palpite.",
+            channels = listOf(NotificationChannel.PUSH)
+        )
+    }
+
+    @Test
+    fun `should dispatch half-time notification for MatchHalfTimeEvent`() {
+        val event = MatchHalfTimeEvent(
+            matchId = matchId,
+            homeTeamName = "Flamengo",
+            awayTeamName = "Fluminense",
+            homeScore = 1,
+            awayScore = 0,
+            sportId = sportId,
+            leagueId = leagueId
+        )
+
+        listener.onMatchHalfTime(event)
+
+        verify(dispatcherService).dispatch(
+            target = NotificationTarget.USER,
+            targetId = userId,
+            title = "⏸️ INTERVALO: Flamengo 1 x 0 Fluminense",
+            content = "Fim do 1º tempo! Fique ligado no seu palpite para a etapa final.",
             channels = listOf(NotificationChannel.PUSH)
         )
     }

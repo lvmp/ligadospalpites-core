@@ -4,6 +4,7 @@ import com.ligadospalpites.sportsfeed.application.usecases.LeagueSyncService
 import com.ligadospalpites.sportsfeed.domain.models.MatchStatus
 import com.ligadospalpites.sportsfeed.domain.events.MatchStartedEvent
 import com.ligadospalpites.sportsfeed.domain.events.MatchGoalEvent
+import com.ligadospalpites.sportsfeed.domain.events.MatchHalfTimeEvent
 import com.ligadospalpites.sportsfeed.domain.events.MatchFinishedEvent
 import com.ligadospalpites.sportsfeed.infrastructure.client.ApiFootballClient
 import com.ligadospalpites.sportsfeed.infrastructure.client.FootballDataClient
@@ -281,27 +282,39 @@ class FootballWorldCupSyncService(
             }
 
             if (matchMatch != null) {
-                // Publish events based on state transition
-                if (matchMatch.status == MatchStatus.SCHEDULED && inc.status == MatchStatus.LIVE) {
+                // 1. Prevenção de regressão para SCHEDULED
+                val effectiveStatus = if ((matchMatch.status == MatchStatus.LIVE || matchMatch.status == MatchStatus.HALF_TIME || matchMatch.status == MatchStatus.FINISHED) && inc.status == MatchStatus.SCHEDULED) {
+                    logger.warn("Match ${matchMatch.id} status regression prevented: keeping ${matchMatch.status} instead of reverting to SCHEDULED")
+                    matchMatch.status
+                } else {
+                    inc.status
+                }
+
+                // 2. Transições de eventos
+                if (matchMatch.status == MatchStatus.SCHEDULED && (effectiveStatus == MatchStatus.LIVE || effectiveStatus == MatchStatus.HALF_TIME)) {
                     logger.info("Match started event published for match ${matchMatch.id}: ${inc.homeTeamName} x ${inc.awayTeamName}")
                     eventPublisher.publishEvent(MatchStartedEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, inc.sportId, inc.leagueId))
                 }
 
-                if (matchMatch.status == MatchStatus.LIVE && inc.status == MatchStatus.LIVE) {
-                    val oldHome = matchMatch.homeScore ?: 0
-                    val oldAway = matchMatch.awayScore ?: 0
-                    val newHome = inc.homeScore ?: 0
-                    val newAway = inc.awayScore ?: 0
-                    if (newHome > oldHome) {
-                        logger.info("Match goal event published (Home team scored) for match ${matchMatch.id}")
-                        eventPublisher.publishEvent(MatchGoalEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, newHome, newAway, "HOME", inc.sportId, inc.leagueId))
-                    } else if (newAway > oldAway) {
-                        logger.info("Match goal event published (Away team scored) for match ${matchMatch.id}")
-                        eventPublisher.publishEvent(MatchGoalEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, newHome, newAway, "AWAY", inc.sportId, inc.leagueId))
-                    }
+                if (matchMatch.status == MatchStatus.LIVE && effectiveStatus == MatchStatus.HALF_TIME) {
+                    logger.info("Match half-time event published for match ${matchMatch.id}: ${inc.homeTeamName} x ${inc.awayTeamName} (${inc.homeScore ?: 0} x ${inc.awayScore ?: 0})")
+                    eventPublisher.publishEvent(MatchHalfTimeEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, inc.homeScore ?: 0, inc.awayScore ?: 0, inc.sportId, inc.leagueId))
                 }
 
-                if (matchMatch.status != MatchStatus.FINISHED && inc.status == MatchStatus.FINISHED) {
+                val oldHome = matchMatch.homeScore ?: 0
+                val oldAway = matchMatch.awayScore ?: 0
+                val newHome = inc.homeScore ?: 0
+                val newAway = inc.awayScore ?: 0
+
+                if (newHome > oldHome) {
+                    logger.info("Match goal event published (Home team scored) for match ${matchMatch.id}")
+                    eventPublisher.publishEvent(MatchGoalEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, newHome, newAway, "HOME", inc.sportId, inc.leagueId))
+                } else if (newAway > oldAway) {
+                    logger.info("Match goal event published (Away team scored) for match ${matchMatch.id}")
+                    eventPublisher.publishEvent(MatchGoalEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, newHome, newAway, "AWAY", inc.sportId, inc.leagueId))
+                }
+
+                if (matchMatch.status != MatchStatus.FINISHED && effectiveStatus == MatchStatus.FINISHED) {
                     logger.info("Match finished event published for match ${matchMatch.id}: ${inc.homeTeamName} x ${inc.awayTeamName}")
                     eventPublisher.publishEvent(MatchFinishedEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, inc.homeScore ?: 0, inc.awayScore ?: 0, inc.sportId, inc.leagueId))
                 }
@@ -316,7 +329,7 @@ class FootballWorldCupSyncService(
                     homeTeamLogoUrl = inc.homeTeamLogoUrl ?: matchMatch.homeTeamLogoUrl,
                     awayTeamLogoUrl = inc.awayTeamLogoUrl ?: matchMatch.awayTeamLogoUrl,
                     kickoffTime = inc.kickoffTime,
-                    status = inc.status,
+                    status = effectiveStatus,
                     homeScore = inc.homeScore,
                     awayScore = inc.awayScore,
                     phase = inc.phase,
@@ -352,7 +365,8 @@ class FootballWorldCupSyncService(
     private fun mapFootballDataStatus(status: String): MatchStatus {
         return when (status.uppercase()) {
             "TIMED", "SCHEDULED", "CALENDAR" -> MatchStatus.SCHEDULED
-            "IN_PLAY", "PAUSED" -> MatchStatus.LIVE
+            "IN_PLAY" -> MatchStatus.LIVE
+            "PAUSED", "HALFTIME", "HT" -> MatchStatus.HALF_TIME
             "FINISHED" -> MatchStatus.FINISHED
             "CANCELLED", "SUSPENDED" -> MatchStatus.CANCELLED
             else -> MatchStatus.SCHEDULED
@@ -362,7 +376,8 @@ class FootballWorldCupSyncService(
     private fun mapApiFootballStatus(shortStatus: String): MatchStatus {
         return when (shortStatus.uppercase()) {
             "NS", "TBD" -> MatchStatus.SCHEDULED
-            "1H", "2H", "HT", "ET", "BT", "P", "INT" -> MatchStatus.LIVE
+            "1H", "2H", "ET", "BT", "P", "INT" -> MatchStatus.LIVE
+            "HT" -> MatchStatus.HALF_TIME
             "FT", "AET", "PEN" -> MatchStatus.FINISHED
             "CAN", "PST", "ABD" -> MatchStatus.CANCELLED
             else -> MatchStatus.SCHEDULED

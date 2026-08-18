@@ -107,6 +107,7 @@ class FootballGenericSyncServiceIntegrationTest : BaseIntegrationTest() {
     @Test
     fun `should fallback to ApiFootball when primary provider fails`() {
         `when`(footballDataClient.fetchMatches("BSA", 2026)).thenThrow(RuntimeException("Football-Data is offline"))
+        `when`(footballDataClient.fetchMatches("BSA", null)).thenThrow(RuntimeException("Football-Data is offline"))
 
         val afFixture = ApiFootballFixtureWrapper(
             fixture = ApiFootballFixture(456L, "2026-04-11T19:00:00Z", ApiFootballStatus("FT")),

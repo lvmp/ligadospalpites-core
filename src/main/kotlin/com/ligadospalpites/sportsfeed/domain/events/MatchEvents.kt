@@ -30,3 +30,13 @@ data class MatchFinishedEvent(
     val sportId: UUID,
     val leagueId: UUID
 )
+
+data class MatchHalfTimeEvent(
+    val matchId: UUID,
+    val homeTeamName: String,
+    val awayTeamName: String,
+    val homeScore: Int,
+    val awayScore: Int,
+    val sportId: UUID,
+    val leagueId: UUID
+)

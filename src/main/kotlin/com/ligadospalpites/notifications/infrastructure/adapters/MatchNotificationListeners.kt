@@ -6,6 +6,7 @@ import com.ligadospalpites.notifications.domain.models.NotificationTarget
 import com.ligadospalpites.predictions.domain.events.PredictionsProcessedEvent
 import com.ligadospalpites.predictions.infrastructure.persistence.SpringDataPredictionRepository
 import com.ligadospalpites.sportsfeed.domain.events.MatchGoalEvent
+import com.ligadospalpites.sportsfeed.domain.events.MatchHalfTimeEvent
 import com.ligadospalpites.sportsfeed.domain.events.MatchStartedEvent
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataLeagueRepository
 import org.slf4j.LoggerFactory
@@ -61,6 +62,28 @@ class MatchNotificationListeners(
             "pelo"
         }
         return "$prep $leagueName"
+    }
+
+    @Async
+    @EventListener
+    fun onMatchHalfTime(event: MatchHalfTimeEvent) {
+        log.info("Processing MatchHalfTimeEvent push notifications for match ${event.matchId}")
+        val predictions = predictionRepository.findByMatchId(event.matchId)
+
+        val scoreText = "${event.homeScore} x ${event.awayScore}"
+        predictions.forEach { prediction ->
+            try {
+                dispatcherService.dispatch(
+                    target = NotificationTarget.USER,
+                    targetId = prediction.userId,
+                    title = "⏸️ INTERVALO: ${event.homeTeamName} $scoreText ${event.awayTeamName}",
+                    content = "Fim do 1º tempo! Fique ligado no seu palpite para a etapa final.",
+                    channels = listOf(NotificationChannel.PUSH)
+                )
+            } catch (e: Exception) {
+                log.error("Failed to dispatch match half-time notification to user ${prediction.userId}", e)
+            }
+        }
     }
 
     @Async
