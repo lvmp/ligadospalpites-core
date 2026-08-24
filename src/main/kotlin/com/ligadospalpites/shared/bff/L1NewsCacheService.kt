@@ -13,7 +13,6 @@ class L1NewsCacheService(
 ) {
     private val objectMapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
 
-    @Cacheable(value = ["newsFeed"], key = "#cacheKey")
     fun getCachedNews(cacheKey: String): List<NewsResponse> {
         return try {
             val cachedNewsJson = redisTemplate.opsForValue().get(cacheKey)

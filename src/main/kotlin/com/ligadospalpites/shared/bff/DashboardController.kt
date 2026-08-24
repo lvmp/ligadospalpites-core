@@ -36,12 +36,11 @@ class DashboardController(
     private val redisTemplate: org.springframework.data.redis.core.StringRedisTemplate,
     private val userResolver: UserResolver,
     private val environment: Environment,
-    private val l1NewsCacheService: L1NewsCacheService
+    private val l1NewsCacheService: L1NewsCacheService,
+    private val executor: Executor
 ) {
 
     private val objectMapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
-
-    private val executor: Executor = Executors.newFixedThreadPool(10)
 
     @SecurityRequirement(name = "bearerAuth")
     @SecurityRequirement(name = "X-User-Id")
