@@ -9,6 +9,8 @@ interface SpringDataPredictionRepository : JpaRepository<PredictionJpaEntity, UU
     fun findByMatchId(matchId: UUID): List<PredictionJpaEntity>
     fun findByUserIdAndMatchId(userId: UUID, matchId: UUID): PredictionJpaEntity?
     fun findByUserId(userId: UUID): List<PredictionJpaEntity>
+    fun findByUserIdAndLeagueId(userId: UUID, leagueId: UUID): List<PredictionJpaEntity>
+    fun findByUserIdAndLeagueIdIn(userId: UUID, leagueIds: Collection<UUID>): List<PredictionJpaEntity>
 
     @Query("""
         SELECT DISTINCT p.userId 
