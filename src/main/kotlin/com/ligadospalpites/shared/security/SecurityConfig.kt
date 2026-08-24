@@ -31,7 +31,6 @@ class SecurityConfig(
             .addFilterBefore(adminApiKeyFilter, AuthorizationFilter::class.java)
             .authorizeHttpRequests { auth ->
                 auth
-                    .requestMatchers("/api/v1/public/**").permitAll()
                     .requestMatchers("/api/v1/internal/**").permitAll()
                     .requestMatchers("/api/v1/payments/revenuecat/webhook").permitAll()
                     .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
