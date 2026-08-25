@@ -3,10 +3,18 @@ spring:
     name: ligadospalpites-core
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/ligadospalpites
-    username: palpiteiro
-    password: supersecretpassword
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ligadospalpites}
+    username: ${SPRING_DATASOURCE_USERNAME:palpiteiro}
+    password: ${SPRING_DATASOURCE_PASSWORD:supersecretpassword}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE:3}
+      minimum-idle: 1
+      idle-timeout: 30000
+      connection-timeout: 20000
+      max-lifetime: 1800000
+      data-source-properties:
+        prepareThreshold: 0
 
   jpa:
     hibernate:
@@ -15,6 +23,8 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
+        jdbc:
+          use_get_generated_keys: true
     show-sql: false
 
   data:

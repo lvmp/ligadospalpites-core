@@ -12,23 +12,17 @@ To keep the application highly maintainable, prevent dependency spaghetti, and e
 
 ```text
 ligadospalpites-core/
-├── settings.gradle.kts                 # Defines subprojects
-├── build.gradle.kts                    # Core build script & Spring Boot version configurations
-│
-├── apps/
-│   └── main-app/                       # Spring Boot Application Bootstrapper (runner) & BFF Gateway
-│       └── src/main/kotlin/com/ligadospalpites/app/Application.kt
-│
-└── packages/
-    ├── shared/                         # Cross-cutting concerns
-    │   └── core/                       # Shared domain interfaces, generic VOs, trace context
-    │
-    └── features/                       # Business capabilities (Bounded Contexts)
-        ├── users/                      # Authentication, profile, basic details
-        ├── billing/                    # Plan admin, App Store/Google receipt validation
-        ├── predictions/                # Predictions (palpites), user points, leagues, rankings
-        ├── sports-feed/                # Fixtures, live events, manual entry, third-party API ingestion
-        └── notifications/              # Extensible notification engine (In-app, Push, Email, etc.)
+├── build.gradle.kts                    # Single-project build script & Spring Boot dependencies
+└── src/main/kotlin/com/ligadospalpites/
+    ├── Application.kt                  # Spring Boot application bootstrapper
+    ├── admin/                          # Administrative use cases & dashboard controllers
+    ├── groups/                         # Social leagues, memberships, Redis rankings
+    ├── notifications/                  # FCM push & in-app notification engine
+    ├── payments/                       # RevenueCat webhooks & user entitlement rules
+    ├── predictions/                    # Match predictions, special predictions & scoring
+    ├── sportsfeed/                     # Sports API sync, fixtures, seasons & leagues
+    ├── users/                          # User identity mapping & Riot profiles
+    └── shared/                         # BFF Dashboard, trace context, OpenAPI, Security & Cache Config
 ```
 
 ### 1.2. Module Isolation Rules
@@ -175,8 +169,10 @@ When the `sports-feed` module registers a final score from the third-party Sport
 
 - **Programming Language**: Kotlin 1.9+ (utilizing coroutines, inline value classes, functional expressions).
 - **Core Framework**: Spring Boot 4.1.0 (MVC, JPA).
-- **Primary Database**: PostgreSQL (relational storage hosted on Supabase PostgreSQL, with Supavisor connection pooling).
-- **Caching & Leaderboards**: Redis (active ranking tables stored in Redis ZSETs and session storage hosted on Upstash serverless Redis).
+- **Primary Database**: PostgreSQL (relational storage hosted on Supabase PostgreSQL, configured with Supavisor transaction pooler compatibility `prepareThreshold=0` and HikariCP `maximum-pool-size=3` per container instance).
+- **2-Tier Caching Architecture**:
+  - **L1 Cache (Local Memory)**: Caffeine Cache with short TTL (10s) for high-frequency BFF feed endpoints (News, Dashboard) to absorb rapid repeat requests.
+  - **L2 Cache (Distributed)**: Redis ZSETs hosted on Upstash serverless Redis for real-time leaderboards and active rankings.
 - **Third-Party Services**: 
   - Firebase Authentication (identity validation via JWT).
   - Firebase Cloud Messaging (push broker integration).
@@ -355,15 +351,15 @@ To support **Scale-to-Zero** in a serverless environment (Google Cloud Run), the
 
 ---
 
-## 8. Hybrid Data Strategy: Profile Partitioning
+## 8. Hybrid Data Strategy & Performance Rules
 
-To reduce heavy PostgreSQL write throughput and utilize Firebase's native synchronization:
+To reduce heavy PostgreSQL write throughput, stay within serverless 512MB RAM limits, and operate efficiently on Free Tier infrastructure:
 - **Firebase Firestore**: Stores user profiles (`displayName`, `avatarUrl`) and application preferences (favorite sports, league subscriptions, notifications settings). The mobile client reads/writes directly to Firestore.
 - **PostgreSQL (Supabase)**: Acts as the primary transactional repository. Stores user local IDs mapping (`firebase_uid` -> `userId`), billing entitlements, predictions, and group memberships.
-- **Redis (Upstash)**: Caches phase-based group rankings using Sorted Sets (ZSET) partitioned by:
-  - `overall`
-  - `group-stage`
-  - `knockout`
+  - **SQL Pushdown Requirement**: In-memory `.findAll()` filtering on operational tables (`tbl_matches`, `tbl_predictions`, `tbl_group_members`) is strictly prohibited. All queries must use indexed JPQL pushdown methods (`findByKickoffTimeBetween...`, `countByGroupId`, etc.) to enforce zero-memory overhead.
+  - **Supavisor Compatibility**: HikariCP must be configured with `data-source-properties.prepareThreshold: 0` and `maximum-pool-size: 3` to prevent `prepared statement does not exist` errors on pooled Supabase connections.
+- **Redis (Upstash)**: Caches phase-based group rankings using Sorted Sets (ZSET) partitioned by `overall`, `group-stage`, and `knockout`.
+- **2-Tier Caching (L1 Caffeine)**: High-frequency feeds (news, dashboard highlights) use an L1 in-memory Caffeine cache (10s TTL) to prevent hitting Upstash Redis command quotas (500k commands/day).
 - **Data Aggregation**: When querying leaderboards or profile endpoints, the backend BFF retrieves Postgres data and combines it in parallel with metadata fetched from Firebase Firestore.
 
 ---

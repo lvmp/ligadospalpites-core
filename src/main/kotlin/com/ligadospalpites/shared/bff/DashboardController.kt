@@ -35,7 +35,8 @@ class DashboardController(
     private val specialPredictionRepository: SpringDataSpecialPredictionRepository,
     private val redisTemplate: org.springframework.data.redis.core.StringRedisTemplate,
     private val userResolver: UserResolver,
-    private val environment: Environment
+    private val environment: Environment,
+    private val l1NewsCacheService: L1NewsCacheService
 ) {
 
     private val objectMapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
@@ -92,56 +93,49 @@ class DashboardController(
             val startOfToday = today.atStartOfDay(zoneId).toInstant()
             val endOf7Days = today.plusDays(7).atTime(23, 59, 59, 999_999_999).atZone(zoneId).toInstant()
 
-            var matches = matchRepository.findAll()
             val activeLeagueIds = leagueRepository.findByIsActiveTrue().map { it.id }.toSet()
-            
-            matches = matches.filter { 
-                (it.status.name == "SCHEDULED" || it.status.name == "LIVE") && 
-                !it.kickoffTime.isBefore(startOfToday) &&
-                it.kickoffTime.isBefore(endOf7Days)
-            }
+            val statuses = listOf(com.ligadospalpites.sportsfeed.domain.models.MatchStatus.SCHEDULED, com.ligadospalpites.sportsfeed.domain.models.MatchStatus.LIVE)
 
-            if (leagueId != null) {
+            val matches = if (leagueId != null) {
                 val isGroup = groupRepository.existsById(leagueId)
                 if (!isGroup) {
-                    matches = matches.filter { it.leagueId == leagueId }
+                    matchRepository.findUpcomingMatchesByLeagueIds(statuses, startOfToday, endOf7Days, listOf(leagueId), sportId)
+                } else if (activeLeagueIds.isNotEmpty()) {
+                    matchRepository.findUpcomingMatchesByLeagueIds(statuses, startOfToday, endOf7Days, activeLeagueIds, sportId)
                 } else {
-                    matches = matches.filter { activeLeagueIds.contains(it.leagueId) }
+                    emptyList()
                 }
+            } else if (activeLeagueIds.isNotEmpty()) {
+                matchRepository.findUpcomingMatchesByLeagueIds(statuses, startOfToday, endOf7Days, activeLeagueIds, sportId)
             } else {
-                matches = matches.filter { activeLeagueIds.contains(it.leagueId) }
+                emptyList()
             }
 
-            if (sportId != null) {
-                matches = matches.filter { it.sportId == sportId }
+            matches.map {
+                NextMatchResponse(
+                    matchId = it.id,
+                    homeTeam = it.homeTeamName,
+                    awayTeam = it.awayTeamName,
+                    kickoffTime = it.kickoffTime.toString(),
+                    phase = formatMatchPhase(it.phase),
+                    homeTeamLogoUrl = it.homeTeamLogoUrl,
+                    awayTeamLogoUrl = it.awayTeamLogoUrl,
+                    periodScoresJson = it.periodScoresJson,
+                    numberOfGames = it.numberOfGames,
+                    streamUrl = it.streamUrl
+                )
             }
-
-            matches.sortedBy { it.kickoffTime }
-                .map {
-                    NextMatchResponse(
-                        matchId = it.id,
-                        homeTeam = it.homeTeamName,
-                        awayTeam = it.awayTeamName,
-                        kickoffTime = it.kickoffTime.toString(),
-                        phase = formatMatchPhase(it.phase),
-                        homeTeamLogoUrl = it.homeTeamLogoUrl,
-                        awayTeamLogoUrl = it.awayTeamLogoUrl,
-                        periodScoresJson = it.periodScoresJson,
-                        numberOfGames = it.numberOfGames,
-                        streamUrl = it.streamUrl
-                    )
-                }
         }, executor)
 
         // 3. Fetch User Groups Highlights (Async)
         val myGroupsFuture = CompletableFuture.supplyAsync({
-            val userMemberships = groupMemberRepository.findAll().filter { it.userId == userUUID }
+            val userMemberships = groupMemberRepository.findByUserId(userUUID)
             userMemberships.mapNotNull { membership ->
                 val group = groupRepository.findById(membership.groupId).orElse(null)
                 if (group != null) {
                     val key = "leaderboard:group:${group.id}:overall"
                     val (rank, _) = leaderboardRepository.getUserRankAndScore(key, userUUID)
-                    val totalMembers = groupMemberRepository.findAll().count { it.groupId == group.id }
+                    val totalMembers = groupMemberRepository.countByGroupId(group.id)
 
                     GroupHighlightResponse(
                         groupId = group.id,
@@ -154,62 +148,12 @@ class DashboardController(
             }
         }, executor)
 
-        // 4. Fetch News (Async from Redis Cache with Fallback)
+        // 4. Fetch News (Async from L1 Caffeine Cache / Redis)
         val newsFuture = CompletableFuture.supplyAsync({
             val targetSportId = sportId ?: UUID.fromString("f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c")
             val isGroup = leagueId != null && groupRepository.existsById(leagueId)
             val cacheKey = if (leagueId != null && !isGroup) "news:$targetSportId:$leagueId" else "news:$targetSportId"
-            try {
-                val cachedNewsJson = redisTemplate.opsForValue().get(cacheKey)
-                if (!cachedNewsJson.isNullOrBlank()) {
-                    val articles: List<Map<String, String>> = objectMapper.readValue(
-                        cachedNewsJson,
-                        objectMapper.typeFactory.constructCollectionType(List::class.java, Map::class.java)
-                    )
-                    articles.take(10).map { art ->
-                        NewsResponse(
-                            title = art["title"] ?: "",
-                            url = art["url"] ?: "",
-                            urlToImage = art["urlToImage"] ?: "",
-                            author = art["author"] ?: "Liga dos Palpites",
-                            description = art["description"] ?: "Matéria completa disponível no link abaixo.",
-                            category = art["category"] ?: "Copa do Mundo"
-                        )
-                    }
-                } else {
-                    // Fallback se o Redis estiver limpo ou recém-criado
-                    if (environment.activeProfiles.contains("prod")) {
-                        emptyList()
-                    } else {
-                        listOf(
-                            NewsResponse(
-                                title = "Brasil se prepara para enfrentar a França na final da Copa",
-                                url = "https://ge.globo.com/copa/news1.html",
-                                urlToImage = "https://ge.globo.com/image1.png",
-                                author = "Liga dos Palpites",
-                                description = "Matéria completa disponível no link abaixo.",
-                                category = "Copa do Mundo"
-                            )
-                        )
-                    }
-                }
-            } catch (e: Exception) {
-                // Em caso de falha de conexão do Redis, devolvemos o fallback amigável sem quebrar o BFF!
-                if (environment.activeProfiles.contains("prod")) {
-                    emptyList()
-                } else {
-                    listOf(
-                        NewsResponse(
-                            title = "Brasil se prepara para enfrentar a França na final da Copa",
-                            url = "https://ge.globo.com/copa/news1.html",
-                            urlToImage = "https://ge.globo.com/image1.png",
-                            author = "Liga dos Palpites",
-                            description = "Matéria completa disponível no link abaixo.",
-                            category = "Copa do Mundo"
-                        )
-                    )
-                }
-            }
+            l1NewsCacheService.getCachedNews(cacheKey).take(10)
         }, executor)
 
         // 5. Check Unread Notifications (Async)
@@ -257,55 +201,7 @@ class DashboardController(
             val isGroup = leagueId != null && groupRepository.existsById(leagueId)
             val cacheKey = if (leagueId != null && !isGroup) "news:$targetSportId:$leagueId" else "news:$targetSportId"
 
-            val newsList = try {
-                val cachedNewsJson = redisTemplate.opsForValue().get(cacheKey)
-                if (!cachedNewsJson.isNullOrBlank()) {
-                    val articles: List<Map<String, String>> = objectMapper.readValue(
-                        cachedNewsJson,
-                        objectMapper.typeFactory.constructCollectionType(List::class.java, Map::class.java)
-                    )
-                    articles.map { art ->
-                        NewsResponse(
-                            title = art["title"] ?: "",
-                            url = art["url"] ?: "",
-                            urlToImage = art["urlToImage"] ?: "",
-                            author = art["author"] ?: "Liga dos Palpites",
-                            description = art["description"] ?: "Matéria completa disponível no link abaixo.",
-                            category = art["category"] ?: "Copa do Mundo"
-                        )
-                    }
-                } else {
-                    if (environment.activeProfiles.contains("prod")) {
-                        emptyList()
-                    } else {
-                        (1..15).map { index ->
-                            NewsResponse(
-                                title = "Brasil se prepara para enfrentar a França na final da Copa - Parte $index",
-                                url = "https://ge.globo.com/copa/news$index.html",
-                                urlToImage = "https://ge.globo.com/image$index.png",
-                                author = "Liga dos Palpites",
-                                description = "Descrição detalhada da matéria mockada número $index para verificação de rolagem infinita.",
-                                category = "Copa do Mundo"
-                            )
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                if (environment.activeProfiles.contains("prod")) {
-                    emptyList()
-                } else {
-                    (1..15).map { index ->
-                        NewsResponse(
-                            title = "Brasil se prepara para enfrentar a França na final da Copa - Parte $index",
-                            url = "https://ge.globo.com/copa/news$index.html",
-                            urlToImage = "https://ge.globo.com/image$index.png",
-                            author = "Liga dos Palpites",
-                            description = "Descrição detalhada da matéria mockada número $index para verificação de rolagem infinita.",
-                            category = "Copa do Mundo"
-                        )
-                    }
-                }
-            }
+            val newsList = l1NewsCacheService.getCachedNews(cacheKey)
 
             val totalElements = newsList.size
             val totalPages = if (size > 0) Math.ceil(totalElements.toDouble() / size).toInt() else 0

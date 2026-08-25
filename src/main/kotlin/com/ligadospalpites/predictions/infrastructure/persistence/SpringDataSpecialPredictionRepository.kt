@@ -8,6 +8,9 @@ import java.util.UUID
 interface SpringDataSpecialPredictionRepository : JpaRepository<SpecialPredictionJpaEntity, UUID> {
     fun findByUserIdAndLeagueIdAndType(userId: UUID, leagueId: UUID, type: String): SpecialPredictionJpaEntity?
     fun findByUserId(userId: UUID): List<SpecialPredictionJpaEntity>
+    fun findByUserIdAndLeagueId(userId: UUID, leagueId: UUID): List<SpecialPredictionJpaEntity>
+    fun findByUserIdAndLeagueIdIn(userId: UUID, leagueIds: Collection<UUID>): List<SpecialPredictionJpaEntity>
+    fun findByLeagueIdAndIsProcessedFalse(leagueId: UUID): List<SpecialPredictionJpaEntity>
 
     @Query("SELECT COALESCE(SUM(s.pointsAwarded), 0) FROM SpecialPredictionJpaEntity s WHERE s.userId = :userId AND s.leagueId = :leagueId")
     fun sumPointsByUserIdAndLeagueId(@Param("userId") userId: UUID, @Param("leagueId") leagueId: UUID): Int

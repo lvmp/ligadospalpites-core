@@ -25,4 +25,6 @@ interface SpringDataGroupMemberRepository : JpaRepository<GroupMemberJpaEntity, 
     fun findUserIdsByGroupId(@Param("groupId") groupId: UUID): List<UUID>
 
     fun findByUserId(userId: UUID): List<GroupMemberJpaEntity>
+
+    fun countByGroupId(groupId: UUID): Int
 }

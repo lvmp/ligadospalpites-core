@@ -148,12 +148,12 @@ class PredictionController(
                 ResponseEntity.ok(prediction?.let { listOf(it) } ?: emptyList<PredictionJpaEntity>())
             }
             leagueId != null -> {
-                val predictions = predictionRepository.findByUserId(userUUID).filter { it.leagueId == leagueId }
+                val predictions = predictionRepository.findByUserIdAndLeagueId(userUUID, leagueId)
                 ResponseEntity.ok(predictions)
             }
             else -> {
                 val activeLeagueIds = leagueRepository.findByIsActiveTrue().map { it.id }.toSet()
-                val predictions = predictionRepository.findByUserId(userUUID).filter { activeLeagueIds.contains(it.leagueId) }
+                val predictions = if (activeLeagueIds.isNotEmpty()) predictionRepository.findByUserIdAndLeagueIdIn(userUUID, activeLeagueIds) else emptyList()
                 ResponseEntity.ok(predictions)
             }
         }
@@ -170,10 +170,10 @@ class PredictionController(
         val userUUID = userResolver.resolveByUidOrUuid(userIdHeader)
 
         val predictions = if (leagueId != null) {
-            specialPredictionRepository.findByUserId(userUUID).filter { it.leagueId == leagueId }
+            specialPredictionRepository.findByUserIdAndLeagueId(userUUID, leagueId)
         } else {
             val activeLeagueIds = leagueRepository.findByIsActiveTrue().map { it.id }.toSet()
-            specialPredictionRepository.findByUserId(userUUID).filter { activeLeagueIds.contains(it.leagueId) }
+            if (activeLeagueIds.isNotEmpty()) specialPredictionRepository.findByUserIdAndLeagueIdIn(userUUID, activeLeagueIds) else emptyList()
         }
         return ResponseEntity.ok(predictions)
     }
@@ -184,9 +184,7 @@ class PredictionController(
     fun evaluateSpecialPredictions(
         @RequestBody request: SpecialPredictionEvaluationRequest
     ): ResponseEntity<Any> {
-        val uncompleted = specialPredictionRepository.findAll().filter { 
-            it.leagueId == request.leagueId && !it.isProcessed 
-        }
+        val uncompleted = specialPredictionRepository.findByLeagueIdAndIsProcessedFalse(request.leagueId)
 
         if (uncompleted.isEmpty()) {
             return ResponseEntity.ok(mapOf(
