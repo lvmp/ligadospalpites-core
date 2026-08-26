@@ -406,7 +406,11 @@ class FixtureController(
 
             val teams = (matches.map { it.homeTeamName } + matches.map { it.awayTeamName }).distinct()
             if (teams.isNotEmpty()) {
-                val finishedMatches = matches.filter { it.status == MatchStatus.FINISHED }
+                val finishedMatches = matches.filter { 
+                    it.status == MatchStatus.FINISHED && 
+                    ! (it.phase ?: "").contains("pré-temporada", ignoreCase = true) && 
+                    ! (it.phase ?: "").contains("preseason", ignoreCase = true)
+                }
                 val computedRows = teams.map { teamName ->
                     var played = 0
                     var won = 0
