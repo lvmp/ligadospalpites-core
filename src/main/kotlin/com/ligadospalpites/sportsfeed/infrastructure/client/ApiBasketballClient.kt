@@ -56,7 +56,31 @@ class ApiBasketballClient(
         }
         return emptyList()
     }
+
+    fun fetchTeamInfo(teamName: String): ApiBasketballTeamSearchWrapper? {
+        logger.info("Searching team info from API-Basketball for team: $teamName")
+        return try {
+            val response = restClient.get()
+                .uri("/teams?search={teamName}", teamName)
+                .retrieve()
+                .body(ApiBasketballTeamSearchResponse::class.java)
+            response?.response?.firstOrNull()
+        } catch (e: Exception) {
+            logger.error("Error fetching team info from API-Basketball for $teamName: ${e.message}")
+            null
+        }
+    }
 }
+
+data class ApiBasketballTeamSearchResponse(
+    val response: List<ApiBasketballTeamSearchWrapper> = emptyList()
+)
+
+data class ApiBasketballTeamSearchWrapper(
+    val id: Long,
+    val name: String,
+    val logo: String? = null
+)
 
 data class ApiBasketballResponse(
     val response: List<ApiBasketballGameWrapper> = emptyList()
