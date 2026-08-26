@@ -34,7 +34,11 @@ Este endpoint consolida de maneira paralela e concorrente todas as informações
       "matchId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
       "homeTeam": "Brasil",
       "awayTeam": "França",
-      "kickoffTime": "2026-07-13T19:00:00Z"
+      "homeTeamLogoUrl": "https://media.api-sports.io/football/teams/6.png",
+      "awayTeamLogoUrl": "https://media.api-sports.io/football/teams/2.png",
+      "kickoffTime": "2026-07-13T19:00:00Z",
+      "phase": "Grande Final",
+      "periodScoresJson": "{\"Q1\":\"25-20\",\"Q2\":\"18-22\"}"
     }
   ],
   "myGroupsHighlight": [

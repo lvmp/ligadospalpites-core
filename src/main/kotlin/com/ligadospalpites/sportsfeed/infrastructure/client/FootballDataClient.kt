@@ -42,7 +42,61 @@ class FootballDataClient(
             throw e
         }
     }
+
+    fun fetchStandings(competitionCode: String): FootballDataStandingsResponse? {
+        logger.info("Fetching standings from Football-Data API for competition: $competitionCode")
+        return try {
+            restClient.get()
+                .uri("/v4/competitions/$competitionCode/standings")
+                .retrieve()
+                .body(FootballDataStandingsResponse::class.java)
+        } catch (e: Exception) {
+            logger.error("Error fetching standings from Football-Data API: ${e.message}", e)
+            null
+        }
+    }
 }
+
+data class FootballDataStandingsResponse(
+    val competition: FootballDataCompetition? = null,
+    val season: FootballDataSeasonInfo? = null,
+    val standings: List<FootballDataStandingGroup> = emptyList()
+)
+
+data class FootballDataCompetition(
+    val id: Long? = null,
+    val name: String? = null,
+    val code: String? = null,
+    val emblem: String? = null
+)
+
+data class FootballDataSeasonInfo(
+    val id: Long? = null,
+    val startDate: String? = null,
+    val endDate: String? = null,
+    val currentMatchday: Int? = null
+)
+
+data class FootballDataStandingGroup(
+    val stage: String? = null,
+    val type: String? = null,
+    val group: String? = null,
+    val table: List<FootballDataStandingRow> = emptyList()
+)
+
+data class FootballDataStandingRow(
+    val position: Int,
+    val team: FootballDataTeam,
+    val playedGames: Int,
+    val won: Int,
+    val draw: Int,
+    val lost: Int,
+    val points: Int,
+    val goalsFor: Int,
+    val goalsAgainst: Int,
+    val goalDifference: Int
+)
+
 
 data class FootballDataResponse(
     val matches: List<FootballDataMatch> = emptyList()
