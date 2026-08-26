@@ -24,7 +24,8 @@ class FixtureController(
     private val seasonRepository: SpringDataSeasonRepository,
     private val entitlementRepository: SpringDataUserEntitlementRepository,
     private val userResolver: UserResolver,
-    @org.springframework.beans.factory.annotation.Autowired(required = false) private val espnBasketballClient: com.ligadospalpites.sportsfeed.infrastructure.client.EspnBasketballClient? = null
+    @org.springframework.beans.factory.annotation.Autowired(required = false) private val espnBasketballClient: com.ligadospalpites.sportsfeed.infrastructure.client.EspnBasketballClient? = null,
+    @org.springframework.beans.factory.annotation.Autowired(required = false) private val footballDataClient: com.ligadospalpites.sportsfeed.infrastructure.client.FootballDataClient? = null
 ) {
 
     // 1. Get leagues grouped by sport
@@ -587,6 +588,47 @@ class FixtureController(
         }
 
         // Default: Futebol (Points Corridos / Grupos)
+        val competitionCodeMap = mapOf(
+            UUID.fromString("e7b0a8f9-4b2e-4b67-8890-a54b3d7c588e") to "WC", // Copa do Mundo
+            UUID.fromString("1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d") to "BSA", // Brasileirão Série A
+            UUID.fromString("2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d") to "PL",  // Premier League
+            UUID.fromString("3a4b5c6d-7e8f-9a0b-1c2d-3e4f5a6b7c8d") to "PD",  // La Liga
+            UUID.fromString("4a5b6c7d-8e9f-0a1b-2c3d-4e5f6a7b8c9d") to "CL",  // Champions League
+            UUID.fromString("5a6b7c8d-9e0f-1a2b-3c4d-5e6f7a8b9c0d") to "FL1", // Ligue 1
+            UUID.fromString("6a7b8c9d-0e1f-2a3b-4c5d-6e7f8a9b0c1d") to "BL1", // Bundesliga
+            UUID.fromString("7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d") to "SA",  // Serie A Itália
+            UUID.fromString("8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d") to "DED", // Eredivisie
+            UUID.fromString("9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d") to "PPL"  // Primeira Liga Portugal
+        )
+        val compCode = competitionCodeMap[leagueId]
+        if (!compCode.isNullOrBlank() && footballDataClient != null) {
+            val officialStandings = footballDataClient.fetchStandings(compCode)
+            if (officialStandings != null && officialStandings.standings.isNotEmpty()) {
+                val officialRows = officialStandings.standings.flatMap { group ->
+                    group.table.map { row ->
+                        StandingRow(
+                            position = row.position,
+                            teamId = UUID.nameUUIDFromBytes((row.team.shortName ?: row.team.name ?: "").toByteArray()),
+                            teamName = row.team.shortName ?: row.team.name ?: "",
+                            points = row.points,
+                            played = row.playedGames,
+                            won = row.won,
+                            drawn = row.draw,
+                            lost = row.lost,
+                            goalsFor = row.goalsFor,
+                            goalsAgainst = row.goalsAgainst,
+                            goalDifference = row.goalDifference,
+                            groupName = group.group ?: group.stage,
+                            winRate = if (row.playedGames > 0) Math.round((row.won.toDouble() / row.playedGames) * 100.0) / 100.0 else 0.0
+                        )
+                    }
+                }
+                if (officialRows.isNotEmpty()) {
+                    return ResponseEntity.ok(officialRows)
+                }
+            }
+        }
+
         val teams = (matches.map { it.homeTeamName } + matches.map { it.awayTeamName }).distinct()
         if (teams.isNotEmpty()) {
             val finishedMatches = matches.filter { it.status == MatchStatus.FINISHED }
