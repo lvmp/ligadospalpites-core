@@ -35,7 +35,43 @@ class ApiFootballClient(
             throw e
         }
     }
+
+    fun fetchTeamInfo(teamName: String): ApiFootballTeamSearchWrapper? {
+        logger.info("Searching team info from API-Football for team: $teamName")
+        return try {
+            val response = restClient.get()
+                .uri("/teams?name={teamName}", teamName)
+                .retrieve()
+                .body(ApiFootballTeamSearchResponse::class.java)
+            response?.response?.firstOrNull()
+        } catch (e: Exception) {
+            logger.error("Error fetching team info from API-Football for $teamName: ${e.message}")
+            null
+        }
+    }
 }
+
+data class ApiFootballTeamSearchResponse(
+    val response: List<ApiFootballTeamSearchWrapper> = emptyList()
+)
+
+data class ApiFootballTeamSearchWrapper(
+    val team: ApiFootballTeamDetails,
+    val venue: ApiFootballVenueDetails? = null
+)
+
+data class ApiFootballTeamDetails(
+    val id: Long,
+    val name: String,
+    val logo: String? = null
+)
+
+data class ApiFootballVenueDetails(
+    val id: Long? = null,
+    val name: String? = null,
+    val city: String? = null,
+    val image: String? = null
+)
 
 data class ApiFootballResponse(
     val response: List<ApiFootballFixtureWrapper> = emptyList()
@@ -78,3 +114,4 @@ data class ApiFootballGoals(
     val home: Int? = null,
     val away: Int? = null
 )
+
