@@ -33,7 +33,8 @@ class BasketballSyncService(
     @Autowired(required = false) private val balldontlieClient: BalldontlieClient? = null,
     private val seasonRepository: SpringDataSeasonRepository,
     private val eventPublisher: ApplicationEventPublisher,
-    private val leagueRepository: SpringDataLeagueRepository
+    private val leagueRepository: SpringDataLeagueRepository,
+    @Autowired(required = false) private val redisTemplate: org.springframework.data.redis.core.StringRedisTemplate? = null
 ) : LeagueSyncService {
 
     private val logger = LoggerFactory.getLogger(BasketballSyncService::class.java)
@@ -270,6 +271,9 @@ class BasketballSyncService(
                     eventPublisher.publishEvent(MatchFinishedEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, inc.homeScore ?: 0, inc.awayScore ?: 0, inc.sportId, inc.leagueId))
                 }
 
+                val finalHomeLogo = resolveTeamLogo(inc.homeTeamName, inc.homeTeamLogoUrl ?: matchMatch.homeTeamLogoUrl)
+                val finalAwayLogo = resolveTeamLogo(inc.awayTeamName, inc.awayTeamLogoUrl ?: matchMatch.awayTeamLogoUrl)
+
                 MatchJpaEntity(
                     id = matchMatch.id,
                     sportId = inc.sportId,
@@ -277,8 +281,8 @@ class BasketballSyncService(
                     seasonId = matchMatch.seasonId,
                     homeTeamName = matchMatch.homeTeamName,
                     awayTeamName = matchMatch.awayTeamName,
-                    homeTeamLogoUrl = inc.homeTeamLogoUrl ?: matchMatch.homeTeamLogoUrl,
-                    awayTeamLogoUrl = inc.awayTeamLogoUrl ?: matchMatch.awayTeamLogoUrl,
+                    homeTeamLogoUrl = finalHomeLogo,
+                    awayTeamLogoUrl = finalAwayLogo,
                     kickoffTime = inc.kickoffTime,
                     status = inc.status,
                     homeScore = inc.homeScore,
@@ -288,12 +292,51 @@ class BasketballSyncService(
                     updatedAt = Instant.now()
                 )
             } else {
-                inc
+                val finalHomeLogo = resolveTeamLogo(inc.homeTeamName, inc.homeTeamLogoUrl)
+                val finalAwayLogo = resolveTeamLogo(inc.awayTeamName, inc.awayTeamLogoUrl)
+                MatchJpaEntity(
+                    id = inc.id,
+                    sportId = inc.sportId,
+                    leagueId = inc.leagueId,
+                    seasonId = inc.seasonId,
+                    homeTeamName = inc.homeTeamName,
+                    awayTeamName = inc.awayTeamName,
+                    homeTeamLogoUrl = finalHomeLogo,
+                    awayTeamLogoUrl = finalAwayLogo,
+                    kickoffTime = inc.kickoffTime,
+                    status = inc.status,
+                    homeScore = inc.homeScore,
+                    awayScore = inc.awayScore,
+                    phase = inc.phase,
+                    periodScoresJson = inc.periodScoresJson,
+                    numberOfGames = inc.numberOfGames,
+                    streamUrl = inc.streamUrl,
+                    updatedAt = Instant.now()
+                )
             }
         }
 
         matchRepository.saveAll(toSave)
         logger.info("Successfully updated/inserted ${toSave.size} basketball games for league $leagueId without deleting user predictions.")
+    }
+
+    private fun resolveTeamLogo(teamName: String, existingLogoUrl: String?): String? {
+        if (!existingLogoUrl.isNullOrBlank()) {
+            return existingLogoUrl
+        }
+        val redisKey = "team:logo:basketball:${canonicalName(teamName)}"
+        val cachedLogo = redisTemplate?.opsForValue()?.get(redisKey)
+        if (!cachedLogo.isNullOrBlank()) {
+            return cachedLogo
+        }
+        logger.info("Basketball logo missing for '$teamName'. Fetching enrichment from API-Basketball free tier...")
+        val fetchedInfo = apiBasketballClient.fetchTeamInfo(teamName)
+        val fetchedLogo = fetchedInfo?.logo
+        if (!fetchedLogo.isNullOrBlank()) {
+            redisTemplate?.opsForValue()?.set(redisKey, fetchedLogo)
+            return fetchedLogo
+        }
+        return null
     }
 
     private fun translateTeamName(name: String): String {

@@ -173,10 +173,10 @@ class EspnBasketballClient(
             null
         }
 
-        val phaseName = when (leagueSlug.lowercase()) {
-            "nba" -> "NBA"
-            "wnba" -> "WNBA"
-            "mens-college-basketball" -> "NCAA"
+        val seasonType = event.season?.type ?: 2
+        val phaseName = when {
+            seasonType == 1 -> "Pré-Temporada"
+            seasonType == 3 -> "Playoffs"
             else -> "Temporada Regular"
         }
 
@@ -202,10 +202,16 @@ private data class EspnScoreboardResponse(
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+private data class EspnSeason(
+    val type: Int? = 2
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
 private data class EspnEvent(
     val id: String = "",
     val date: String? = null,
     val status: EspnStatus? = null,
+    val season: EspnSeason? = null,
     val competitions: List<EspnCompetition>? = emptyList()
 )
 

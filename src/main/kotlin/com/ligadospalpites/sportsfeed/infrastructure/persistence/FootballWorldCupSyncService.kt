@@ -319,6 +319,9 @@ class FootballWorldCupSyncService(
                     eventPublisher.publishEvent(MatchFinishedEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, inc.homeScore ?: 0, inc.awayScore ?: 0, inc.sportId, inc.leagueId))
                 }
 
+                val finalHomeLogo = resolveTeamLogo(inc.homeTeamName, inc.homeTeamLogoUrl ?: matchMatch.homeTeamLogoUrl)
+                val finalAwayLogo = resolveTeamLogo(inc.awayTeamName, inc.awayTeamLogoUrl ?: matchMatch.awayTeamLogoUrl)
+
                 MatchJpaEntity(
                     id = matchMatch.id,
                     sportId = inc.sportId,
@@ -326,8 +329,8 @@ class FootballWorldCupSyncService(
                     seasonId = matchMatch.seasonId,
                     homeTeamName = matchMatch.homeTeamName,
                     awayTeamName = matchMatch.awayTeamName,
-                    homeTeamLogoUrl = inc.homeTeamLogoUrl ?: matchMatch.homeTeamLogoUrl,
-                    awayTeamLogoUrl = inc.awayTeamLogoUrl ?: matchMatch.awayTeamLogoUrl,
+                    homeTeamLogoUrl = finalHomeLogo,
+                    awayTeamLogoUrl = finalAwayLogo,
                     kickoffTime = inc.kickoffTime,
                     status = effectiveStatus,
                     homeScore = inc.homeScore,
@@ -336,12 +339,48 @@ class FootballWorldCupSyncService(
                     updatedAt = Instant.now()
                 )
             } else {
-                inc
+                val finalHomeLogo = resolveTeamLogo(inc.homeTeamName, inc.homeTeamLogoUrl)
+                val finalAwayLogo = resolveTeamLogo(inc.awayTeamName, inc.awayTeamLogoUrl)
+                MatchJpaEntity(
+                    id = inc.id,
+                    sportId = inc.sportId,
+                    leagueId = inc.leagueId,
+                    seasonId = inc.seasonId,
+                    homeTeamName = inc.homeTeamName,
+                    awayTeamName = inc.awayTeamName,
+                    homeTeamLogoUrl = finalHomeLogo,
+                    awayTeamLogoUrl = finalAwayLogo,
+                    kickoffTime = inc.kickoffTime,
+                    status = inc.status,
+                    homeScore = inc.homeScore,
+                    awayScore = inc.awayScore,
+                    phase = inc.phase,
+                    updatedAt = Instant.now()
+                )
             }
         }
 
         matchRepository.saveAll(toSave)
         logger.info("Successfully updated/inserted ${toSave.size} matches without deleting user predictions.")
+    }
+
+    private fun resolveTeamLogo(teamName: String, existingLogoUrl: String?): String? {
+        if (!existingLogoUrl.isNullOrBlank()) {
+            return existingLogoUrl
+        }
+        val redisKey = "team:logo:${canonicalName(teamName)}"
+        val cachedLogo = redisTemplate.opsForValue().get(redisKey)
+        if (!cachedLogo.isNullOrBlank()) {
+            return cachedLogo
+        }
+        logger.info("Logo missing for '$teamName'. Fetching enrichment from API-Football free tier...")
+        val fetchedInfo = apiFootballClient.fetchTeamInfo(teamName)
+        val fetchedLogo = fetchedInfo?.team?.logo
+        if (!fetchedLogo.isNullOrBlank()) {
+            redisTemplate.opsForValue().set(redisKey, fetchedLogo)
+            return fetchedLogo
+        }
+        return null
     }
 
     private fun translateTeamName(name: String): String {

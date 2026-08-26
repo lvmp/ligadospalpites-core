@@ -75,8 +75,12 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
     private val worldCupLeagueId = UUID.fromString("e7b0a8f9-4b2e-4b67-8890-a54b3d7c588e")
     private val testSeasonId = UUID.fromString("50c22998-33b2-4d9a-ba02-4be71a1be992")
 
+    @Autowired(required = false)
+    private var cacheManager: org.springframework.cache.CacheManager? = null
+
     @BeforeEach
     fun setUpData() {
+        cacheManager?.getCache("newsFeed")?.clear()
         mockMvc = MockMvcBuilders.webAppContextSetup(wac).build()
         // Clear old database records
         predictionRepository.deleteAll()

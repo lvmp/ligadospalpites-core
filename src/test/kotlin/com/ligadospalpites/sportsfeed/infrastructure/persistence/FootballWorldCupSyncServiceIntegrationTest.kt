@@ -33,12 +33,19 @@ class FootballWorldCupSyncServiceIntegrationTest : BaseIntegrationTest() {
     @Autowired
     private lateinit var dashboardController: com.ligadospalpites.shared.bff.DashboardController
 
+    @Autowired
+    private lateinit var l1NewsCacheService: com.ligadospalpites.shared.bff.L1NewsCacheService
+
+    @Autowired(required = false)
+    private var cacheManager: org.springframework.cache.CacheManager? = null
+
     private val worldCupLeagueId = UUID.fromString("e7b0a8f9-4b2e-4b67-8890-a54b3d7c588e")
     private val worldCupSeasonId = UUID.fromString("50c22998-33b2-4d9a-ba02-4be71a1be992")
 
     @BeforeEach
     fun setUp() {
         matchRepository.deleteAll()
+        cacheManager?.getCache("newsFeed")?.clear()
     }
 
     @Test
@@ -48,8 +55,8 @@ class FootballWorldCupSyncServiceIntegrationTest : BaseIntegrationTest() {
             utcDate = "2026-06-11T19:00:00Z",
             status = "FINISHED",
             stage = "GROUP_STAGE",
-            homeTeam = FootballDataTeam(1L, "Brazil", "Brazil"),
-            awayTeam = FootballDataTeam(2L, "France", "France"),
+            homeTeam = FootballDataTeam(1L, "Brazil", "Brazil", crest = "https://crests.football-data.org/brazil.png"),
+            awayTeam = FootballDataTeam(2L, "France", "France", crest = "https://crests.football-data.org/france.png"),
             score = FootballDataScore(FootballDataTeamScore(2, 1))
         )
         `when`(footballDataClient.fetchMatches("WC", 2026)).thenReturn(listOf(fdMatch))

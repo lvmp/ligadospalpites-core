@@ -56,7 +56,7 @@ Inside each feature module, we strictly enforce **Clean Architecture / Ports and
 ### 2.1. Internal Directory Structure Example (`predictions` module)
 ```text
 predictions/
-├── src/main/kotlin/com/ligadospalpites/feature/predictions/
+├── src/main/kotlin/com/ligadospalpites/predictions/
 │   ├── api/                            # EXPOSED: Public interfaces & DTOs for other modules
 │   │   ├── PredictionsFacade.kt
 │   │   └── dtos/
@@ -104,31 +104,30 @@ sequenceDiagram
     App->>User: Unlock features (Ad-Free, unlimited leagues)
 ```
 
-### 3.2. Asynchronous Webhook Subscription Management
-To handle auto-renewals, cancellations, and refunds, the system exposes public endpoints for App Store Server Notifications V2 and Google Play Developer Notifications:
-- **Apple endpoint**: `/api/v1/webhooks/apple/notifications`
-- **Google endpoint**: `/api/v1/webhooks/google/notifications`
+### 3.2. Asynchronous Webhook Subscription Management (RevenueCat)
+To handle auto-renewals, cancellations, and refunds, the system relies on **RevenueCat Webhook Integration** ([ADR-0009](file:///c:/Users/Vinicius/workspace/ligadospalpites-core/docs/adr/0009-revenuecat-webhook-integration.md)), exposing a secure public endpoint for event dispatching:
+- **RevenueCat Webhook endpoint**: `/api/v1/webhooks/revenuecat`
 
-When a notification is received, the `billing` module parses the JWS payload, determines the notification type (e.g., `SUBSCRIBED`, `DID_RENEW`, `EXPIRED`, `REFUND`), and updates the user's entitlements accordingly.
+When a webhook notification is received, the `payments` module verifies the `Authorization` header token, determines the event type (e.g. `INITIAL_PURCHASE`, `RENEWAL`, `CANCELLATION`, `EXPIRATION`), and updates the user's entitlements (`tbl_user_entitlements`) accordingly.
 
 ### 3.3. Cross-Module Access Control (Plan Enforcement)
 When a user attempts to view a league or submit a palpite, the `predictions` module must verify if the user's plan permits it.
 
 ```kotlin
-package com.ligadospalpites.feature.predictions.application.usecases
+package com.ligadospalpites.predictions.application.usecases
 
-import com.ligadospalpites.feature.billing.api.BillingFacade // Dependency on Billing module interface
+import com.ligadospalpites.payments.api.PaymentsFacade // Dependency on Payments module interface
 
 class VisualizarLigaUseCase(
-    private val billingFacade: BillingFacade,
+    private val paymentsFacade: PaymentsFacade,
     private val leagueRepository: LeagueRepository
 ) {
     fun execute(userId: String, leagueId: String): League {
         val league = leagueRepository.buscarPorId(leagueId) 
             ?: throw LeagueNotFoundException(leagueId)
             
-        // Query billing facade (sync query) to check if user has access to this league's sport
-        val canAccess = billingFacade.verifySportAccess(userId, league.sportId)
+        // Query payments facade (sync query) to check if user has access to this league's sport
+        val canAccess = paymentsFacade.verifySportAccess(userId, league.sportId)
         if (!canAccess) {
             throw AccessDeniedException("Seu plano não permite acessar este esporte. Faça um upgrade!")
         }
@@ -177,6 +176,18 @@ When the `sports-feed` module registers a final score from the third-party Sport
   - Firebase Authentication (identity validation via JWT).
   - Firebase Cloud Messaging (push broker integration).
   - Firebase Storage (static media asset delivery).
+
+### 5.1. Multi-Sport Data Strategy Matrix (Free-Tier Resilient APIs)
+To support 6 major sports while maintaining zero-cost infrastructure ([ADR-0002](file:///c:/Users/Vinicius/workspace/ligadospalpites-core/docs/adr/0002-cloud-deployment-free-tier.md)), data providers are integrated via resilient fallback chains:
+
+| Sport | Primary Provider | Fallback / Secondary Provider | ADR Reference |
+| :--- | :--- | :--- | :--- |
+| ⚽ **Football** | `football-data.org` (13 Leagues) | ESPN Public API / Admin Portal | [ADR-0012](file:///c:/Users/Vinicius/workspace/ligadospalpites-core/docs/adr/0012-football-multi-league-data-strategy.md) |
+| 🏀 **Basketball** | `balldontlie.io API` (NBA) | ESPN Public API / EuroLeague JSON / LNB | [ADR-0013](file:///c:/Users/Vinicius/workspace/ligadospalpites-core/docs/adr/0013-basketball-data-strategy.md) |
+| 🎮 **eSports** | `PandaScore API` (CS2, LoL, Valorant) | Riot Games API (Summoner profiles/elo) | [ADR-0014](file:///c:/Users/Vinicius/workspace/ligadospalpites-core/docs/adr/0014-esports-data-strategy.md) |
+| 🏎️ **Motorsport** | `Jolpica Ergast API` (F1 / F2) | Formula E Public API / Stock Car Brasil | [ADR-0015](file:///c:/Users/Vinicius/workspace/ligadospalpites-core/docs/adr/0015-motorsport-data-strategy.md) |
+| 🏈 **American Football** | `ESPN Public API` (`football/nfl`) | NCAA Football Scoreboard | [ADR-0016](file:///c:/Users/Vinicius/workspace/ligadospalpites-core/docs/adr/0016-american-football-data-strategy.md) |
+| 🎾 **Tennis** | `ESPN Public API` (`tennis`) | Grand Slam Scoreboards | [ADR-0017](file:///c:/Users/Vinicius/workspace/ligadospalpites-core/docs/adr/0017-tennis-data-strategy.md) |
 
 ---
 
@@ -398,4 +409,27 @@ When a new season starts for a particular league:
 To support legacy mobile clients (V1) without requiring immediate UI updates, the backend enforces smart defaults:
 - **Implicit Season Resolution**: When a client requests fixtures or standings for a league but does not specify a `seasonId`, the API gateway and controllers resolve the request by querying the database for the unique season of that league where `is_active = true`.
 - **Enriched Client Payloads**: For V2 mobile clients, the Catalog API lists leagues enriched with `currentSeason` objects. These contain display metadata like `displayLabel: "Temporada 2026"`, allowing the Flutter application to dynamically render seasonal headers without complex local logic.
+
+---
+
+## 10. Automated Event-Driven Push Notification Engine
+
+To maintain high user engagement with zero latency, the system incorporates an event-driven notification engine ([ADR-0010](file:///c:/Users/Vinicius/workspace/ligadospalpites-core/docs/adr/0010-notification-dispatching-and-targeting.md) & [ADR-0011](file:///c:/Users/Vinicius/workspace/ligadospalpites-core/docs/adr/0011-automated-event-driven-push-notifications.md)).
+
+```text
+┌─────────────────┐       Match Event        ┌─────────────────────┐
+│   sportsfeed    │ ───────────────────────> │    notifications    │
+└─────────────────┘  (Score, Kickoff, End)   └─────────────────────┘
+                                                        │
+                                                        │ Dispatch Strategy (FCM / In-App)
+                                                        ▼
+                                             ┌─────────────────────┐
+                                             │  tbl_devices / FCM  │
+                                             └─────────────────────┘
+```
+
+### 10.1. Push Dispatch Workflow
+1. **Targeting & Audience Resolution**: Messages can target individual users (`USER`), social groups (`GROUP`), sport followers (`SPORT`), or global broadcast (`BROADCAST`).
+2. **Device Management & Token Pruning**: Device tokens are registered in `tbl_devices`. Inactive or uninstalled app tokens returned as invalid by FCM are automatically purged to keep push delivery performance high.
+3. **Automated Triggers**: Key live events (match kickoff, score change, final result with auto-calculated palpite points) fire asynchronous events that trigger localized FCM push notifications without blocking main sync jobs.
 
