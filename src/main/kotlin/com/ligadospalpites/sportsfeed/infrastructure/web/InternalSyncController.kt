@@ -7,7 +7,10 @@ import java.util.UUID
 
 @RestController
 @RequestMapping("/api/v1/internal")
-class InternalSyncController(private val syncOrchestrator: SyncOrchestrator) {
+class InternalSyncController(
+    private val syncOrchestrator: SyncOrchestrator,
+    private val dispatchDailyAgendaPushUseCase: com.ligadospalpites.notifications.application.usecases.DispatchDailyAgendaPushUseCase? = null
+) {
 
     @PostMapping("/news/sync")
     fun syncNews(@RequestParam sportId: UUID): ResponseEntity<Map<String, String>> {
@@ -42,6 +45,12 @@ class InternalSyncController(private val syncOrchestrator: SyncOrchestrator) {
             "message" to "All active leagues news sync completed",
             "results" to results
         ))
+    }
+
+    @PostMapping("/scheduler/daily-agenda")
+    fun processDailyAgenda(): ResponseEntity<Map<String, String>> {
+        dispatchDailyAgendaPushUseCase?.execute()
+        return ResponseEntity.ok(mapOf("status" to "SUCCESS", "message" to "Daily agenda push processed"))
     }
 }
 

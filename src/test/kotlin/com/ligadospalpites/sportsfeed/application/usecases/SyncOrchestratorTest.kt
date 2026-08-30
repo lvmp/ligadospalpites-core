@@ -21,6 +21,7 @@ class SyncOrchestratorTest {
     private lateinit var leagueSyncService2: LeagueSyncService
     private lateinit var newsApiClient: com.ligadospalpites.sportsfeed.infrastructure.client.NewsApiClient
     private lateinit var redisTemplate: org.springframework.data.redis.core.StringRedisTemplate
+    private lateinit var dispatchDailyAgendaPushUseCase: com.ligadospalpites.notifications.application.usecases.DispatchDailyAgendaPushUseCase
     private lateinit var orchestrator: SyncOrchestrator
 
     private val sportId = UUID.randomUUID()
@@ -35,6 +36,7 @@ class SyncOrchestratorTest {
         leagueSyncService2 = mock(LeagueSyncService::class.java)
         newsApiClient = mock(com.ligadospalpites.sportsfeed.infrastructure.client.NewsApiClient::class.java)
         redisTemplate = mock(org.springframework.data.redis.core.StringRedisTemplate::class.java)
+        dispatchDailyAgendaPushUseCase = mock(com.ligadospalpites.notifications.application.usecases.DispatchDailyAgendaPushUseCase::class.java)
 
         @Suppress("UNCHECKED_CAST")
         val valueOps = mock(org.springframework.data.redis.core.ValueOperations::class.java) as org.springframework.data.redis.core.ValueOperations<String, String>
@@ -45,7 +47,8 @@ class SyncOrchestratorTest {
             leagueRepository = leagueRepository,
             matchRepository = matchRepository,
             newsApiClient = newsApiClient,
-            redisTemplate = redisTemplate
+            redisTemplate = redisTemplate,
+            dispatchDailyAgendaPushUseCase = dispatchDailyAgendaPushUseCase
         )
     }
 
@@ -90,6 +93,7 @@ class SyncOrchestratorTest {
 
         verify(leagueSyncService1).syncMatches(sportId, leagueId1)
         verify(leagueSyncService2).syncMatches(sportId, leagueId2)
+        verify(dispatchDailyAgendaPushUseCase).execute()
         verifyNoInteractions(matchRepository)
     }
 
@@ -132,6 +136,7 @@ class SyncOrchestratorTest {
 
         verify(leagueSyncService1).syncMatches(sportId, leagueId1)
         verify(leagueSyncService2, never()).syncMatches(sportId, leagueId2)
+        verify(dispatchDailyAgendaPushUseCase, never()).execute()
     }
 
     @Test

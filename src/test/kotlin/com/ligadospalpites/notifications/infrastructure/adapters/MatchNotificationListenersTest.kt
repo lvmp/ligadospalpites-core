@@ -5,6 +5,7 @@ import com.ligadospalpites.notifications.domain.models.NotificationChannel
 import com.ligadospalpites.notifications.domain.models.NotificationTarget
 import com.ligadospalpites.predictions.infrastructure.persistence.PredictionJpaEntity
 import com.ligadospalpites.predictions.infrastructure.persistence.SpringDataPredictionRepository
+import com.ligadospalpites.sportsfeed.domain.events.MatchGoalEvent
 import com.ligadospalpites.sportsfeed.domain.events.MatchHalfTimeEvent
 import com.ligadospalpites.sportsfeed.domain.events.MatchStartedEvent
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.LeagueJpaEntity
@@ -140,6 +141,30 @@ class MatchNotificationListenersTest {
             targetId = userId,
             title = "⏸️ INTERVALO: Flamengo 1 x 0 Fluminense",
             content = "Fim do 1º tempo! Fique ligado no seu palpite para a etapa final.",
+            channels = listOf(NotificationChannel.PUSH)
+        )
+    }
+
+    @Test
+    fun `should dispatch goal notification targeting LEAGUE for MatchGoalEvent`() {
+        val event = MatchGoalEvent(
+            matchId = matchId,
+            homeTeamName = "Flamengo",
+            awayTeamName = "Vasco",
+            homeScore = 1,
+            awayScore = 0,
+            scoringTeam = "HOME",
+            sportId = sportId,
+            leagueId = leagueId
+        )
+
+        listener.onMatchGoal(event)
+
+        verify(dispatcherService).dispatch(
+            target = NotificationTarget.LEAGUE,
+            targetId = leagueId,
+            title = "⚽ GOOOL DO Flamengo! (1 x 0)",
+            content = "Placar atualizado: Flamengo 1 x 0 Vasco.",
             channels = listOf(NotificationChannel.PUSH)
         )
     }

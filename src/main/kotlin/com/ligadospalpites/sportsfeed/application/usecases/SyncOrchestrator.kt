@@ -21,7 +21,8 @@ class SyncOrchestrator(
     private val leagueRepository: SpringDataLeagueRepository,
     private val matchRepository: SpringDataMatchRepository,
     private val newsApiClient: com.ligadospalpites.sportsfeed.infrastructure.client.NewsApiClient,
-    private val redisTemplate: org.springframework.data.redis.core.StringRedisTemplate
+    private val redisTemplate: org.springframework.data.redis.core.StringRedisTemplate,
+    private val dispatchDailyAgendaPushUseCase: com.ligadospalpites.notifications.application.usecases.DispatchDailyAgendaPushUseCase? = null
 ) {
     private val logger = LoggerFactory.getLogger(SyncOrchestrator::class.java)
 
@@ -108,6 +109,15 @@ class SyncOrchestrator(
         }
 
         logger.info("Completed sync process for all active leagues. Results: $results")
+
+        if (force) {
+            try {
+                dispatchDailyAgendaPushUseCase?.execute()
+            } catch (e: Exception) {
+                logger.error("Failed to dispatch daily agenda push notification: ${e.message}", e)
+            }
+        }
+
         return results
     }
 
