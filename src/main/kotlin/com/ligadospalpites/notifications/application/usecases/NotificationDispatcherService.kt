@@ -46,7 +46,7 @@ class NotificationDispatcherService(
                     log.error("targetId cannot be null for LEAGUE targeting")
                     return
                 }
-                groupMemberRepository.findUserIdsByGroupId(targetId)
+                (predictionRepository.findUserIdsByLeagueId(targetId) + groupMemberRepository.findUserIdsByGroupId(targetId)).distinct()
             }
             NotificationTarget.SPORT -> {
                 if (targetId == null) {

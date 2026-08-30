@@ -94,8 +94,8 @@ class MatchNotificationListeners(
         val scoringTeamName = if (event.scoringTeam == "HOME") event.homeTeamName else event.awayTeamName
 
         dispatcherService.dispatch(
-            target = NotificationTarget.SPORT,
-            targetId = event.sportId,
+            target = NotificationTarget.LEAGUE,
+            targetId = event.leagueId,
             title = "⚽ GOOOL DO $scoringTeamName! ($scoreText)",
             content = "Placar atualizado: ${event.homeTeamName} ${event.homeScore} x ${event.awayScore} ${event.awayTeamName}.",
             channels = listOf(NotificationChannel.PUSH)

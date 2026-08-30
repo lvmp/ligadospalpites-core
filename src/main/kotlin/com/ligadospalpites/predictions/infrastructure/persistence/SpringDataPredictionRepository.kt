@@ -1,5 +1,6 @@
 package com.ligadospalpites.predictions.infrastructure.persistence
 
+import com.ligadospalpites.sportsfeed.infrastructure.persistence.MatchJpaEntity
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
@@ -20,6 +21,9 @@ interface SpringDataPredictionRepository : JpaRepository<PredictionJpaEntity, UU
         )
     """)
     fun findUserIdsBySportId(@Param("sportId") sportId: UUID): List<UUID>
+
+    @Query("SELECT DISTINCT p.userId FROM PredictionJpaEntity p WHERE p.leagueId = :leagueId")
+    fun findUserIdsByLeagueId(@Param("leagueId") leagueId: UUID): List<UUID>
 
     @Query("SELECT COALESCE(SUM(p.pointsAwarded), 0) FROM PredictionJpaEntity p WHERE p.userId = :userId AND p.leagueId = :leagueId")
     fun sumPointsByUserIdAndLeagueId(@Param("userId") userId: UUID, @Param("leagueId") leagueId: UUID): Int

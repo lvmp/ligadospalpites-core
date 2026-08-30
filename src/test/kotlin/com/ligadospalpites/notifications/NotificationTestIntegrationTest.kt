@@ -168,6 +168,46 @@ class NotificationTestIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `should successfully accept push dispatch for LEAGUE target with sports leagueId prediction`() {
+        val user = userRepository.save(User(UUID.randomUUID(), "firebase-uid-u2-league", "u2-league@test.com", "User Two League"))
+        deviceRepository.save(Device(id = UUID.randomUUID(), userId = user.id, deviceId = UUID.randomUUID(), fcmToken = "token-u2-league", deviceType = "ANDROID"))
+
+        val sportId = UUID.fromString("f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c")
+        val sportsLeagueId = UUID.fromString("e7b0a8f9-4b2e-4b67-8890-a54b3d7c588e")
+        val seasonId = UUID.fromString("50c22998-33b2-4d9a-ba02-4be71a1be992")
+
+        val match = matchRepository.save(MatchJpaEntity(
+            id = UUID.randomUUID(),
+            sportId = sportId,
+            leagueId = sportsLeagueId,
+            seasonId = seasonId
+        ))
+
+        predictionRepository.save(PredictionJpaEntity(
+            id = UUID.randomUUID(),
+            userId = user.id,
+            matchId = match.id,
+            leagueId = sportsLeagueId
+        ))
+
+        val payload = """
+            {
+                "target": "LEAGUE",
+                "targetId": "$sportsLeagueId",
+                "title": "Alerta do Brasileirão",
+                "content": "Novo jogo iniciado!",
+                "channels": ["PUSH"]
+            }
+        """.trimIndent()
+
+        mockMvc.perform(post("/api/v1/notifications/dispatch")
+            .header("X-Admin-Secret", adminSecret)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(payload))
+            .andExpect(status().isAccepted)
+    }
+
+    @Test
     fun `should successfully accept push dispatch for SPORT target`() {
         val user = userRepository.save(User(UUID.randomUUID(), "firebase-uid-u3", "u3@test.com", "User Three"))
         deviceRepository.save(Device(id = UUID.randomUUID(), userId = user.id, deviceId = UUID.randomUUID(), fcmToken = "token-u3", deviceType = "ANDROID"))
