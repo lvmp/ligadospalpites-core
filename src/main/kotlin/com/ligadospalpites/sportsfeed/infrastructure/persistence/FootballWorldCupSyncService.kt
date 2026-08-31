@@ -16,6 +16,7 @@ import org.springframework.context.ApplicationEventPublisher
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Service
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 @Service
@@ -291,12 +292,16 @@ class FootballWorldCupSyncService(
                 }
 
                 // 2. Transições de eventos
-                if (matchMatch.status == MatchStatus.SCHEDULED && (effectiveStatus == MatchStatus.LIVE || effectiveStatus == MatchStatus.HALF_TIME)) {
+                val now = Instant.now()
+                val kickoffWindowStart = now.minus(3, ChronoUnit.HOURS)
+                val isRecentKickoff = inc.kickoffTime.isAfter(kickoffWindowStart)
+
+                if (matchMatch.status == MatchStatus.SCHEDULED && (effectiveStatus == MatchStatus.LIVE || effectiveStatus == MatchStatus.HALF_TIME) && isRecentKickoff) {
                     logger.info("Match started event published for match ${matchMatch.id}: ${inc.homeTeamName} x ${inc.awayTeamName}")
                     eventPublisher.publishEvent(MatchStartedEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, inc.sportId, inc.leagueId))
                 }
 
-                if (matchMatch.status == MatchStatus.LIVE && effectiveStatus == MatchStatus.HALF_TIME) {
+                if (matchMatch.status == MatchStatus.LIVE && effectiveStatus == MatchStatus.HALF_TIME && isRecentKickoff) {
                     logger.info("Match half-time event published for match ${matchMatch.id}: ${inc.homeTeamName} x ${inc.awayTeamName} (${inc.homeScore ?: 0} x ${inc.awayScore ?: 0})")
                     eventPublisher.publishEvent(MatchHalfTimeEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, inc.homeScore ?: 0, inc.awayScore ?: 0, inc.sportId, inc.leagueId))
                 }
@@ -306,12 +311,15 @@ class FootballWorldCupSyncService(
                 val newHome = inc.homeScore ?: 0
                 val newAway = inc.awayScore ?: 0
 
-                if (newHome > oldHome) {
-                    logger.info("Match goal event published (Home team scored) for match ${matchMatch.id}")
-                    eventPublisher.publishEvent(MatchGoalEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, newHome, newAway, "HOME", inc.sportId, inc.leagueId))
-                } else if (newAway > oldAway) {
-                    logger.info("Match goal event published (Away team scored) for match ${matchMatch.id}")
-                    eventPublisher.publishEvent(MatchGoalEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, newHome, newAway, "AWAY", inc.sportId, inc.leagueId))
+                val isLiveMatch = (effectiveStatus == MatchStatus.LIVE || effectiveStatus == MatchStatus.HALF_TIME) && matchMatch.status != MatchStatus.FINISHED
+                if (isLiveMatch && isRecentKickoff) {
+                    if (newHome > oldHome) {
+                        logger.info("Match goal event published (Home team scored) for match ${matchMatch.id}")
+                        eventPublisher.publishEvent(MatchGoalEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, newHome, newAway, "HOME", inc.sportId, inc.leagueId))
+                    } else if (newAway > oldAway) {
+                        logger.info("Match goal event published (Away team scored) for match ${matchMatch.id}")
+                        eventPublisher.publishEvent(MatchGoalEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, newHome, newAway, "AWAY", inc.sportId, inc.leagueId))
+                    }
                 }
 
                 if (matchMatch.status != MatchStatus.FINISHED && effectiveStatus == MatchStatus.FINISHED) {

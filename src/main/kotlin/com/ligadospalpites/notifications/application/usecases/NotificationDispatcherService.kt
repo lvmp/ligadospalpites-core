@@ -76,7 +76,7 @@ class NotificationDispatcherService(
         userDeviceGroups.forEach { (userId, userDevices) ->
             val recipient = RecipientContactInfo(
                 email = null, // Can be extended later if needed
-                activeFcmTokens = userDevices.map { it.fcmToken }
+                activeFcmTokens = userDevices.map { it.fcmToken }.distinct()
             )
 
             val notification = Notification(

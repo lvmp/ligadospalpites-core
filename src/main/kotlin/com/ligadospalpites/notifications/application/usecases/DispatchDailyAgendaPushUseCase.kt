@@ -7,6 +7,8 @@ import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataLeagu
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataMatchRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.data.redis.core.StringRedisTemplate
+import java.time.Duration
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -15,12 +17,25 @@ import java.time.format.DateTimeFormatter
 class DispatchDailyAgendaPushUseCase(
     private val leagueRepository: SpringDataLeagueRepository,
     private val matchRepository: SpringDataMatchRepository,
-    private val dispatcherService: NotificationDispatcherService
+    private val dispatcherService: NotificationDispatcherService,
+    private val redisTemplate: StringRedisTemplate? = null
 ) {
     private val logger = LoggerFactory.getLogger(DispatchDailyAgendaPushUseCase::class.java)
 
     fun execute() {
         logger.info("Executing DispatchDailyAgendaPushUseCase for today's matches.")
+
+        val zoneId = ZoneId.of("America/Sao_Paulo")
+        val today = LocalDate.now(zoneId)
+        val redisKey = "daily_agenda_push:sent:$today"
+
+        if (redisTemplate != null) {
+            val alreadySent = redisTemplate.opsForValue().get(redisKey)
+            if (alreadySent != null) {
+                logger.info("Daily agenda push already dispatched today ($today). Skipping duplicate push.")
+                return
+            }
+        }
 
         val activeLeagues = leagueRepository.findByIsActiveTrue()
         if (activeLeagues.isEmpty()) {
@@ -28,8 +43,6 @@ class DispatchDailyAgendaPushUseCase(
             return
         }
 
-        val zoneId = ZoneId.of("America/Sao_Paulo")
-        val today = LocalDate.now(zoneId)
         val startOfToday = today.atStartOfDay(zoneId).toInstant()
         val endOfToday = today.atTime(23, 59, 59, 999_999_999).atZone(zoneId).toInstant()
 
@@ -79,5 +92,11 @@ class DispatchDailyAgendaPushUseCase(
             content = content,
             channels = listOf(NotificationChannel.PUSH, NotificationChannel.IN_APP)
         )
+
+        try {
+            redisTemplate?.opsForValue()?.set(redisKey, "SENT", Duration.ofHours(24))
+        } catch (e: Exception) {
+            logger.warn("Failed to set redis key $redisKey: ${e.message}")
+        }
     }
 }
