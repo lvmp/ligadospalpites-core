@@ -86,18 +86,22 @@ class DispatchDailyAgendaPushUseCaseTest {
         val contentCaptor = ArgumentCaptor.forClass(String::class.java)
         @Suppress("UNCHECKED_CAST")
         val channelsCaptor = ArgumentCaptor.forClass(List::class.java) as ArgumentCaptor<List<NotificationChannel>>
+        @Suppress("UNCHECKED_CAST")
+        val metadataCaptor = ArgumentCaptor.forClass(Map::class.java) as ArgumentCaptor<Map<String, String>>
 
         verify(dispatcherService).dispatch(
             targetCaptor.capture() ?: NotificationTarget.ALL,
             targetIdCaptor.capture(),
             titleCaptor.capture() ?: "",
             contentCaptor.capture() ?: "",
-            channelsCaptor.capture() ?: emptyList()
+            channelsCaptor.capture() ?: emptyList(),
+            metadataCaptor.capture() ?: emptyMap()
         )
 
         assertEquals(NotificationTarget.ALL, targetCaptor.value)
         assertNull(targetIdCaptor.value)
         assertEquals("📅 AGENDA DO DIA - Liga dos Palpites", titleCaptor.value)
+        assertEquals("daily_agenda", metadataCaptor.value["type"])
         assertTrue(contentCaptor.value.contains("🏆 Brasileirão Série A:"))
         assertTrue(contentCaptor.value.contains("• Flamengo x Palmeiras (16:00)"))
         assertTrue(contentCaptor.value.contains("🏆 Premier League:"))

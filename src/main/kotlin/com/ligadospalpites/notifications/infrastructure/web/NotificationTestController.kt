@@ -62,12 +62,15 @@ class NotificationTestController(
             }
         } ?: listOf(NotificationChannel.PUSH)
 
+        val metadata = request.metadata ?: emptyMap()
+
         dispatcherService.dispatch(
             target = targetEnum,
             targetId = targetUUID,
             title = request.title,
             content = request.content,
-            channels = channels
+            channels = channels,
+            metadata = metadata
         )
 
         return ResponseEntity.accepted().body(
@@ -84,5 +87,6 @@ data class DispatchNotificationRequest(
     val targetId: String?,
     val title: String,
     val content: String,
-    val channels: List<String>? = listOf("PUSH")
+    val channels: List<String>? = listOf("PUSH"),
+    val metadata: Map<String, String>? = null
 )

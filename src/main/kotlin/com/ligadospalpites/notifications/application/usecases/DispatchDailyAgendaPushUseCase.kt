@@ -90,7 +90,8 @@ class DispatchDailyAgendaPushUseCase(
             targetId = null,
             title = title,
             content = content,
-            channels = listOf(NotificationChannel.PUSH, NotificationChannel.IN_APP)
+            channels = listOf(NotificationChannel.PUSH, NotificationChannel.IN_APP),
+            metadata = mapOf("type" to "daily_agenda")
         )
 
         try {

@@ -46,7 +46,11 @@ class MatchNotificationListeners(
                     targetId = prediction.userId,
                     title = "⚽ JOGO INICIADO: ${event.homeTeamName} x ${event.awayTeamName}",
                     content = content,
-                    channels = listOf(NotificationChannel.PUSH)
+                    channels = listOf(NotificationChannel.PUSH),
+                    metadata = mapOf(
+                        "type" to "match_update",
+                        "matchId" to event.matchId.toString()
+                    )
                 )
             } catch (e: Exception) {
                 log.error("Failed to dispatch match started notification to user ${prediction.userId}", e)
@@ -78,7 +82,11 @@ class MatchNotificationListeners(
                     targetId = prediction.userId,
                     title = "⏸️ INTERVALO: ${event.homeTeamName} $scoreText ${event.awayTeamName}",
                     content = "Fim do 1º tempo! Fique ligado no seu palpite para a etapa final.",
-                    channels = listOf(NotificationChannel.PUSH)
+                    channels = listOf(NotificationChannel.PUSH),
+                    metadata = mapOf(
+                        "type" to "match_update",
+                        "matchId" to event.matchId.toString()
+                    )
                 )
             } catch (e: Exception) {
                 log.error("Failed to dispatch match half-time notification to user ${prediction.userId}", e)
@@ -98,7 +106,11 @@ class MatchNotificationListeners(
             targetId = event.leagueId,
             title = "⚽ GOOOL DO $scoringTeamName! ($scoreText)",
             content = "Placar atualizado: ${event.homeTeamName} ${event.homeScore} x ${event.awayScore} ${event.awayTeamName}.",
-            channels = listOf(NotificationChannel.PUSH)
+            channels = listOf(NotificationChannel.PUSH),
+            metadata = mapOf(
+                "type" to "match_update",
+                "matchId" to event.matchId.toString()
+            )
         )
     }
 
@@ -114,7 +126,11 @@ class MatchNotificationListeners(
                     targetId = update.userId,
                     title = "🏁 JOGO ENCERRADO & PONTOS CALCULADOS!",
                     content = "Fim de jogo! Você conquistou ${update.pointsGained} pontos com o seu palpite.",
-                    channels = listOf(NotificationChannel.PUSH)
+                    channels = listOf(NotificationChannel.PUSH),
+                    metadata = mapOf(
+                        "type" to "ranking_update",
+                        "leagueId" to event.leagueId.toString()
+                    )
                 )
             } catch (e: Exception) {
                 log.error("Failed to dispatch prediction points notification to user ${update.userId}", e)

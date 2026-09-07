@@ -18,7 +18,8 @@ class DispatchAdminNotificationUseCase(
         targetIdStr: String?,
         title: String,
         content: String,
-        operatorId: String = "admin-master"
+        operatorId: String = "admin-master",
+        metadata: Map<String, String>? = null
     ): Boolean {
         val target = when (targetStr.uppercase()) {
             "GLOBAL", "ALL" -> NotificationTarget.ALL
@@ -34,12 +35,15 @@ class DispatchAdminNotificationUseCase(
 
         val channels = listOf(NotificationChannel.PUSH, NotificationChannel.IN_APP)
 
+        val finalMetadata = metadata ?: mapOf("type" to "announcement")
+
         notificationDispatcherService.dispatch(
             target = target,
             targetId = targetId,
             title = title,
             content = content,
-            channels = channels
+            channels = channels,
+            metadata = finalMetadata
         )
 
         auditLogRepository.save(

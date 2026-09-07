@@ -19,7 +19,8 @@ data class Notification(
     val id: UUID,
     val recipientUserId: UUID,
     val title: String,
-    val content: String
+    val content: String,
+    val metadata: Map<String, String> = emptyMap()
 )
 
 data class RecipientContactInfo(

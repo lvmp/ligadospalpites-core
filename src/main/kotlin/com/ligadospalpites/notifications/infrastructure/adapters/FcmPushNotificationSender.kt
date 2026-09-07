@@ -16,7 +16,7 @@ data class DeviceTokenExpiredEvent(val fcmToken: String)
 
 @Component
 class FcmPushNotificationSender(
-    private val firebaseMessaging: FirebaseMessaging?, // Autowired optionally
+    private val firebaseMessaging: FirebaseMessaging?,
     private val eventPublisher: ApplicationEventPublisher
 ) : NotificationSender {
 
@@ -25,9 +25,15 @@ class FcmPushNotificationSender(
     override fun supports(channel: NotificationChannel) = channel == NotificationChannel.PUSH
 
     override fun send(notification: Notification, recipient: RecipientContactInfo) {
+        val dataMap = mutableMapOf<String, String>()
+        dataMap.putAll(notification.metadata)
+        if (!dataMap.containsKey("click_action")) {
+            dataMap["click_action"] = "FLUTTER_NOTIFICATION_CLICK"
+        }
+
         recipient.activeFcmTokens.forEach { token ->
             if (firebaseMessaging == null) {
-                log.info("FCM Messaging disabled. Simulating push notification to token '{}': [{}] {}", token, notification.title, notification.content)
+                log.info("FCM Messaging disabled. Simulating push notification to token '{}': [{}] {} Data: {}", token, notification.title, notification.content, dataMap)
                 return@forEach
             }
 
@@ -40,12 +46,13 @@ class FcmPushNotificationSender(
                             .setBody(notification.content)
                             .build()
                     )
+                    .putAllData(dataMap)
                     .build()
                 firebaseMessaging.send(message)
-                log.debug("Push notification successfully sent to token '{}'", token)
+                log.debug("Push notification successfully sent to token '{}' with data {}", token, dataMap)
             } catch (ex: FirebaseMessagingException) {
                 log.warn("Failed to send FCM push to token '{}': {}", token, ex.message)
-                if (ex.messagingErrorCode == MessagingErrorCode.UNREGISTERED || 
+                if (ex.messagingErrorCode == MessagingErrorCode.UNREGISTERED ||
                     ex.messagingErrorCode == MessagingErrorCode.INVALID_ARGUMENT) {
                     log.info("Token '{}' is unregistered/invalid. Publishing expired token event.", token)
                     eventPublisher.publishEvent(DeviceTokenExpiredEvent(token))

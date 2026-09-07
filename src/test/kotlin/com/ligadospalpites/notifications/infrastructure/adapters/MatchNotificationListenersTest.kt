@@ -71,7 +71,8 @@ class MatchNotificationListenersTest {
             targetId = userId,
             title = "⚽ JOGO INICIADO: Flamengo x Palmeiras",
             content = "A bola está rolando pelo Campeonato Brasileiro! Fique ligado no seu palpite.",
-            channels = listOf(NotificationChannel.PUSH)
+            channels = listOf(NotificationChannel.PUSH),
+            metadata = mapOf("type" to "match_update", "matchId" to matchId.toString())
         )
     }
 
@@ -95,7 +96,8 @@ class MatchNotificationListenersTest {
             targetId = userId,
             title = "⚽ JOGO INICIADO: São Paulo x River Plate",
             content = "A bola está rolando pela Copa Libertadores! Fique ligado no seu palpite.",
-            channels = listOf(NotificationChannel.PUSH)
+            channels = listOf(NotificationChannel.PUSH),
+            metadata = mapOf("type" to "match_update", "matchId" to matchId.toString())
         )
     }
 
@@ -118,7 +120,8 @@ class MatchNotificationListenersTest {
             targetId = userId,
             title = "⚽ JOGO INICIADO: Time A x Time B",
             content = "A bola está rolando! Fique ligado no seu palpite.",
-            channels = listOf(NotificationChannel.PUSH)
+            channels = listOf(NotificationChannel.PUSH),
+            metadata = mapOf("type" to "match_update", "matchId" to matchId.toString())
         )
     }
 
@@ -141,7 +144,8 @@ class MatchNotificationListenersTest {
             targetId = userId,
             title = "⏸️ INTERVALO: Flamengo 1 x 0 Fluminense",
             content = "Fim do 1º tempo! Fique ligado no seu palpite para a etapa final.",
-            channels = listOf(NotificationChannel.PUSH)
+            channels = listOf(NotificationChannel.PUSH),
+            metadata = mapOf("type" to "match_update", "matchId" to matchId.toString())
         )
     }
 
@@ -165,7 +169,8 @@ class MatchNotificationListenersTest {
             targetId = leagueId,
             title = "⚽ GOOOL DO Flamengo! (1 x 0)",
             content = "Placar atualizado: Flamengo 1 x 0 Vasco.",
-            channels = listOf(NotificationChannel.PUSH)
+            channels = listOf(NotificationChannel.PUSH),
+            metadata = mapOf("type" to "match_update", "matchId" to matchId.toString())
         )
     }
 }

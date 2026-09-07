@@ -18,7 +18,8 @@ class NotificationDispatcherService(
     private val deviceRepository: DeviceRepository,
     private val predictionRepository: SpringDataPredictionRepository,
     private val groupMemberRepository: SpringDataGroupMemberRepository,
-    private val senders: List<NotificationSender>
+    private val senders: List<NotificationSender>,
+    private val userRepository: com.ligadospalpites.users.infrastructure.persistence.SpringDataUserRepository? = null
 ) {
     private val log = LoggerFactory.getLogger(NotificationDispatcherService::class.java)
 
@@ -28,9 +29,10 @@ class NotificationDispatcherService(
         targetId: UUID?,
         title: String,
         content: String,
-        channels: List<NotificationChannel>
+        channels: List<NotificationChannel>,
+        metadata: Map<String, String> = emptyMap()
     ) {
-        log.info("Starting background notification dispatch. Target: $target, TargetId: $targetId, Channels: $channels")
+        log.info("Starting background notification dispatch. Target: $target, TargetId: $targetId, Channels: $channels, Metadata: $metadata")
 
         // 1. Resolve userIds to notify
         val userIds = when (target) {
@@ -55,7 +57,11 @@ class NotificationDispatcherService(
                 }
                 predictionRepository.findUserIdsBySportId(targetId)
             }
-            NotificationTarget.ALL -> emptyList() // Handled directly via device search
+            NotificationTarget.ALL -> {
+                val dbUsers = userRepository?.findAll()?.map { it.id } ?: emptyList()
+                val deviceUsers = deviceRepository.findAll().map { it.userId }
+                (dbUsers + deviceUsers).distinct()
+            }
         }
 
         // 2. Fetch associated devices/tokens
@@ -65,17 +71,18 @@ class NotificationDispatcherService(
             deviceRepository.findAllByUserIds(userIds)
         }
 
-        if (devices.isEmpty()) {
-            log.warn("No active devices found for target $target ($targetId)")
+        if (userIds.isEmpty() && devices.isEmpty()) {
+            log.warn("No active users/devices found for target $target ($targetId)")
             return
         }
 
-        // Group tokens by userId to send unified notifications
-        val userDeviceGroups = devices.groupBy { it.userId }
+        val devicesByUserId = devices.groupBy { it.userId }
+        val targetUserIds = if (target == NotificationTarget.ALL) userIds else userIds.ifEmpty { devicesByUserId.keys.toList() }
 
-        userDeviceGroups.forEach { (userId, userDevices) ->
+        targetUserIds.forEach { userId ->
+            val userDevices = devicesByUserId[userId] ?: emptyList()
             val recipient = RecipientContactInfo(
-                email = null, // Can be extended later if needed
+                email = null,
                 activeFcmTokens = userDevices.map { it.fcmToken }.distinct()
             )
 
@@ -83,7 +90,8 @@ class NotificationDispatcherService(
                 id = UUID.randomUUID(),
                 recipientUserId = userId,
                 title = title,
-                content = content
+                content = content,
+                metadata = metadata
             )
 
             channels.forEach { channel ->
