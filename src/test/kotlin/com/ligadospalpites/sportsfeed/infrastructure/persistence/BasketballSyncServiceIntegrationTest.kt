@@ -30,6 +30,9 @@ class BasketballSyncServiceIntegrationTest : BaseIntegrationTest() {
     @MockitoBean
     private lateinit var balldontlieClient: BalldontlieClient
 
+    @MockitoBean
+    private lateinit var statsNbaClient: StatsNbaClient
+
     private val nbaLeagueId = UUID.fromString("5c1e3a11-b9db-44ab-ba02-411a0c0bcf14")
     private val nbaSeasonId = UUID.fromString("8a6a4c33-3112-4fb2-a6bc-cd8a0cbf42ef")
 
@@ -38,6 +41,7 @@ class BasketballSyncServiceIntegrationTest : BaseIntegrationTest() {
         matchRepository.deleteAll()
         `when`(balldontlieClient.fetchNbaGames()).thenReturn(emptyList())
         `when`(espnBasketballClient.fetchNbaScoreboard()).thenReturn(emptyList())
+        `when`(statsNbaClient.fetchStandings(anyString())).thenReturn(emptyList())
     }
 
     @Test
@@ -159,5 +163,32 @@ class BasketballSyncServiceIntegrationTest : BaseIntegrationTest() {
         assertEquals(108, saved[0].awayScore)
         verify(balldontlieClient, times(1)).fetchNbaGames()
         verify(espnBasketballClient, never()).fetchNbaScoreboard()
+    }
+
+    @Test
+    fun `should sync NBA standings from StatsNbaClient as primary standings provider`() {
+        val standings = listOf(
+            com.ligadospalpites.sportsfeed.infrastructure.web.StandingRow(
+                position = 1,
+                teamId = UUID.randomUUID(),
+                teamName = "Boston Celtics",
+                played = 82,
+                won = 64,
+                lost = 18,
+                winRate = 0.780,
+                gamesBehind = "-",
+                streak = "W5",
+                groupName = "Eastern Conference"
+            )
+        )
+        `when`(statsNbaClient.fetchStandings(anyString())).thenReturn(standings)
+
+        val result = syncService.syncNbaStandings(nbaLeagueId)
+
+        assertEquals(1, result.size)
+        assertEquals("Boston Celtics", result[0].teamName)
+        assertEquals("Eastern Conference", result[0].groupName)
+        verify(statsNbaClient, times(1)).fetchStandings(anyString())
+        verify(espnBasketballClient, never()).fetchNbaStandings()
     }
 }

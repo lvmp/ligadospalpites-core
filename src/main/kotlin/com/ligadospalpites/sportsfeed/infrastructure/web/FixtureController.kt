@@ -25,7 +25,11 @@ class FixtureController(
     private val entitlementRepository: SpringDataUserEntitlementRepository,
     private val userResolver: UserResolver,
     @org.springframework.beans.factory.annotation.Autowired(required = false) private val espnBasketballClient: com.ligadospalpites.sportsfeed.infrastructure.client.EspnBasketballClient? = null,
-    @org.springframework.beans.factory.annotation.Autowired(required = false) private val footballDataClient: com.ligadospalpites.sportsfeed.infrastructure.client.FootballDataClient? = null
+    @org.springframework.beans.factory.annotation.Autowired(required = false) private val statsNbaClient: com.ligadospalpites.sportsfeed.infrastructure.client.StatsNbaClient? = null,
+    @org.springframework.beans.factory.annotation.Autowired(required = false) private val balldontlieClient: com.ligadospalpites.sportsfeed.infrastructure.client.BalldontlieClient? = null,
+    @org.springframework.beans.factory.annotation.Autowired(required = false) private val redisTemplate: org.springframework.data.redis.core.StringRedisTemplate? = null,
+    @org.springframework.beans.factory.annotation.Autowired(required = false) private val footballDataClient: com.ligadospalpites.sportsfeed.infrastructure.client.FootballDataClient? = null,
+    private val objectMapper: com.fasterxml.jackson.databind.ObjectMapper = com.fasterxml.jackson.databind.ObjectMapper()
 ) {
 
     // 1. Get leagues grouped by sport
@@ -398,10 +402,61 @@ class FixtureController(
         // 1. Basquete (NBA / NBB / EuroLeague)
         if (sportName.contains("basquete") || sportName.contains("nba") || sportName.contains("nbb") || sportName.contains("euroleague")) {
             val isNba = (league?.name ?: "").contains("NBA", ignoreCase = true) || leagueId == UUID.fromString("5c1e3a11-b9db-44ab-ba02-411a0c0bcf14")
-            if (isNba && espnBasketballClient != null) {
-                val officialNbaStandings = espnBasketballClient.fetchNbaStandings()
-                if (officialNbaStandings.isNotEmpty()) {
-                    return ResponseEntity.ok(officialNbaStandings)
+            if (isNba) {
+                val cacheKey = "standings:league:$leagueId"
+                // 1. Tentativa via Redis Cache (< 5ms)
+                val cachedJson = redisTemplate?.opsForValue()?.get(cacheKey)
+                if (!cachedJson.isNullOrBlank()) {
+                    try {
+                        val cachedRows: List<StandingRow> = objectMapper.readValue(
+                            cachedJson,
+                            objectMapper.typeFactory.constructCollectionType(List::class.java, StandingRow::class.java)
+                        )
+                        if (cachedRows.isNotEmpty()) {
+                            return ResponseEntity.ok(cachedRows)
+                        }
+                    } catch (e: Exception) {
+                        // ignore JSON parse error and continue to external providers
+                    }
+                }
+
+                // 2. Provedor Primário: stats.nba.com
+                if (statsNbaClient != null) {
+                    try {
+                        val statsRows = statsNbaClient.fetchStandings()
+                        if (statsRows.isNotEmpty()) {
+                            try {
+                                redisTemplate?.opsForValue()?.set(cacheKey, objectMapper.writeValueAsString(statsRows), java.time.Duration.ofHours(2))
+                            } catch (_: Exception) {}
+                            return ResponseEntity.ok(statsRows)
+                        }
+                    } catch (_: Exception) {}
+                }
+
+                // 3. Fallback 1: ESPN Public API
+                if (espnBasketballClient != null) {
+                    try {
+                        val officialNbaStandings = espnBasketballClient.fetchNbaStandings()
+                        if (officialNbaStandings.isNotEmpty()) {
+                            try {
+                                redisTemplate?.opsForValue()?.set(cacheKey, objectMapper.writeValueAsString(officialNbaStandings), java.time.Duration.ofHours(2))
+                            } catch (_: Exception) {}
+                            return ResponseEntity.ok(officialNbaStandings)
+                        }
+                    } catch (_: Exception) {}
+                }
+
+                // 4. Fallback 2: balldontlie.io API
+                if (balldontlieClient != null) {
+                    try {
+                        val bdlRows = balldontlieClient.fetchStandings()
+                        if (bdlRows.isNotEmpty()) {
+                            try {
+                                redisTemplate?.opsForValue()?.set(cacheKey, objectMapper.writeValueAsString(bdlRows), java.time.Duration.ofHours(2))
+                            } catch (_: Exception) {}
+                            return ResponseEntity.ok(bdlRows)
+                        }
+                    } catch (_: Exception) {}
                 }
             }
 
@@ -412,6 +467,24 @@ class FixtureController(
                     ! (it.phase ?: "").contains("pré-temporada", ignoreCase = true) && 
                     ! (it.phase ?: "").contains("preseason", ignoreCase = true)
                 }
+
+                // NBA Conference Map para cálculo de contingência local
+                val nbaWesternConferenceTeams = setOf(
+                    "dallas mavericks", "denver nuggets", "golden state warriors", "houston rockets",
+                    "los angeles clippers", "los angeles lakers", "memphis grizzlies", "minnesota timberwolves",
+                    "new orleans pelicans", "oklahoma city thunder", "phoenix suns", "portland trail blazers",
+                    "sacramento kings", "san antonio spurs", "utah jazz"
+                )
+
+                fun resolveConference(teamName: String): String {
+                    val norm = teamName.lowercase().trim()
+                    return if (nbaWesternConferenceTeams.any { norm.contains(it) || it.contains(norm) }) {
+                        "Western Conference"
+                    } else {
+                        "Eastern Conference"
+                    }
+                }
+
                 val computedRows = teams.map { teamName ->
                     var played = 0
                     var won = 0
@@ -426,6 +499,7 @@ class FixtureController(
                         }
                     }
                     val winRate = if (played > 0) Math.round((won.toDouble() / played) * 1000.0) / 1000.0 else 0.0
+                    val group = if (isNba) resolveConference(teamName) else null
                     StandingRow(
                         position = 0,
                         teamId = UUID.nameUUIDFromBytes(teamName.toByteArray()),
@@ -435,13 +509,41 @@ class FixtureController(
                         lost = lost,
                         winRate = winRate,
                         gamesBehind = "0.0",
-                        streak = if (won > 0) "W$won" else if (lost > 0) "L$lost" else "-"
+                        streak = if (won > 0) "W$won" else if (lost > 0) "L$lost" else "-",
+                        groupName = group
                     )
-                }.sortedWith(compareByDescending<StandingRow> { it.winRate ?: 0.0 }.thenByDescending { it.won ?: 0 })
+                }
 
-                val leaderWon = computedRows.firstOrNull()?.won ?: 0
-                val leaderLost = computedRows.firstOrNull()?.lost ?: 0
-                val withGb = computedRows.mapIndexed { idx, r ->
+                if (isNba) {
+                    val grouped = computedRows.groupBy { it.groupName }
+                    val conferenceSorted = grouped.flatMap { (_, confRows) ->
+                        val sortedConf = confRows.sortedWith(
+                            compareByDescending<StandingRow> { it.winRate ?: 0.0 }
+                                .thenByDescending { it.won ?: 0 }
+                        )
+                        val leaderWon = sortedConf.firstOrNull()?.won ?: 0
+                        val leaderLost = sortedConf.firstOrNull()?.lost ?: 0
+
+                        sortedConf.mapIndexed { idx, r ->
+                            val gbVal = if (idx == 0) "-" else {
+                                val rWon = r.won ?: 0
+                                val rLost = r.lost ?: 0
+                                val diff = ((leaderWon - rWon) + (rLost - leaderLost)) / 2.0
+                                if (diff <= 0) "0.0" else if (diff % 1.0 == 0.0) "${diff.toInt()}.0" else "$diff"
+                            }
+                            r.copy(position = idx + 1, gamesBehind = gbVal)
+                        }
+                    }
+                    return ResponseEntity.ok(conferenceSorted)
+                }
+
+                val sortedGeneral = computedRows.sortedWith(
+                    compareByDescending<StandingRow> { it.winRate ?: 0.0 }
+                        .thenByDescending { it.won ?: 0 }
+                )
+                val leaderWon = sortedGeneral.firstOrNull()?.won ?: 0
+                val leaderLost = sortedGeneral.firstOrNull()?.lost ?: 0
+                val withGb = sortedGeneral.mapIndexed { idx, r ->
                     val gbVal = if (idx == 0) "-" else {
                         val rWon = r.won ?: 0
                         val rLost = r.lost ?: 0

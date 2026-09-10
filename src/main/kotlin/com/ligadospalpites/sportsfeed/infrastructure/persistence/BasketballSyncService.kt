@@ -7,6 +7,9 @@ import com.ligadospalpites.sportsfeed.domain.events.MatchFinishedEvent
 import com.ligadospalpites.sportsfeed.infrastructure.client.ApiBasketballClient
 import com.ligadospalpites.sportsfeed.infrastructure.client.BalldontlieClient
 import com.ligadospalpites.sportsfeed.infrastructure.client.EspnBasketballClient
+import com.ligadospalpites.sportsfeed.infrastructure.client.StatsNbaClient
+import com.ligadospalpites.sportsfeed.infrastructure.web.StandingRow
+import com.fasterxml.jackson.databind.ObjectMapper
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
 import io.github.resilience4j.retry.annotation.Retry
 import org.slf4j.LoggerFactory
@@ -16,6 +19,7 @@ import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 data class BasketballLeagueMetadata(
     val id: UUID,
@@ -31,10 +35,12 @@ class BasketballSyncService(
     private val apiBasketballClient: ApiBasketballClient,
     @Autowired(required = false) private val espnBasketballClient: EspnBasketballClient? = null,
     @Autowired(required = false) private val balldontlieClient: BalldontlieClient? = null,
+    @Autowired(required = false) private val statsNbaClient: StatsNbaClient? = null,
     private val seasonRepository: SpringDataSeasonRepository,
     private val eventPublisher: ApplicationEventPublisher,
     private val leagueRepository: SpringDataLeagueRepository,
-    @Autowired(required = false) private val redisTemplate: org.springframework.data.redis.core.StringRedisTemplate? = null
+    @Autowired(required = false) private val redisTemplate: org.springframework.data.redis.core.StringRedisTemplate? = null,
+    private val objectMapper: ObjectMapper = ObjectMapper()
 ) : LeagueSyncService {
 
     private val logger = LoggerFactory.getLogger(BasketballSyncService::class.java)
@@ -95,6 +101,75 @@ class BasketballSyncService(
                 performUpsert(leagueId, baseline)
             } else {
                 logger.warn("No games retrieved for league ${metadata.defaultName}. Local database unchanged.")
+            }
+        }
+
+        if (metadata.defaultName.equals("NBA", ignoreCase = true)) {
+            try {
+                syncNbaStandings(leagueId)
+            } catch (e: Exception) {
+                logger.warn("Failed to synchronize NBA standings: ${e.message}")
+            }
+        }
+    }
+
+    fun syncNbaStandings(leagueId: UUID): List<StandingRow> {
+        val cacheKey = "standings:league:$leagueId"
+        logger.info("Starting resilient NBA standings synchronization for league: $leagueId")
+
+        // 1. Provedor Primário: stats.nba.com
+        if (statsNbaClient != null) {
+            try {
+                val statsRows = statsNbaClient.fetchStandings()
+                if (statsRows.isNotEmpty()) {
+                    logger.info("Successfully fetched ${statsRows.size} NBA standings rows from stats.nba.com (Primary)")
+                    cacheStandings(cacheKey, statsRows)
+                    return statsRows
+                }
+            } catch (e: Exception) {
+                logger.warn("stats.nba.com failed for NBA standings: ${e.message}. Trying ESPN fallback...")
+            }
+        }
+
+        // 2. Fallback 1: ESPN Public API
+        if (espnBasketballClient != null) {
+            try {
+                val espnRows = espnBasketballClient.fetchNbaStandings()
+                if (espnRows.isNotEmpty()) {
+                    logger.info("Successfully fetched ${espnRows.size} NBA standings rows from ESPN Public API (Fallback 1)")
+                    cacheStandings(cacheKey, espnRows)
+                    return espnRows
+                }
+            } catch (e: Exception) {
+                logger.warn("ESPN failed for NBA standings: ${e.message}. Trying balldontlie fallback...")
+            }
+        }
+
+        // 3. Fallback 2: balldontlie.io API
+        if (balldontlieClient != null) {
+            try {
+                val bdlRows = balldontlieClient.fetchStandings()
+                if (bdlRows.isNotEmpty()) {
+                    logger.info("Successfully fetched ${bdlRows.size} NBA standings rows from balldontlie.io (Fallback 2)")
+                    cacheStandings(cacheKey, bdlRows)
+                    return bdlRows
+                }
+            } catch (e: Exception) {
+                logger.warn("balldontlie.io failed for NBA standings: ${e.message}")
+            }
+        }
+
+        return emptyList()
+    }
+
+    private fun cacheStandings(key: String, rows: List<StandingRow>) {
+        if (redisTemplate != null) {
+            try {
+                val json = objectMapper.writeValueAsString(rows)
+                redisTemplate.opsForValue().set(key, json, java.time.Duration.ofHours(2))
+                logger.info("Cached ${rows.size} standing rows in Redis with key '$key' (TTL 2h)")
+            } catch (e: Exception) {
+                logger.warn("Failed to cache standings in Redis for key $key: ${e.message}")
             }
         }
     }

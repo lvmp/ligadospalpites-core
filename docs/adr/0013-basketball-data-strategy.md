@@ -12,39 +12,46 @@ O plano gratuito da API-Basketball (API-Sports) bloqueia requisições para a te
 
 ## Decision
 
-Decidimos integrar uma estratégia de dados de basquete 100% livre baseada em 3 pilares:
+Decidimos integrar uma estratégia de dados de basquete 100% livre baseada em arquitetura multi-provedor resiliente e cache no Redis:
 
-1. **NBA (balldontlie.io API v1 [Primário] + ESPN Public API [Fallback])**:
-   - Utilização da **balldontlie.io API** (`/nba/v1/games`) como provedor primário via chave `BALLDONTLIE_API_KEY`, com fallback automático transparente para a **API Pública da ESPN** (`site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard`) em caso de atingo de rate-limit ou indisponibilidade.
-   - Acesso a jogos da temporada atual, datas, status e parciais de pontos.
+1. **NBA Standings / Classificação Oficial (stats.nba.com [Primário] + ESPN [Fallback 1] + balldontlie.io [Fallback 2])**:
+   - **`stats.nba.com` (`leaguestandingsv3`)** como fonte oficial primária para classificação, garantindo 100% de paridade com as regras oficiais de desempate, divisão por conferência (*Eastern* / *Western*), *Games Behind* (GB), sequências e logos oficiais da CDN da NBA (`cdn.nba.com`).
+   - Fallback automático para a **API Pública da ESPN** (`/nba/standings`) e **balldontlie.io** (`/nba/v1/standings`).
+   - Cacheamento obrigatório em **Upstash Redis** (`standings:league:nba`, TTL 2h) para garantir respostas sub-10ms no aplicativo móvel.
 
-2. **WNBA e NCAA (ESPN Public API)**:
+2. **NBA Partidas e Calendário (balldontlie.io + ESPN Public API)**:
+   - Ingestão com parciais por quarto (`periodScoresJson`), status em tempo real e logos HD.
+
+3. **WNBA e NCAA (ESPN Public API)**:
    - Ingestão via API Pública da ESPN com dados ilimitados e logos 500x500 PNG.
 
-3. **EuroLeague e EuroCup (EuroLeague JSON API)**:
+4. **EuroLeague e EuroCup (EuroLeague JSON API)**:
    - Uso de endpoints abertos do portal oficial (`live.euroleague.net/api/Games`).
    - Fornece classificação e jogos de clubes europeus sem custo.
 
-4. **NBB Brasil (LNB Portal JSON / Admin)**:
+5. **NBB Brasil (LNB Portal JSON / Admin)**:
    - Consumo do endpoint JSON do site oficial da LNB ou gestão via Painel Admin/Seed SQL.
 
 ```mermaid
 graph TD
-    A[BasketballSyncService] --> B{Liga}
-    B -->|NBA| C[BalldontlieClient - Primario]
-    C -->|Fallback em Falha/RateLimit| D[EspnBasketballClient - Secundario]
-    D -->|Fallback| E[ApiBasketballClient - Terciario]
-    B -->|WNBA / NCAA| D
-    B -->|EuroLeague| F[EuroLeague Open Client]
-    B -->|NBB Brasil| G[LNB Portal Client / Admin]
+    A[BasketballSyncService / Scheduler] --> B{Tipo de Dado}
+    B -->|Standings NBA| C[StatsNbaClient - Primario]
+    C -->|Fallback em Falha/403| D[EspnBasketballClient - Fallback 1]
+    D -->|Fallback| E[BalldontlieClient - Fallback 2]
+    E -->|Fallback Final| F[Safe Fallback Local por Conferencia]
     
-    C & D & E & F & G --> H[PostgreSQL / Supabase]
-    C & D & E & F & G --> I[Upstash Redis Cache]
+    C & D & E & F --> G[(Upstash Redis: standings:league:nba)]
+    
+    B -->|Partidas / Scoreboard NBA| H[BalldontlieClient / EspnBasketballClient]
+    H --> I[(PostgreSQL / Supabase tbl_matches)]
+    
+    J[App Mobile: GET /api/v1/sports/standings] --> G
 ```
 
 ## Consequences
 
 ### Positive
-* **Resiliência Multi-Provedor**: Se a `balldontlie.io` falhar ou atingir limite no plano gratuito, a `ESPN` assume automaticamente a ingestão de placares da NBA.
-* **Liberdade de Temporada**: Jogos da temporada atual da NBA/WNBA liberados sem custos.
-* **Padronização OpenAPI**: Estrutura tipada seguindo o contrato OpenAPI `nba.yml` da balldontlie.io.
+* **Precisão Oficial Absoluta**: Classificação da NBA segue estritamente os critérios da liga via `stats.nba.com`, sem discrepâncias de desempate.
+* **Resiliência Multi-Provedor**: Três camadas de provedores externos gratuitos com fallback automático e isolamento no Redis.
+* **Alta Performance Mobile**: Requisições de tabela respondidas em < 10ms a partir do cache Redis, protegendo o usuário contra latências de APIs externas.
+* **Liberdade de Temporada**: Dados da temporada atual sem necessidade de planos pagos.

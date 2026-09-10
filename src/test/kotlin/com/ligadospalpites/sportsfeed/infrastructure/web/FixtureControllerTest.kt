@@ -202,4 +202,74 @@ class FixtureControllerTest {
         assertEquals(2, furiaRow?.mapsWon)
         assertEquals(1, furiaRow?.mapsLost)
     }
+
+    @Test
+    fun `should return NBA standings partitioned into Eastern and Western conferences`() {
+        val nbaLeagueId = UUID.fromString("5c1e3a11-b9db-44ab-ba02-411a0c0bcf14")
+        val basketballSportId = UUID.fromString("e5284bf1-d576-4740-97cc-f06bca181cb2")
+        val nbaLeagueEntity = LeagueJpaEntity(
+            id = nbaLeagueId,
+            name = "NBA",
+            sportId = basketballSportId,
+            isActive = true,
+            format = "POINTS"
+        )
+        val basketballSportEntity = SportJpaEntity(id = basketballSportId, name = "Basquete")
+
+        val nbaMatches = listOf(
+            MatchJpaEntity(
+                id = UUID.randomUUID(),
+                sportId = basketballSportId,
+                leagueId = nbaLeagueId,
+                seasonId = UUID.randomUUID(),
+                homeTeamName = "Boston Celtics",
+                awayTeamName = "Miami Heat",
+                kickoffTime = Instant.now(),
+                status = MatchStatus.FINISHED,
+                homeScore = 110,
+                awayScore = 100,
+                phase = "Temporada Regular"
+            ),
+            MatchJpaEntity(
+                id = UUID.randomUUID(),
+                sportId = basketballSportId,
+                leagueId = nbaLeagueId,
+                seasonId = UUID.randomUUID(),
+                homeTeamName = "Los Angeles Lakers",
+                awayTeamName = "Golden State Warriors",
+                kickoffTime = Instant.now(),
+                status = MatchStatus.FINISHED,
+                homeScore = 105,
+                awayScore = 108,
+                phase = "Temporada Regular"
+            )
+        )
+
+        `when`(leagueRepository.findById(nbaLeagueId)).thenReturn(Optional.of(nbaLeagueEntity))
+        `when`(sportRepository.findById(basketballSportId)).thenReturn(Optional.of(basketballSportEntity))
+        `when`(matchRepository.findByLeagueId(nbaLeagueId)).thenReturn(nbaMatches)
+
+        val response = controller.getStandings(nbaLeagueId)
+
+        assertEquals(200, response.statusCode.value())
+        val rows = response.body
+        assertNotNull(rows)
+        assertTrue(rows!!.isNotEmpty())
+
+        val groups = rows.mapNotNull { it.groupName }.distinct()
+        assertTrue(groups.contains("Eastern Conference"), "Should contain Eastern Conference")
+        assertTrue(groups.contains("Western Conference"), "Should contain Western Conference")
+
+        val celtics = rows.find { it.teamName == "Boston Celtics" }
+        assertNotNull(celtics)
+        assertEquals("Eastern Conference", celtics?.groupName)
+        assertEquals(1, celtics?.won)
+        assertEquals(1, celtics?.position)
+
+        val warriors = rows.find { it.teamName == "Golden State Warriors" }
+        assertNotNull(warriors)
+        assertEquals("Western Conference", warriors?.groupName)
+        assertEquals(1, warriors?.won)
+        assertEquals(1, warriors?.position)
+    }
 }
