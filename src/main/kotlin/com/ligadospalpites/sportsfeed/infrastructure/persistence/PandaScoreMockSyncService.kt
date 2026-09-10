@@ -21,7 +21,10 @@ class PandaScoreMockSyncService(
         UUID.fromString("7c1e3a11-b9db-44ab-ba02-411a0c0bcf14"), // CBLOL
         UUID.fromString("8c1e3a11-b9db-44ab-ba02-411a0c0bcf14"), // VCT Americas
         UUID.fromString("9c1e3a11-b9db-44ab-ba02-411a0c0bcf14"), // CS2 Major
-        UUID.fromString("ac1e3a11-b9db-44ab-ba02-411a0c0bcf14")  // Worlds
+        UUID.fromString("ac1e3a11-b9db-44ab-ba02-411a0c0bcf14"), // Worlds
+        UUID.fromString("bc1e3a11-b9db-44ab-ba02-411a0c0bcf14"), // CS2 ESL Pro League
+        UUID.fromString("cc1e3a11-b9db-44ab-ba02-411a0c0bcf14"), // CS2 BLAST Premier
+        UUID.fromString("dc1e3a11-b9db-44ab-ba02-411a0c0bcf14")  // Valorant VCT Champions
     )
 
     override fun supports(sportId: UUID, leagueId: UUID): Boolean {

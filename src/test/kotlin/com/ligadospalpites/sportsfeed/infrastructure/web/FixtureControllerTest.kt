@@ -199,6 +199,9 @@ class FixtureControllerTest {
         assertNotNull(furiaRow)
         assertEquals(1, furiaRow?.seriesWon)
         assertEquals(0, furiaRow?.seriesLost)
+        assertEquals(1, furiaRow?.played)
+        assertEquals(1.0, furiaRow?.winRate)
+        assertEquals("W1", furiaRow?.streak)
         assertEquals(2, furiaRow?.mapsWon)
         assertEquals(1, furiaRow?.mapsLost)
     }
@@ -271,5 +274,31 @@ class FixtureControllerTest {
         assertEquals("Western Conference", warriors?.groupName)
         assertEquals(1, warriors?.won)
         assertEquals(1, warriors?.position)
+    }
+
+    @Test
+    fun `should return eSports standings fallback for new leagues ESL Pro League and BLAST Premier`() {
+        val eslLeagueId = UUID.fromString("bc1e3a11-b9db-44ab-ba02-411a0c0bcf14")
+        val esportsSportId = UUID.fromString("9b1e3a11-b9db-44ab-ba02-411a0c0bcf14")
+        val eslLeagueEntity = LeagueJpaEntity(
+            id = eslLeagueId,
+            name = "Counter-Strike 2 - ESL Pro League",
+            sportId = esportsSportId,
+            isActive = true,
+            format = "POINTS"
+        )
+        val esportsSportEntity = SportJpaEntity(id = esportsSportId, name = "eSports")
+
+        `when`(leagueRepository.findById(eslLeagueId)).thenReturn(Optional.of(eslLeagueEntity))
+        `when`(sportRepository.findById(esportsSportId)).thenReturn(Optional.of(esportsSportEntity))
+        `when`(matchRepository.findByLeagueId(eslLeagueId)).thenReturn(emptyList())
+
+        val response = controller.getStandings(eslLeagueId)
+        assertEquals(200, response.statusCode.value())
+        val rows = response.body
+        assertNotNull(rows)
+        val teamNames = rows!!.map { it.teamName }
+        assertTrue(teamNames.contains("MOUZ"), "ESL Pro League standings must contain MOUZ")
+        assertTrue(teamNames.contains("Eternal Fire"), "ESL Pro League standings must contain Eternal Fire")
     }
 }

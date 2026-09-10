@@ -52,7 +52,38 @@ class PandaScoreClient(
             emptyList()
         }
     }
+
+    fun fetchStandings(tournamentSlugOrId: String): List<PandaScoreStandingResponse> {
+        if (apiToken.isBlank()) {
+            logger.warn("PandaScore API token is empty. Skipping standings API call.")
+            return emptyList()
+        }
+
+        return try {
+            val uri = "/tournaments/$tournamentSlugOrId/standings"
+            logger.info("Fetching tournament standings from PandaScore: $uri")
+            val response = restClient.get()
+                .uri(uri)
+                .retrieve()
+                .body(Array<PandaScoreStandingResponse>::class.java)
+
+            response?.toList() ?: emptyList()
+        } catch (e: Exception) {
+            logger.error("Error communicating with PandaScore Standings API: ${e.message}", e)
+            emptyList()
+        }
+    }
 }
+
+data class PandaScoreStandingResponse(
+    val rank: Int,
+    val team: PandaScoreTeam,
+    val wins: Int? = 0,
+    val losses: Int? = 0,
+    val ties: Int? = 0,
+    val points: Int? = null,
+    val matches_played: Int? = 0
+)
 
 data class PandaScoreMatchResponse(
     val id: Long,

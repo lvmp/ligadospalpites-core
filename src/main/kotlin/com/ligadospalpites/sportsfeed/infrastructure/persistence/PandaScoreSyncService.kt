@@ -65,6 +65,24 @@ class PandaScoreSyncService(
             defaultName = "League of Legends - Worlds",
             pandaScoreSlug = "league-of-legends-world-championship",
             logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/league-of-legends.png"
+        ),
+        UUID.fromString("bc1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
+            id = UUID.fromString("bc1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
+            defaultName = "Counter-Strike 2 - ESL Pro League",
+            pandaScoreSlug = "cs-go-esl-pro-league",
+            logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/csgo.png"
+        ),
+        UUID.fromString("cc1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
+            id = UUID.fromString("cc1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
+            defaultName = "Counter-Strike 2 - BLAST Premier",
+            pandaScoreSlug = "cs-go-blast-premier",
+            logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/csgo.png"
+        ),
+        UUID.fromString("dc1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
+            id = UUID.fromString("dc1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
+            defaultName = "Valorant - VCT Champions",
+            pandaScoreSlug = "vct-champions",
+            logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/valorant.png"
         )
     )
 
@@ -155,11 +173,29 @@ class PandaScoreSyncService(
                 Tuple4("Kabum!", "Vivo Keyd", null to null, 3),
                 Tuple4("Fluxo", "INTZ", null to null, 1)
             )
+            metadata.defaultName.contains("VCT Champions") || metadata.defaultName.contains("Champions") -> listOf(
+                Tuple4("Sentinels", "Fnatic", 2 to 1, 3),
+                Tuple4("Paper Rex", "Team Heretics", 2 to 0, 3),
+                Tuple4("EDward Gaming", "Leviatán", null to null, 3),
+                Tuple4("LOUD", "DRX", null to null, 3)
+            )
             metadata.defaultName.contains("VCT") -> listOf(
                 Tuple4("LOUD", "Sentinels", 2 to 0, 3),
                 Tuple4("NRG", "100 Thieves", 1 to 2, 3),
                 Tuple4("Cloud9", "KRÜ Esports", null to null, 3),
                 Tuple4("Leviatán", "FURIA", null to null, 3)
+            )
+            metadata.defaultName.contains("ESL Pro League") -> listOf(
+                Tuple4("MOUZ", "Eternal Fire", 2 to 1, 3),
+                Tuple4("Natus Vincere", "G2 Esports", 2 to 0, 3),
+                Tuple4("FURIA", "Team Liquid", null to null, 3),
+                Tuple4("Vitality", "FaZe Clan", null to null, 3)
+            )
+            metadata.defaultName.contains("BLAST Premier") -> listOf(
+                Tuple4("Team Spirit", "Natus Vincere", 2 to 1, 3),
+                Tuple4("FaZe Clan", "Astralis", 2 to 0, 3),
+                Tuple4("G2 Esports", "Virtus.pro", null to null, 3),
+                Tuple4("Vitality", "Heroic", null to null, 3)
             )
             metadata.defaultName.contains("CS2") || metadata.defaultName.contains("Major") -> listOf(
                 Tuple4("FURIA", "Natus Vincere", 1 to 2, 3),
@@ -213,8 +249,11 @@ class PandaScoreSyncService(
 
         val toSave = incoming.map { inc ->
             val matchMatch = existing.find { ext ->
-                ext.homeTeamName.lowercase() == inc.homeTeamName.lowercase() &&
-                ext.awayTeamName.lowercase() == inc.awayTeamName.lowercase()
+                val sameTeams = ext.homeTeamName.equals(inc.homeTeamName, ignoreCase = true) &&
+                                ext.awayTeamName.equals(inc.awayTeamName, ignoreCase = true)
+                if (!sameTeams) return@find false
+                // Se a diferença de kickoff for inferior a 48h, consideramos o mesmo jogo
+                java.time.Duration.between(ext.kickoffTime, inc.kickoffTime).abs().toHours() < 48
             }
 
             if (matchMatch != null) {
