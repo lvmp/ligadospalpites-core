@@ -1,5 +1,6 @@
 package com.ligadospalpites.sportsfeed.infrastructure.client
 
+import java.time.Instant
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.client.SimpleClientHttpRequestFactory
@@ -27,17 +28,31 @@ class PandaScoreClient(
         builder.build()
     }
 
-    fun fetchMatches(leagueSlug: String? = null, page: Int = 1, size: Int = 50): List<PandaScoreMatchResponse> {
+    fun fetchMatches(
+        leagueSlug: String? = null,
+        startDate: Instant? = null,
+        endDate: Instant? = null,
+        page: Int = 1,
+        size: Int = 50
+    ): List<PandaScoreMatchResponse> {
         if (apiToken.isBlank()) {
             logger.warn("PandaScore API token is empty. Skipping external API call.")
             return emptyList()
         }
 
         return try {
-            val uri = if (!leagueSlug.isNullOrBlank()) {
-                "/leagues/$leagueSlug/matches?page[number]=$page&page[size]=$size&sort=-begin_at"
+            val rangeFilter = if (startDate != null && endDate != null) {
+                "&range[begin_at]=$startDate,$endDate"
+            } else if (startDate != null) {
+                "&range[begin_at]=$startDate,${startDate.plus(365, java.time.temporal.ChronoUnit.DAYS)}"
             } else {
-                "/matches?page[number]=$page&page[size]=$size&sort=-begin_at"
+                ""
+            }
+
+            val uri = if (!leagueSlug.isNullOrBlank()) {
+                "/leagues/$leagueSlug/matches?page[number]=$page&page[size]=$size&sort=-begin_at$rangeFilter"
+            } else {
+                "/matches?page[number]=$page&page[size]=$size&sort=-begin_at$rangeFilter"
             }
 
             logger.info("Fetching eSports matches from PandaScore: $uri")

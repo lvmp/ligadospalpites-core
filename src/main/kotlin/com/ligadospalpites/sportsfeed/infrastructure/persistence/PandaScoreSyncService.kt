@@ -14,6 +14,8 @@ import org.springframework.context.ApplicationEventPublisher
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Service
 import java.time.Instant
+import java.time.temporal.ChronoUnit
+import java.time.Duration
 import java.util.UUID
 
 data class EsportsLeagueMetadata(
@@ -105,11 +107,24 @@ class PandaScoreSyncService(
         val activeSeason = seasonRepository.findByLeagueIdAndIsActiveTrue(leagueId)
         val targetSeasonId = activeSeason?.id ?: throw IllegalStateException("No active season found for eSports league: $leagueId")
 
-        val externalGames = pandaScoreClient.fetchMatches(leagueSlug = metadata.pandaScoreSlug)
+        val externalGames = pandaScoreClient.fetchMatches(
+            leagueSlug = metadata.pandaScoreSlug,
+            startDate = activeSeason.startDate,
+            endDate = activeSeason.endDate
+        )
         return externalGames.mapNotNull { game ->
             if (game.opponents.size < 2) return@mapNotNull null
             val homeOpponent = game.opponents[0].opponent ?: return@mapNotNull null
             val awayOpponent = game.opponents[1].opponent ?: return@mapNotNull null
+
+            val kickoff = parseIsoInstant(game.begin_at)
+            val isWithinSeason = !kickoff.isBefore(activeSeason.startDate.minus(7, ChronoUnit.DAYS)) &&
+                    !kickoff.isAfter(activeSeason.endDate.plus(7, ChronoUnit.DAYS))
+
+            if (!isWithinSeason) {
+                logger.warn("Ignoring PandaScore match outside active season range ($kickoff): ${game.name ?: "${homeOpponent.name} vs ${awayOpponent.name}"}")
+                return@mapNotNull null
+            }
 
             val homeScore = game.results.find { it.team_id == homeOpponent.id }?.score
             val awayScore = game.results.find { it.team_id == awayOpponent.id }?.score
@@ -126,7 +141,7 @@ class PandaScoreSyncService(
                 awayTeamName = awayOpponent.name,
                 homeTeamLogoUrl = homeOpponent.image_url,
                 awayTeamLogoUrl = awayOpponent.image_url,
-                kickoffTime = parseIsoInstant(game.begin_at),
+                kickoffTime = kickoff,
                 status = mapPandaScoreStatus(game.status),
                 homeScore = homeScore,
                 awayScore = awayScore,
@@ -213,17 +228,28 @@ class PandaScoreSyncService(
 
         val toSave = incoming.map { inc ->
             val matchMatch = existing.find { ext ->
-                ext.homeTeamName.lowercase() == inc.homeTeamName.lowercase() &&
-                ext.awayTeamName.lowercase() == inc.awayTeamName.lowercase()
+                ext.homeTeamName.equals(inc.homeTeamName, ignoreCase = true) &&
+                ext.awayTeamName.equals(inc.awayTeamName, ignoreCase = true) &&
+                Duration.between(ext.kickoffTime, inc.kickoffTime).abs().toHours() < 72
+            } ?: existing.find { ext ->
+                ext.homeTeamName.equals(inc.homeTeamName, ignoreCase = true) &&
+                ext.awayTeamName.equals(inc.awayTeamName, ignoreCase = true)
             }
 
             if (matchMatch != null) {
-                if (matchMatch.status == MatchStatus.SCHEDULED && inc.status == MatchStatus.LIVE) {
+                val effectiveStatus = if ((matchMatch.status == MatchStatus.LIVE || matchMatch.status == MatchStatus.FINISHED) && inc.status == MatchStatus.SCHEDULED) {
+                    logger.warn("eSports match ${matchMatch.id} status regression prevented: keeping ${matchMatch.status} instead of reverting to SCHEDULED")
+                    matchMatch.status
+                } else {
+                    inc.status
+                }
+
+                if (matchMatch.status == MatchStatus.SCHEDULED && (effectiveStatus == MatchStatus.LIVE)) {
                     logger.info("eSports match started event published: ${matchMatch.id} (${inc.homeTeamName} x ${inc.awayTeamName})")
                     eventPublisher.publishEvent(MatchStartedEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, inc.sportId, inc.leagueId))
                 }
 
-                if (matchMatch.status != MatchStatus.FINISHED && inc.status == MatchStatus.FINISHED) {
+                if (matchMatch.status != MatchStatus.FINISHED && effectiveStatus == MatchStatus.FINISHED) {
                     logger.info("eSports match finished event published: ${matchMatch.id} (${inc.homeTeamName} x ${inc.awayTeamName})")
                     eventPublisher.publishEvent(MatchFinishedEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, inc.homeScore ?: 0, inc.awayScore ?: 0, inc.sportId, inc.leagueId))
                 }
@@ -238,7 +264,7 @@ class PandaScoreSyncService(
                     homeTeamLogoUrl = inc.homeTeamLogoUrl ?: matchMatch.homeTeamLogoUrl,
                     awayTeamLogoUrl = inc.awayTeamLogoUrl ?: matchMatch.awayTeamLogoUrl,
                     kickoffTime = inc.kickoffTime,
-                    status = inc.status,
+                    status = effectiveStatus,
                     homeScore = inc.homeScore,
                     awayScore = inc.awayScore,
                     phase = inc.phase,
