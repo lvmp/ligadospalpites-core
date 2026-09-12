@@ -277,6 +277,65 @@ class FixtureControllerTest {
     }
 
     @Test
+    fun `should return 403 Forbidden when user is not premium on timeline endpoint`() {
+        val matchId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val useCase = mock(com.ligadospalpites.sportsfeed.application.usecases.GetMatchTimelineUseCase::class.java)
+        `when`(userResolver.resolveByUidOrUuid("non-premium")).thenReturn(userId)
+        `when`(useCase.execute(matchId, userId)).thenThrow(org.springframework.security.access.AccessDeniedException("PREMIUM_REQUIRED"))
+
+        val testController = FixtureController(
+            sportRepository = sportRepository,
+            leagueRepository = leagueRepository,
+            matchRepository = matchRepository,
+            seasonRepository = seasonRepository,
+            entitlementRepository = entitlementRepository,
+            userResolver = userResolver,
+            getMatchTimelineUseCase = useCase
+        )
+
+        val response = testController.getMatchTimeline(matchId, "non-premium")
+        assertEquals(org.springframework.http.HttpStatus.FORBIDDEN, response.statusCode)
+        val body = response.body as Map<*, *>
+        assertEquals("PREMIUM_REQUIRED", body["error"])
+    }
+
+    @Test
+    fun `should return 200 OK with timeline events when user is premium`() {
+        val matchId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        val useCase = mock(com.ligadospalpites.sportsfeed.application.usecases.GetMatchTimelineUseCase::class.java)
+        `when`(userResolver.resolveByUidOrUuid("premium-user")).thenReturn(userId)
+
+        val sampleEvent = com.ligadospalpites.sportsfeed.domain.models.MatchTimelineEvent(
+            matchId = matchId,
+            minute = 10,
+            eventType = com.ligadospalpites.sportsfeed.domain.models.TimelineEventType.GOAL,
+            description = "Golaço do Mengão!"
+        )
+        `when`(useCase.execute(matchId, userId)).thenReturn(listOf(sampleEvent))
+
+        val testController = FixtureController(
+            sportRepository = sportRepository,
+            leagueRepository = leagueRepository,
+            matchRepository = matchRepository,
+            seasonRepository = seasonRepository,
+            entitlementRepository = entitlementRepository,
+            userResolver = userResolver,
+            getMatchTimelineUseCase = useCase
+        )
+
+        val response = testController.getMatchTimeline(matchId, "premium-user")
+        assertEquals(org.springframework.http.HttpStatus.OK, response.statusCode)
+        val body = response.body as List<*>
+        assertEquals(1, body.size)
+        val eventRes = body[0] as MatchTimelineEventResponse
+        assertEquals(10, eventRes.minute)
+        assertEquals("GOAL", eventRes.eventType)
+        assertEquals("Golaço do Mengão!", eventRes.description)
+    }
+
+    @Test
     fun `should return eSports standings fallback for new leagues ESL Pro League and BLAST Premier`() {
         val eslLeagueId = UUID.fromString("bc1e3a11-b9db-44ab-ba02-411a0c0bcf14")
         val esportsSportId = UUID.fromString("9b1e3a11-b9db-44ab-ba02-411a0c0bcf14")

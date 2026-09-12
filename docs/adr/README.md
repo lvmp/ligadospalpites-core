@@ -27,6 +27,7 @@ Antes de propor alterações de banco de dados, infraestrutura ou padrões de c�
 | **[ADR-0015: Motorsport (F1, F2, FE, Stock Car) Data Strategy](0015-motorsport-data-strategy.md)** | `Accepted` | Estratégia para Automobilismo via Jolpica Ergast API (F1/F2), Formula E API e Stock Car Pro Series Brasil. |
 | **[ADR-0016: American Football (NFL & College) Data Strategy](0016-american-football-data-strategy.md)** | `Accepted` | Estratégia para Futebol Americano (NFL e College) via ESPN Public API com parciais por quarto e escudos HD. |
 | **[ADR-0017: Tennis (ATP, WTA & Grand Slams) Data Strategy](0017-tennis-data-strategy.md)** | `Accepted` | Estratégia para Tênis (ATP, WTA e Grand Slams) via ESPN Public API com acompanhamento parcial de sets. |
+| **[ADR-0018: Live Match Timeline & Commentary (Minuto a Minuto)](0018-live-match-timeline-and-commentary.md)** | `Accepted` | Estratégia de custo zero com ESPN Public API, paywall para assinantes, buffer Redis (20-30s) e persistência definitiva pós-jogo. |
 
 ---
 

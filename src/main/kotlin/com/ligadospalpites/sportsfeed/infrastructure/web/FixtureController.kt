@@ -30,6 +30,7 @@ class FixtureController(
     @org.springframework.beans.factory.annotation.Autowired(required = false) private val redisTemplate: org.springframework.data.redis.core.StringRedisTemplate? = null,
     @org.springframework.beans.factory.annotation.Autowired(required = false) private val footballDataClient: com.ligadospalpites.sportsfeed.infrastructure.client.FootballDataClient? = null,
     @org.springframework.beans.factory.annotation.Autowired(required = false) private val pandaScoreClient: com.ligadospalpites.sportsfeed.infrastructure.client.PandaScoreClient? = null,
+    @org.springframework.beans.factory.annotation.Autowired(required = false) private val getMatchTimelineUseCase: com.ligadospalpites.sportsfeed.application.usecases.GetMatchTimelineUseCase? = null,
     private val objectMapper: com.fasterxml.jackson.databind.ObjectMapper = com.fasterxml.jackson.databind.ObjectMapper()
 ) {
 
@@ -137,6 +138,54 @@ class FixtureController(
         }.map { MatchResponse.fromEntity(it) }
 
         return ResponseEntity.ok(filtered)
+    }
+
+    // 2.1 Get Match Timeline / Commentary (Minuto a Minuto - Exclusivo para Assinantes)
+    @SecurityRequirement(name = "bearerAuth")
+    @SecurityRequirement(name = "X-User-Id")
+    @GetMapping("/matches/{matchId}/timeline")
+    fun getMatchTimeline(
+        @PathVariable matchId: UUID,
+        @RequestHeader(value = "X-User-Id", required = false) userIdHeader: String?
+    ): ResponseEntity<Any> {
+        val userUUID = userResolver.resolveByUidOrUuid(userIdHeader)
+        if (getMatchTimelineUseCase == null) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(mapOf("error" to "SERVICE_UNAVAILABLE", "message" to "Serviço de minuto a minuto temporariamente indisponível."))
+        }
+
+        return try {
+            val events = getMatchTimelineUseCase.execute(matchId, userUUID)
+            val response = events.map { ev ->
+                MatchTimelineEventResponse(
+                    id = ev.id,
+                    matchId = ev.matchId,
+                    minute = ev.minute,
+                    extraMinute = ev.extraMinute,
+                    displayMinute = ev.displayMinute,
+                    period = ev.period,
+                    eventType = ev.eventType.name,
+                    teamName = ev.teamName,
+                    playerName = ev.playerName,
+                    playerAssistName = ev.playerAssistName,
+                    description = ev.description,
+                    isImportant = ev.isImportant,
+                    createdAt = ev.createdAt
+                )
+            }
+            ResponseEntity.ok(response)
+        } catch (e: org.springframework.security.access.AccessDeniedException) {
+            ResponseEntity.status(HttpStatus.FORBIDDEN).body(
+                mapOf(
+                    "error" to "PREMIUM_REQUIRED",
+                    "message" to "O acompanhamento minuto a minuto é exclusivo para assinantes Premium ou assinantes deste esporte."
+                )
+            )
+        } catch (e: IllegalArgumentException) {
+            ResponseEntity.status(HttpStatus.NOT_FOUND).body(
+                mapOf("error" to "MATCH_NOT_FOUND", "message" to (e.message ?: "Partida não encontrada."))
+            )
+        }
     }
 
     // 3. Standings (Tabela) for Group Stage / Points Corridos
@@ -1027,4 +1076,20 @@ data class StandingRow(
 data class BracketResponse(
     val leagueId: UUID,
     val phases: Map<String, List<MatchResponse>>
+)
+
+data class MatchTimelineEventResponse(
+    val id: UUID,
+    val matchId: UUID,
+    val minute: Int,
+    val extraMinute: Int?,
+    val displayMinute: String,
+    val period: String,
+    val eventType: String,
+    val teamName: String?,
+    val playerName: String?,
+    val playerAssistName: String?,
+    val description: String,
+    val isImportant: Boolean,
+    val createdAt: java.time.Instant
 )

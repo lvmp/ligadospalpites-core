@@ -50,6 +50,19 @@ class EspnSoccerClient(
     fun fetchCopaDoBrasilMatches(seasonYear: Int = 2026): List<EspnSoccerEvent> {
         return fetchSoccerMatches("bra.copa_do_brazil", seasonYear)
     }
+
+    fun fetchMatchSummary(leagueCode: String, eventId: String): EspnMatchSummaryResponse? {
+        logger.info("Fetching match summary from ESPN Soccer API for league $leagueCode, event $eventId")
+        return try {
+            restClient.get()
+                .uri("/apis/site/v2/sports/soccer/$leagueCode/summary?event=$eventId")
+                .retrieve()
+                .body(EspnMatchSummaryResponse::class.java)
+        } catch (e: Exception) {
+            logger.warn("Could not fetch match summary from ESPN for event $eventId (${e.message})")
+            null
+        }
+    }
 }
 
 data class EspnSoccerResponse(
@@ -106,4 +119,58 @@ data class EspnSoccerTeam(
     val displayName: String? = null,
     val shortDisplayName: String? = null,
     val logo: String? = null
+)
+
+data class EspnMatchSummaryResponse(
+    val header: EspnSummaryHeader? = null,
+    val keyEvents: List<EspnKeyEvent> = emptyList(),
+    val commentary: List<EspnCommentaryItem> = emptyList()
+)
+
+data class EspnSummaryHeader(
+    val id: String? = null,
+    val season: EspnSummarySeason? = null,
+    val competitions: List<EspnSoccerCompetition> = emptyList()
+)
+
+data class EspnSummarySeason(
+    val year: Int? = null,
+    val type: Int? = null
+)
+
+data class EspnKeyEvent(
+    val id: String? = null,
+    val type: EspnKeyEventType? = null,
+    val text: String? = null,
+    val clock: EspnClock? = null,
+    val team: EspnSoccerTeam? = null,
+    val participants: List<EspnParticipant> = emptyList()
+)
+
+data class EspnKeyEventType(
+    val id: String? = null,
+    val text: String? = null
+)
+
+data class EspnClock(
+    val value: Double? = null,
+    val displayValue: String? = null
+)
+
+data class EspnParticipant(
+    val athlete: EspnAthlete? = null,
+    val type: String? = null
+)
+
+data class EspnAthlete(
+    val id: String? = null,
+    val displayName: String? = null,
+    val shortName: String? = null
+)
+
+data class EspnCommentaryItem(
+    val id: String? = null,
+    val text: String? = null,
+    val time: EspnClock? = null,
+    val play: Boolean = false
 )
