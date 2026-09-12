@@ -600,6 +600,83 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `should return live and half-time matches with current scores and prioritize over scheduled matches`() {
+        val liveMatchId = UUID.randomUUID()
+        val halfTimeMatchId = UUID.randomUUID()
+        val scheduledMatchId = UUID.randomUUID()
+
+        // 1. Partida em andamento (LIVE)
+        matchRepository.save(
+            MatchJpaEntity(
+                id = liveMatchId,
+                sportId = footballId,
+                leagueId = worldCupLeagueId,
+                seasonId = testSeasonId,
+                homeTeamName = "Brasil",
+                awayTeamName = "Argentina",
+                kickoffTime = Instant.now().minus(30, ChronoUnit.MINUTES),
+                status = MatchStatus.LIVE,
+                homeScore = 2,
+                awayScore = 1,
+                phase = "Final"
+            )
+        )
+
+        // 2. Partida no intervalo (HALF_TIME)
+        matchRepository.save(
+            MatchJpaEntity(
+                id = halfTimeMatchId,
+                sportId = footballId,
+                leagueId = worldCupLeagueId,
+                seasonId = testSeasonId,
+                homeTeamName = "França",
+                awayTeamName = "Inglaterra",
+                kickoffTime = Instant.now().minus(50, ChronoUnit.MINUTES),
+                status = MatchStatus.HALF_TIME,
+                homeScore = 0,
+                awayScore = 0,
+                phase = "Semifinal"
+            )
+        )
+
+        // 3. Partida agendada futura (SCHEDULED)
+        matchRepository.save(
+            MatchJpaEntity(
+                id = scheduledMatchId,
+                sportId = footballId,
+                leagueId = worldCupLeagueId,
+                seasonId = testSeasonId,
+                homeTeamName = "Espanha",
+                awayTeamName = "Portugal",
+                kickoffTime = Instant.now().plus(2, ChronoUnit.HOURS),
+                status = MatchStatus.SCHEDULED,
+                homeScore = null,
+                awayScore = null,
+                phase = "Oitavas"
+            )
+        )
+
+        val mvcResult = mockMvc.perform(get("/api/v1/home/dashboard")
+            .header("X-User-Id", testUserId.toString()))
+            .andExpect(request().asyncStarted())
+            .andReturn()
+
+        mockMvc.perform(asyncDispatch(mvcResult))
+            .andExpect(status().isOk)
+            // As duas partidas ao vivo/intervalo devem vir primeiro que a partida SCHEDULED
+            .andExpect(jsonPath("$.nextMatches[?(@.matchId == '${liveMatchId.toString()}')].status", hasItem("LIVE")))
+            .andExpect(jsonPath("$.nextMatches[?(@.matchId == '${liveMatchId.toString()}')].homeScore", hasItem(2)))
+            .andExpect(jsonPath("$.nextMatches[?(@.matchId == '${liveMatchId.toString()}')].awayScore", hasItem(1)))
+            .andExpect(jsonPath("$.nextMatches[?(@.matchId == '${liveMatchId.toString()}')].sportId", hasItem(footballId.toString())))
+            .andExpect(jsonPath("$.nextMatches[?(@.matchId == '${liveMatchId.toString()}')].leagueId", hasItem(worldCupLeagueId.toString())))
+            .andExpect(jsonPath("$.nextMatches[?(@.matchId == '${halfTimeMatchId.toString()}')].status", hasItem("HALF_TIME")))
+            .andExpect(jsonPath("$.nextMatches[?(@.matchId == '${halfTimeMatchId.toString()}')].homeScore", hasItem(0)))
+            .andExpect(jsonPath("$.nextMatches[?(@.matchId == '${halfTimeMatchId.toString()}')].awayScore", hasItem(0)))
+            // Valida que o primeiro elemento da lista é uma das partidas em andamento
+            .andExpect(jsonPath("$.nextMatches[0].status", org.hamcrest.Matchers.anyOf(equalTo("LIVE"), equalTo("HALF_TIME"))))
+    }
+
+    @Test
     fun `should register and update device fcm token successfully`() {
         val deviceId = UUID.randomUUID().toString()
         val fcmToken = "test-fcm-token-12345"

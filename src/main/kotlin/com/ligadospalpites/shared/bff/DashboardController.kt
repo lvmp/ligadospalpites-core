@@ -94,19 +94,23 @@ class DashboardController(
             val endOf7Days = today.plusDays(7).atTime(23, 59, 59, 999_999_999).atZone(zoneId).toInstant()
 
             val activeLeagueIds = leagueRepository.findByIsActiveTrue().map { it.id }.toSet()
-            val statuses = listOf(com.ligadospalpites.sportsfeed.domain.models.MatchStatus.SCHEDULED, com.ligadospalpites.sportsfeed.domain.models.MatchStatus.LIVE)
+            val liveStatuses = listOf(
+                com.ligadospalpites.sportsfeed.domain.models.MatchStatus.LIVE,
+                com.ligadospalpites.sportsfeed.domain.models.MatchStatus.HALF_TIME
+            )
+            val scheduledStatus = com.ligadospalpites.sportsfeed.domain.models.MatchStatus.SCHEDULED
 
             val matches = if (leagueId != null) {
                 val isGroup = groupRepository.existsById(leagueId)
                 if (!isGroup) {
-                    matchRepository.findUpcomingMatchesByLeagueIds(statuses, startOfToday, endOf7Days, listOf(leagueId), sportId)
+                    matchRepository.findDashboardMatchesByLeagueIds(liveStatuses, scheduledStatus, startOfToday, endOf7Days, listOf(leagueId), sportId)
                 } else if (activeLeagueIds.isNotEmpty()) {
-                    matchRepository.findUpcomingMatchesByLeagueIds(statuses, startOfToday, endOf7Days, activeLeagueIds, sportId)
+                    matchRepository.findDashboardMatchesByLeagueIds(liveStatuses, scheduledStatus, startOfToday, endOf7Days, activeLeagueIds, sportId)
                 } else {
                     emptyList()
                 }
             } else if (activeLeagueIds.isNotEmpty()) {
-                matchRepository.findUpcomingMatchesByLeagueIds(statuses, startOfToday, endOf7Days, activeLeagueIds, sportId)
+                matchRepository.findDashboardMatchesByLeagueIds(liveStatuses, scheduledStatus, startOfToday, endOf7Days, activeLeagueIds, sportId)
             } else {
                 emptyList()
             }
@@ -114,9 +118,14 @@ class DashboardController(
             matches.map {
                 NextMatchResponse(
                     matchId = it.id,
+                    sportId = it.sportId,
+                    leagueId = it.leagueId,
                     homeTeam = it.homeTeamName,
                     awayTeam = it.awayTeamName,
                     kickoffTime = it.kickoffTime.toString(),
+                    status = it.status.name,
+                    homeScore = it.homeScore,
+                    awayScore = it.awayScore,
                     phase = formatMatchPhase(it.phase),
                     homeTeamLogoUrl = it.homeTeamLogoUrl,
                     awayTeamLogoUrl = it.awayTeamLogoUrl,
@@ -246,6 +255,11 @@ data class NextMatchResponse(
     val homeTeam: String,
     val awayTeam: String,
     val kickoffTime: String,
+    val status: String = "SCHEDULED",
+    val homeScore: Int? = null,
+    val awayScore: Int? = null,
+    val sportId: UUID? = null,
+    val leagueId: UUID? = null,
     val phase: String? = null,
     val homeTeamLogoUrl: String? = null,
     val awayTeamLogoUrl: String? = null,
