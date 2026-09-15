@@ -31,8 +31,9 @@ dependencies {
     implementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
     implementation("org.springframework.boot:spring-boot-starter-mail")
 
-    // Jackson Kotlin
+    // Jackson Kotlin & Date/Time JSR-310
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
 
     // Firebase Admin SDK for FCM Messaging

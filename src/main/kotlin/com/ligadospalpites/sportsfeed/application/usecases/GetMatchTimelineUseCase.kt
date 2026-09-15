@@ -1,6 +1,10 @@
 package com.ligadospalpites.sportsfeed.application.usecases
 
+import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.SerializationFeature
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
+import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.ligadospalpites.sportsfeed.domain.models.MatchStatus
 import com.ligadospalpites.sportsfeed.domain.models.MatchTimelineEvent
 import com.ligadospalpites.sportsfeed.domain.models.TimelineEventType
@@ -29,6 +33,10 @@ class GetMatchTimelineUseCase(
     private val espnSoccerClient: EspnSoccerClient,
     @Autowired(required = false) private val redisTemplate: StringRedisTemplate? = null,
     private val objectMapper: ObjectMapper = ObjectMapper()
+        .registerModule(KotlinModule.Builder().build())
+        .registerModule(JavaTimeModule())
+        .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+        .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
 ) {
     private val logger = LoggerFactory.getLogger(GetMatchTimelineUseCase::class.java)
 

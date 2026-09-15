@@ -31,7 +31,7 @@ class FixtureController(
     @org.springframework.beans.factory.annotation.Autowired(required = false) private val footballDataClient: com.ligadospalpites.sportsfeed.infrastructure.client.FootballDataClient? = null,
     @org.springframework.beans.factory.annotation.Autowired(required = false) private val pandaScoreClient: com.ligadospalpites.sportsfeed.infrastructure.client.PandaScoreClient? = null,
     @org.springframework.beans.factory.annotation.Autowired(required = false) private val getMatchTimelineUseCase: com.ligadospalpites.sportsfeed.application.usecases.GetMatchTimelineUseCase? = null,
-    private val objectMapper: com.fasterxml.jackson.databind.ObjectMapper = com.fasterxml.jackson.databind.ObjectMapper()
+    private val objectMapper: com.fasterxml.jackson.databind.ObjectMapper = com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules()
 ) {
 
     // 1. Get leagues grouped by sport

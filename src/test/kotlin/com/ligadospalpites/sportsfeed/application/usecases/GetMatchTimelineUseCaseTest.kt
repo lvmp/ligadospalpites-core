@@ -1,6 +1,5 @@
 package com.ligadospalpites.sportsfeed.application.usecases
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.ligadospalpites.sportsfeed.domain.models.MatchStatus
 import com.ligadospalpites.sportsfeed.domain.models.MatchTimelineEvent
 import com.ligadospalpites.sportsfeed.domain.models.TimelineEventType
@@ -23,6 +22,11 @@ import org.springframework.data.redis.core.ValueOperations
 import org.springframework.security.access.AccessDeniedException
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import com.fasterxml.jackson.databind.DeserializationFeature
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.SerializationFeature
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
+import com.fasterxml.jackson.module.kotlin.KotlinModule
 import java.util.*
 
 class GetMatchTimelineUseCaseTest {
@@ -35,6 +39,10 @@ class GetMatchTimelineUseCaseTest {
     private val valueOps: ValueOperations<String, String> = mock()
 
     private val objectMapper = ObjectMapper()
+        .registerModule(KotlinModule.Builder().build())
+        .registerModule(JavaTimeModule())
+        .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+        .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
     private lateinit var useCase: GetMatchTimelineUseCase
 
     private val matchId = UUID.randomUUID()
@@ -104,6 +112,49 @@ class GetMatchTimelineUseCaseTest {
         val timeline = useCase.execute(matchId, userId)
         assertFalse(timeline.isEmpty())
         assertTrue(timeline.any { it.eventType == TimelineEventType.GOAL })
+
+        verify(valueOps).set(eq("match:$matchId:timeline"), anyString(), eq(java.time.Duration.ofSeconds(30)))
+    }
+
+    @Test
+    fun `should return cached timeline events from Redis when available`() {
+        val match = MatchJpaEntity(
+            id = matchId,
+            sportId = sportId,
+            leagueId = leagueId,
+            seasonId = UUID.randomUUID(),
+            homeTeamName = "Flamengo",
+            awayTeamName = "Palmeiras",
+            status = MatchStatus.LIVE
+        )
+        val entitlement = UserEntitlementJpaEntity(
+            id = UUID.randomUUID(),
+            userId = userId,
+            entitlementType = EntitlementType.PREMIUM,
+            expiresAt = Instant.now().plus(30, ChronoUnit.DAYS)
+        )
+        val cachedEvent = MatchTimelineEvent(
+            id = UUID.randomUUID(),
+            matchId = matchId,
+            minute = 10,
+            eventType = TimelineEventType.GOAL,
+            description = "Gol do Mengão!",
+            isImportant = true,
+            createdAt = Instant.now()
+        )
+        val cachedJson = objectMapper.writeValueAsString(listOf(cachedEvent))
+
+        `when`(matchRepository.findById(matchId)).thenReturn(Optional.of(match))
+        `when`(entitlementRepository.findByUserId(userId)).thenReturn(listOf(entitlement))
+        `when`(valueOps.get("match:$matchId:timeline")).thenReturn(cachedJson)
+
+        val timeline = useCase.execute(matchId, userId)
+        assertEquals(1, timeline.size)
+        assertEquals(10, timeline[0].minute)
+        assertEquals("Gol do Mengão!", timeline[0].description)
+        assertNotNull(timeline[0].createdAt)
+
+        verifyNoInteractions(espnSoccerClient)
     }
 
     @Test

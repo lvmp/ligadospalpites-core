@@ -45,9 +45,4 @@ class OpenApiConfig {
                     )
             )
     }
-
-    @Bean
-    fun objectMapper(): com.fasterxml.jackson.databind.ObjectMapper {
-        return com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
-    }
 }
