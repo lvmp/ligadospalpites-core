@@ -27,7 +27,7 @@ jobs:
           service: ligadospalpites-core
           region: us-central1
           source: .
-          flags: '--allow-unauthenticated --max-instances=3 --min-instances=0 --cpu-throttling --memory=1Gi --cpu=1 --startup-cpu-boost'
+          flags: '--allow-unauthenticated --max-instances=3 --min-instances=0 --cpu-throttling --memory=1Gi --cpu=1 --cpu-boost'
           env_vars: |
             SPRING_PROFILES_ACTIVE=prod
             DATABASE_URL=${{ secrets.DATABASE_URL }}
