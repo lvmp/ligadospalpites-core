@@ -19,10 +19,12 @@ class FixtureControllerTest {
     private val seasonRepository: SpringDataSeasonRepository = mock(SpringDataSeasonRepository::class.java)
     private val entitlementRepository: SpringDataUserEntitlementRepository = mock(SpringDataUserEntitlementRepository::class.java)
     private val userResolver: UserResolver = mock(UserResolver::class.java)
+    private val espnSoccerClient: com.ligadospalpites.sportsfeed.infrastructure.client.EspnSoccerClient = mock(com.ligadospalpites.sportsfeed.infrastructure.client.EspnSoccerClient::class.java)
 
     private lateinit var controller: FixtureController
 
     private val libertadoresLeagueId = UUID.fromString("4acdf011-fbde-4122-83bc-c46b1ba847de")
+    private val copaDoBrasilLeagueId = UUID.fromString("b3cdf011-fbde-4122-83bc-c46b1ba847de")
     private val footballSportId = UUID.fromString("f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c")
     private val seasonId = UUID.randomUUID()
 
@@ -34,7 +36,8 @@ class FixtureControllerTest {
             matchRepository = matchRepository,
             seasonRepository = seasonRepository,
             entitlementRepository = entitlementRepository,
-            userResolver = userResolver
+            userResolver = userResolver,
+            espnSoccerClient = espnSoccerClient
         )
 
         val leagueEntity = LeagueJpaEntity(
@@ -45,6 +48,15 @@ class FixtureControllerTest {
             format = "GROUPS_AND_KNOCKOUT"
         )
         `when`(leagueRepository.findById(libertadoresLeagueId)).thenReturn(Optional.of(leagueEntity))
+
+        val copaDoBrasilEntity = LeagueJpaEntity(
+            id = copaDoBrasilLeagueId,
+            name = "Copa do Brasil",
+            sportId = footballSportId,
+            isActive = true,
+            format = "KNOCKOUT"
+        )
+        `when`(leagueRepository.findById(copaDoBrasilLeagueId)).thenReturn(Optional.of(copaDoBrasilEntity))
 
         val seasonEntity = SeasonJpaEntity(
             id = seasonId,
@@ -59,37 +71,29 @@ class FixtureControllerTest {
     }
 
     @Test
-    fun `should return all 8 groups for Copa Libertadores standings when matches have generic phase`() {
-        // Matches with generic phase "Fase de Grupos"
-        val sampleMatches = listOf(
-            MatchJpaEntity(
-                id = UUID.randomUUID(),
-                sportId = footballSportId,
-                leagueId = libertadoresLeagueId,
-                seasonId = seasonId,
-                homeTeamName = "Flamengo",
-                awayTeamName = "Estudiantes de La Plata",
-                kickoffTime = Instant.now(),
-                status = MatchStatus.FINISHED,
-                homeScore = 2,
-                awayScore = 1,
-                phase = "Fase de Grupos"
-            ),
-            MatchJpaEntity(
-                id = UUID.randomUUID(),
-                sportId = footballSportId,
-                leagueId = libertadoresLeagueId,
-                seasonId = seasonId,
-                homeTeamName = "Palmeiras",
-                awayTeamName = "Cerro Porteño",
-                kickoffTime = Instant.now(),
-                status = MatchStatus.FINISHED,
-                homeScore = 3,
-                awayScore = 0,
-                phase = "Fase de Grupos"
-            )
+    fun `should return official ESPN standings for Copa Libertadores without in-service calculation`() {
+        val officialEspnRows = listOf(
+            StandingRow(1, UUID.randomUUID(), "Flamengo", points = 16, played = 6, won = 5, drawn = 1, lost = 0, goalsFor = 14, goalsAgainst = 2, goalDifference = 12, groupName = "Grupo A"),
+            StandingRow(2, UUID.randomUUID(), "Estudiantes de La Plata", points = 9, played = 6, won = 2, drawn = 3, lost = 1, goalsFor = 6, goalsAgainst = 5, goalDifference = 1, groupName = "Grupo A")
         )
-        `when`(matchRepository.findBySeasonId(seasonId)).thenReturn(sampleMatches)
+        `when`(espnSoccerClient.fetchLibertadoresStandings()).thenReturn(officialEspnRows)
+
+        val response = controller.getStandings(libertadoresLeagueId)
+
+        assertEquals(200, response.statusCode.value())
+        val rows = response.body
+        assertNotNull(rows)
+        assertEquals(2, rows!!.size)
+        assertEquals("Flamengo", rows[0].teamName)
+        assertEquals(16, rows[0].points)
+        assertEquals("Estudiantes de La Plata", rows[1].teamName)
+        assertEquals(9, rows[1].points)
+        verify(espnSoccerClient, times(1)).fetchLibertadoresStandings()
+    }
+
+    @Test
+    fun `should return all 8 groups as fallback when ESPN client returns empty for Libertadores`() {
+        `when`(espnSoccerClient.fetchLibertadoresStandings()).thenReturn(emptyList())
 
         val response = controller.getStandings(libertadoresLeagueId)
 
@@ -101,29 +105,80 @@ class FixtureControllerTest {
         val expectedGroups = listOf("Grupo A", "Grupo B", "Grupo C", "Grupo D", "Grupo E", "Grupo F", "Grupo G", "Grupo H")
 
         assertEquals(expectedGroups, groupNames, "Standings response must contain all 8 groups (Grupos A ao H)")
-        assertTrue(rows.size >= 32, "Should contain at least 32 team rows (4 per group)")
+        assertEquals(32, rows.size, "Total standings fallback rows for Libertadores must be exactly 32 (4 per group)")
+    }
 
-        // Validate that Flamengo match in Grupo A was dynamically computed
-        val flamengoRow = rows.find { it.teamName == "Flamengo" }
-        assertNotNull(flamengoRow)
-        assertEquals("Grupo A", flamengoRow?.groupName)
-        assertEquals(3, flamengoRow?.points)
-        assertEquals(1, flamengoRow?.played)
-        assertEquals(1, flamengoRow?.won)
+    @Test
+    fun `should return empty standings list for knockout tournament like Copa do Brasil`() {
+        val response = controller.getStandings(copaDoBrasilLeagueId)
 
-        // Validate that Palmeiras match in Grupo F was dynamically computed
-        val palmeirasRow = rows.find { it.teamName == "Palmeiras" }
-        assertNotNull(palmeirasRow)
-        assertEquals("Grupo F", palmeirasRow?.groupName)
-        assertEquals(3, palmeirasRow?.points)
-        assertEquals(1, palmeirasRow?.played)
+        assertEquals(200, response.statusCode.value())
+        val rows = response.body
+        assertNotNull(rows)
+        assertTrue(rows!!.isEmpty(), "Standings for KNOCKOUT tournament like Copa do Brasil must be empty")
+    }
 
-        // Validate each group has exactly 4 teams and total rows is exactly 32
-        assertEquals(32, rows.size, "Total standings rows for Libertadores must be exactly 32")
-        expectedGroups.forEach { grp ->
-            val teamsInGrp = rows.filter { it.groupName == grp }
-            assertEquals(4, teamsInGrp.size, "Each group must contain exactly 4 teams, but $grp had ${teamsInGrp.size}")
-        }
+    @Test
+    fun `should return populated bracket stages for Copa do Brasil without calculation`() {
+        val matches = listOf(
+            MatchJpaEntity(
+                id = UUID.randomUUID(),
+                sportId = footballSportId,
+                leagueId = copaDoBrasilLeagueId,
+                seasonId = seasonId,
+                homeTeamName = "Flamengo",
+                awayTeamName = "Amazonas FC",
+                kickoffTime = Instant.now(),
+                status = MatchStatus.FINISHED,
+                homeScore = 1,
+                awayScore = 0,
+                phase = "Terceira Fase"
+            ),
+            MatchJpaEntity(
+                id = UUID.randomUUID(),
+                sportId = footballSportId,
+                leagueId = copaDoBrasilLeagueId,
+                seasonId = seasonId,
+                homeTeamName = "Flamengo",
+                awayTeamName = "Palmeiras",
+                kickoffTime = Instant.now(),
+                status = MatchStatus.FINISHED,
+                homeScore = 2,
+                awayScore = 0,
+                phase = "Oitavas de Final"
+            ),
+            MatchJpaEntity(
+                id = UUID.randomUUID(),
+                sportId = footballSportId,
+                leagueId = copaDoBrasilLeagueId,
+                seasonId = seasonId,
+                homeTeamName = "Flamengo",
+                awayTeamName = "Atlético-MG",
+                kickoffTime = Instant.now(),
+                status = MatchStatus.FINISHED,
+                homeScore = 3,
+                awayScore = 1,
+                phase = "Grande Final"
+            )
+        )
+        `when`(matchRepository.findByLeagueId(copaDoBrasilLeagueId)).thenReturn(matches)
+
+        val response = controller.getBrackets(copaDoBrasilLeagueId)
+
+        assertEquals(200, response.statusCode.value())
+        val bracket = response.body
+        assertNotNull(bracket)
+        assertEquals(copaDoBrasilLeagueId, bracket!!.leagueId)
+
+        val stages = bracket.phases
+        assertTrue(stages.containsKey("ROUND_OF_32"))
+        assertTrue(stages.containsKey("OITAVAS"))
+        assertTrue(stages.containsKey("FINAL"))
+
+        assertEquals(1, stages["ROUND_OF_32"]?.size)
+        assertEquals("Flamengo", stages["ROUND_OF_32"]?.first()?.homeTeam)
+        assertEquals(1, stages["OITAVAS"]?.size)
+        assertEquals(1, stages["FINAL"]?.size)
     }
 
     @Test

@@ -91,6 +91,9 @@ app:
     pandascore:
       url: "${PANDASCORE_URL:https://api.pandascore.co}"
       token: "${PANDASCORE_API_KEY:${PANDASCORE_TOKEN:}}"
+    goal-api:
+      url: "${GOAL_API_URL:https://goal-api.com/api/v1}"
+      api-key: "${GOAL_API_KEY:mock-key-goal}"
 
 resilience4j:
   circuitbreaker:
@@ -159,6 +162,14 @@ resilience4j:
         slowCallDurationThreshold: 5s
         waitDurationInOpenState: 30s
         permittedNumberOfCallsInHalfOpenState: 2
+      goalApi:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 6
+        failureRateThreshold: 50
+        slowCallRateThreshold: 50
+        slowCallDurationThreshold: 5s
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 2
   retry:
     instances:
       footballDataApi:
@@ -199,6 +210,12 @@ resilience4j:
           multiplier: 2
       statsNbaApi:
         maxAttempts: 2
+        waitDuration: 1s
+        exponentialBackoff:
+          enabled: true
+          multiplier: 2
+      goalApi:
+        maxAttempts: 3
         waitDuration: 1s
         exponentialBackoff:
           enabled: true

@@ -1,10 +1,13 @@
 package com.ligadospalpites.sportsfeed.infrastructure.client
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import com.ligadospalpites.sportsfeed.infrastructure.web.StandingRow
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.client.SimpleClientHttpRequestFactory
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
+import java.util.UUID
 
 @Component
 class EspnSoccerClient(
@@ -61,6 +64,81 @@ class EspnSoccerClient(
         } catch (e: Exception) {
             logger.warn("Could not fetch match summary from ESPN for event $eventId (${e.message})")
             null
+        }
+    }
+
+    fun fetchLibertadoresStandings(seasonYear: Int = 2026): List<StandingRow> {
+        logger.info("Fetching official Copa Libertadores Standings from ESPN Public API (season: $seasonYear)")
+        return try {
+            val response = restClient.get()
+                .uri("/apis/v2/sports/soccer/conmebol.libertadores/standings?season=$seasonYear")
+                .retrieve()
+                .body(EspnSoccerStandingsResponse::class.java)
+
+            val rows = mutableListOf<StandingRow>()
+            response?.children?.forEach { group ->
+                val groupName = (group.name ?: "Grupo A")
+                    .replace("Group", "Grupo")
+                    .trim()
+                val entries = group.standings?.entries ?: emptyList()
+                val groupRows = entries.mapIndexed { idx, entry ->
+                    val teamName = entry.team.displayName ?: entry.team.name ?: "Time"
+                    val logo = entry.team.logos.firstOrNull()?.href
+                    val statMap = entry.stats.associateBy { it.name }
+
+                    val rank = statMap["rank"]?.value?.toInt()
+                        ?: statMap["rank"]?.displayValue?.toIntOrNull()
+                        ?: (idx + 1)
+                    val points = statMap["points"]?.value?.toInt()
+                        ?: statMap["points"]?.displayValue?.toIntOrNull()
+                        ?: 0
+                    val played = statMap["gamesPlayed"]?.value?.toInt()
+                        ?: statMap["gamesPlayed"]?.displayValue?.toIntOrNull()
+                        ?: 0
+                    val wins = statMap["wins"]?.value?.toInt()
+                        ?: statMap["wins"]?.displayValue?.toIntOrNull()
+                        ?: 0
+                    val ties = statMap["ties"]?.value?.toInt()
+                        ?: statMap["ties"]?.displayValue?.toIntOrNull()
+                        ?: 0
+                    val losses = statMap["losses"]?.value?.toInt()
+                        ?: statMap["losses"]?.displayValue?.toIntOrNull()
+                        ?: 0
+                    val goalsFor = statMap["pointsFor"]?.value?.toInt()
+                        ?: statMap["pointsFor"]?.displayValue?.toIntOrNull()
+                        ?: 0
+                    val goalsAgainst = statMap["pointsAgainst"]?.value?.toInt()
+                        ?: statMap["pointsAgainst"]?.displayValue?.toIntOrNull()
+                        ?: 0
+                    val goalDifference = statMap["pointDifferential"]?.value?.toInt()
+                        ?: statMap["pointDifferential"]?.displayValue?.toIntOrNull()
+                        ?: (goalsFor - goalsAgainst)
+                    val winRate = if (played > 0) Math.round((wins.toDouble() / played) * 100.0) / 100.0 else 0.0
+
+                    StandingRow(
+                        position = rank,
+                        teamId = UUID.nameUUIDFromBytes(teamName.toByteArray()),
+                        teamName = teamName,
+                        points = points,
+                        played = played,
+                        won = wins,
+                        drawn = ties,
+                        lost = losses,
+                        goalsFor = goalsFor,
+                        goalsAgainst = goalsAgainst,
+                        goalDifference = goalDifference,
+                        groupName = groupName,
+                        winRate = winRate,
+                        teamLogoUrl = logo
+                    )
+                }.sortedBy { it.position }
+                rows.addAll(groupRows)
+            }
+            logger.info("Successfully fetched ${rows.size} official standing rows for Libertadores from ESPN")
+            rows
+        } catch (e: Exception) {
+            logger.error("Failed to fetch official ESPN Libertadores standings: ${e.message}", e)
+            emptyList()
         }
     }
 }
@@ -174,3 +252,53 @@ data class EspnCommentaryItem(
     val time: EspnClock? = null,
     val play: Boolean = false
 )
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class EspnSoccerStandingsResponse(
+    val children: List<EspnSoccerGroup> = emptyList()
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class EspnSoccerGroup(
+    val id: String? = null,
+    val name: String? = null,
+    val abbreviation: String? = null,
+    val standings: EspnSoccerGroupStandings? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class EspnSoccerGroupStandings(
+    val id: String? = null,
+    val name: String? = null,
+    val season: Int? = null,
+    val entries: List<EspnSoccerStandingEntry> = emptyList()
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class EspnSoccerStandingEntry(
+    val team: EspnSoccerStandingTeam = EspnSoccerStandingTeam(),
+    val stats: List<EspnSoccerStat> = emptyList()
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class EspnSoccerStandingTeam(
+    val id: String? = null,
+    val uid: String? = null,
+    val name: String? = null,
+    val displayName: String? = null,
+    val shortDisplayName: String? = null,
+    val logos: List<EspnSoccerLogo> = emptyList()
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class EspnSoccerLogo(
+    val href: String? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class EspnSoccerStat(
+    val name: String = "",
+    val value: Double? = null,
+    val displayValue: String? = null
+)
+

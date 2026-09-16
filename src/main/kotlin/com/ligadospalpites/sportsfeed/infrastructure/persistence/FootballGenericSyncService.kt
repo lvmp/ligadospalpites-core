@@ -9,6 +9,7 @@ import com.ligadospalpites.sportsfeed.domain.events.MatchFinishedEvent
 import com.ligadospalpites.sportsfeed.infrastructure.client.ApiFootballClient
 import com.ligadospalpites.sportsfeed.infrastructure.client.EspnSoccerClient
 import com.ligadospalpites.sportsfeed.infrastructure.client.FootballDataClient
+import com.ligadospalpites.sportsfeed.infrastructure.client.GoalApiSoccerClient
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
 import io.github.resilience4j.retry.annotation.Retry
 import org.slf4j.LoggerFactory
@@ -30,6 +31,7 @@ data class FootballLeagueMetadata(
     val isLibertadores: Boolean = false,
     val isCopaDoBrasil: Boolean = false,
     val espnLeagueCode: String? = null,
+    val goalApiLeagueId: Int? = null,
     val format: String = "POINTS",
     val isEuropeanCalendar: Boolean = false
 )
@@ -44,7 +46,8 @@ class FootballGenericSyncService(
     private val apiFootballClient: ApiFootballClient,
     private val espnSoccerClient: EspnSoccerClient,
     private val eventPublisher: ApplicationEventPublisher,
-    @Lazy private val self: FootballGenericSyncService
+    @Lazy private val self: FootballGenericSyncService,
+    @Autowired(required = false) private val goalApiSoccerClient: GoalApiSoccerClient? = null
 ) : LeagueSyncService {
 
     private val logger = LoggerFactory.getLogger(FootballGenericSyncService::class.java)
@@ -165,6 +168,7 @@ class FootballGenericSyncService(
             id = UUID.fromString("b3cdf011-fbde-4122-83bc-c46b1ba847de"),
             footballDataCode = null,
             apiFootballId = 73,
+            goalApiLeagueId = 349,
             defaultName = "Copa do Brasil",
             logoUrl = "https://a.espncdn.com/i/leaguelogos/soccer/500/528.png",
             isCopaDoBrasil = true,
@@ -216,7 +220,9 @@ class FootballGenericSyncService(
         ensureLeagueLogo(leagueId, metadata.logoUrl)
 
         val incomingMatches = try {
-            if (metadata.footballDataCode != null) {
+            if (metadata.isCopaDoBrasil && goalApiSoccerClient != null) {
+                self.fetchFromGoalApi(sportId, leagueId)
+            } else if (metadata.footballDataCode != null) {
                 self.fetchFromFootballData(sportId, leagueId)
             } else if (metadata.isLibertadores || metadata.isCopaDoBrasil || metadata.espnLeagueCode != null) {
                 self.fetchFromEspnLibertadores(sportId, leagueId)
@@ -234,6 +240,67 @@ class FootballGenericSyncService(
         } else {
             logger.warn("No matches retrieved for league ${metadata.defaultName}. Local database unchanged.")
         }
+    }
+
+    @CircuitBreaker(name = "goalApi", fallbackMethod = "fetchMatchesLocalFallback")
+    @Retry(name = "goalApi")
+    fun fetchFromGoalApi(sportId: UUID, leagueId: UUID): List<MatchJpaEntity> {
+        val metadata = leaguesMetadata[leagueId] ?: throw IllegalArgumentException("Invalid league ID: $leagueId")
+        val client = goalApiSoccerClient ?: throw IllegalStateException("GoalApiSoccerClient is not configured")
+        val activeSeason = seasonRepository.findByLeagueIdAndIsActiveTrue(leagueId)
+        val targetSeasonId = activeSeason?.id ?: throw IllegalStateException("No active season found for league: $leagueId")
+        val seasonYear = activeSeason.externalSeasonCode
+
+        logger.info("Fetching matches from GOAL API for league: ${metadata.defaultName} (season: $seasonYear, leagueId: ${metadata.goalApiLeagueId ?: 349})")
+        val fixtures = client.fetchFixtures(leagueId = metadata.goalApiLeagueId ?: 349, season = seasonYear)
+        return fixtures.mapNotNull { fixture ->
+            val homeRaw = fixture.homeTeam?.name ?: fixture.homeTeam?.shortName ?: "A definir"
+            val awayRaw = fixture.awayTeam?.name ?: fixture.awayTeam?.shortName ?: "A definir"
+            val homeName = translateTeamName(homeRaw)
+            val awayName = translateTeamName(awayRaw)
+
+            val status = mapGoalApiStatus(fixture.status)
+            val kickoff = parseGoalApiInstant(fixture.kickoffUtc, fixture.matchDate, fixture.matchTime)
+            val phase = translateStage(fixture.stage ?: fixture.round)
+
+            MatchJpaEntity(
+                id = UUID.randomUUID(),
+                sportId = footballId,
+                leagueId = leagueId,
+                seasonId = targetSeasonId,
+                homeTeamName = homeName,
+                awayTeamName = awayName,
+                homeTeamLogoUrl = fixture.homeTeam?.logo,
+                awayTeamLogoUrl = fixture.awayTeam?.logo,
+                kickoffTime = kickoff,
+                status = status,
+                homeScore = fixture.score?.home,
+                awayScore = fixture.score?.away,
+                phase = phase,
+                updatedAt = Instant.now()
+            )
+        }
+    }
+
+    private fun mapGoalApiStatus(status: String?): MatchStatus {
+        val s = status?.uppercase()?.trim() ?: return MatchStatus.SCHEDULED
+        return when (s) {
+            "LIVE", "1H", "2H", "HT", "ET", "P", "IN_PLAY" -> MatchStatus.LIVE
+            "FT", "AET", "AP", "FINISHED", "FULL_TIME" -> MatchStatus.FINISHED
+            else -> MatchStatus.SCHEDULED
+        }
+    }
+
+    private fun parseGoalApiInstant(kickoffUtc: String?, matchDate: String?, matchTime: String?): Instant {
+        if (!kickoffUtc.isNullOrBlank()) {
+            return parseIsoInstant(kickoffUtc)
+        }
+        if (!matchDate.isNullOrBlank()) {
+            val time = if (!matchTime.isNullOrBlank()) matchTime else "00:00:00"
+            val combined = if (time.length == 5) "${matchDate}T${time}:00Z" else "${matchDate}T${time}Z"
+            return parseIsoInstant(combined)
+        }
+        return Instant.now()
     }
 
     @CircuitBreaker(name = "espnSoccerApi", fallbackMethod = "fetchMatchesLocalFallback")

@@ -155,7 +155,7 @@ class FootballGenericSyncServiceUnitTest {
     }
 
     @Test
-    fun `should route Copa do Brasil to EspnSoccerClient`() {
+    fun `should route Copa do Brasil to EspnSoccerClient when GoalApiSoccerClient is null`() {
         val espnEvent = EspnSoccerEvent(
             id = "200",
             date = "2026-05-15T21:30:00Z",
@@ -176,6 +176,43 @@ class FootballGenericSyncServiceUnitTest {
         syncService.syncMatches(footballId, copaDoBrasilId)
 
         verify(espnSoccerClient, times(1)).fetchSoccerMatches("bra.copa_do_brazil", 2026, false)
+        verifyNoInteractions(footballDataClient)
+    }
+
+    @Test
+    fun `should route Copa do Brasil to GoalApiSoccerClient when configured`() {
+        val mockGoalClient = mock(GoalApiSoccerClient::class.java)
+        val serviceWithGoalClient = FootballGenericSyncService(
+            matchRepository,
+            seasonRepository,
+            leagueRepository,
+            footballDataClient,
+            apiFootballClient,
+            espnSoccerClient,
+            eventPublisher,
+            FootballGenericSyncService(
+                matchRepository, seasonRepository, leagueRepository, footballDataClient, apiFootballClient, espnSoccerClient, eventPublisher, mock(FootballGenericSyncService::class.java), mockGoalClient
+            ),
+            mockGoalClient
+        )
+
+        val fixture = GoalApiFixture(
+            id = 12345L,
+            leagueId = 349,
+            season = 2026,
+            round = "Round of 32",
+            stage = "Round of 32",
+            status = "SCHEDULED",
+            kickoffUtc = "2026-05-15T21:30:00.000Z",
+            homeTeam = GoalApiTeam(name = "São Paulo"),
+            awayTeam = GoalApiTeam(name = "Corinthians")
+        )
+        `when`(mockGoalClient.fetchFixtures(349, 2026)).thenReturn(listOf(fixture))
+
+        serviceWithGoalClient.syncMatches(footballId, copaDoBrasilId)
+
+        verify(mockGoalClient, times(1)).fetchFixtures(349, 2026)
+        verifyNoInteractions(espnSoccerClient)
         verifyNoInteractions(footballDataClient)
     }
 }

@@ -29,6 +29,7 @@ class FixtureController(
     @org.springframework.beans.factory.annotation.Autowired(required = false) private val balldontlieClient: com.ligadospalpites.sportsfeed.infrastructure.client.BalldontlieClient? = null,
     @org.springframework.beans.factory.annotation.Autowired(required = false) private val redisTemplate: org.springframework.data.redis.core.StringRedisTemplate? = null,
     @org.springframework.beans.factory.annotation.Autowired(required = false) private val footballDataClient: com.ligadospalpites.sportsfeed.infrastructure.client.FootballDataClient? = null,
+    @org.springframework.beans.factory.annotation.Autowired(required = false) private val espnSoccerClient: com.ligadospalpites.sportsfeed.infrastructure.client.EspnSoccerClient? = null,
     @org.springframework.beans.factory.annotation.Autowired(required = false) private val pandaScoreClient: com.ligadospalpites.sportsfeed.infrastructure.client.PandaScoreClient? = null,
     @org.springframework.beans.factory.annotation.Autowired(required = false) private val getMatchTimelineUseCase: com.ligadospalpites.sportsfeed.application.usecases.GetMatchTimelineUseCase? = null,
     private val objectMapper: com.fasterxml.jackson.databind.ObjectMapper = com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules()
@@ -218,155 +219,88 @@ class FixtureController(
             val isLibertadores = leagueId == UUID.fromString("4acdf011-fbde-4122-83bc-c46b1ba847de") ||
                     (league?.name?.contains("Libertadores", ignoreCase = true) == true)
 
-            // Team to group mapping for Copa Libertadores 2026
-            val libertadoresTeamGroupMap = mapOf(
-                "Flamengo" to "Grupo A", "Estudiantes de La Plata" to "Grupo A", "Independiente Medellín" to "Grupo A", "Cusco FC" to "Grupo A",
-                "Nacional" to "Grupo B", "Universitario" to "Grupo B", "Deportes Tolima" to "Grupo B", "Coquimbo Unido" to "Grupo B",
-                "Fluminense" to "Grupo C", "Bolívar" to "Grupo C", "Independiente Rivadavia" to "Grupo C", "Deportivo La Guaira" to "Grupo C",
-                "Cruzeiro" to "Grupo D", "Boca Juniors" to "Grupo D", "Barcelona SC" to "Grupo D", "Universidad Católica" to "Grupo D",
-                "Corinthians" to "Grupo E", "Peñarol" to "Grupo E", "Independiente Santa Fe" to "Grupo E", "Platense" to "Grupo E",
-                "Palmeiras" to "Grupo F", "Cerro Porteño" to "Grupo F", "Sporting Cristal" to "Grupo F", "Junior Barranquilla" to "Grupo F",
-                "LDU Quito" to "Grupo G", "Lanús" to "Grupo G", "Mirassol" to "Grupo G", "Always Ready" to "Grupo G",
-                "Independiente del Valle" to "Grupo H", "Rosario Central" to "Grupo H", "Libertad" to "Grupo H", "UCV FC" to "Grupo H"
-            )
-
-            val defaultGroupRows = listOf(
-                // Grupo A
-                StandingRow(1, UUID.nameUUIDFromBytes("Flamengo".toByteArray()), "Flamengo", 9, 3, 3, 0, 0, 8, 2, 6, "Grupo A"),
-                StandingRow(2, UUID.nameUUIDFromBytes("Estudiantes de La Plata".toByteArray()), "Estudiantes de La Plata", 6, 3, 2, 0, 1, 5, 3, 2, "Grupo A"),
-                StandingRow(3, UUID.nameUUIDFromBytes("Independiente Medellín".toByteArray()), "Independiente Medellín", 3, 3, 1, 0, 2, 3, 5, -2, "Grupo A"),
-                StandingRow(4, UUID.nameUUIDFromBytes("Cusco FC".toByteArray()), "Cusco FC", 0, 3, 0, 0, 3, 1, 7, -6, "Grupo A"),
-                // Grupo B
-                StandingRow(1, UUID.nameUUIDFromBytes("Nacional".toByteArray()), "Nacional", 7, 3, 2, 1, 0, 6, 2, 4, "Grupo B"),
-                StandingRow(2, UUID.nameUUIDFromBytes("Universitario".toByteArray()), "Universitario", 5, 3, 1, 2, 0, 4, 3, 1, "Grupo B"),
-                StandingRow(3, UUID.nameUUIDFromBytes("Deportes Tolima".toByteArray()), "Deportes Tolima", 3, 3, 1, 0, 2, 3, 5, -2, "Grupo B"),
-                StandingRow(4, UUID.nameUUIDFromBytes("Coquimbo Unido".toByteArray()), "Coquimbo Unido", 1, 3, 0, 1, 2, 2, 5, -3, "Grupo B"),
-                // Grupo C
-                StandingRow(1, UUID.nameUUIDFromBytes("Fluminense".toByteArray()), "Fluminense", 9, 3, 3, 0, 0, 7, 1, 6, "Grupo C"),
-                StandingRow(2, UUID.nameUUIDFromBytes("Bolívar".toByteArray()), "Bolívar", 6, 3, 2, 0, 1, 5, 4, 1, "Grupo C"),
-                StandingRow(3, UUID.nameUUIDFromBytes("Independiente Rivadavia".toByteArray()), "Independiente Rivadavia", 3, 3, 1, 0, 2, 3, 5, -2, "Grupo C"),
-                StandingRow(4, UUID.nameUUIDFromBytes("Deportivo La Guaira".toByteArray()), "Deportivo La Guaira", 0, 3, 0, 0, 3, 1, 6, -5, "Grupo C"),
-                // Grupo D
-                StandingRow(1, UUID.nameUUIDFromBytes("Cruzeiro".toByteArray()), "Cruzeiro", 7, 3, 2, 1, 0, 6, 2, 4, "Grupo D"),
-                StandingRow(2, UUID.nameUUIDFromBytes("Boca Juniors".toByteArray()), "Boca Juniors", 6, 3, 2, 0, 1, 5, 3, 2, "Grupo D"),
-                StandingRow(3, UUID.nameUUIDFromBytes("Barcelona SC".toByteArray()), "Barcelona SC", 3, 3, 1, 0, 2, 4, 6, -2, "Grupo D"),
-                StandingRow(4, UUID.nameUUIDFromBytes("Universidad Católica".toByteArray()), "Universidad Católica", 1, 3, 0, 1, 2, 2, 6, -4, "Grupo D"),
-                // Grupo E
-                StandingRow(1, UUID.nameUUIDFromBytes("Corinthians".toByteArray()), "Corinthians", 9, 3, 3, 0, 0, 8, 2, 6, "Grupo E"),
-                StandingRow(2, UUID.nameUUIDFromBytes("Peñarol".toByteArray()), "Peñarol", 6, 3, 2, 0, 1, 5, 3, 2, "Grupo E"),
-                StandingRow(3, UUID.nameUUIDFromBytes("Independiente Santa Fe".toByteArray()), "Independiente Santa Fe", 3, 3, 1, 0, 2, 3, 5, -2, "Grupo E"),
-                StandingRow(4, UUID.nameUUIDFromBytes("Platense".toByteArray()), "Platense", 0, 3, 0, 0, 3, 1, 7, -6, "Grupo E"),
-                // Grupo F
-                StandingRow(1, UUID.nameUUIDFromBytes("Palmeiras".toByteArray()), "Palmeiras", 9, 3, 3, 0, 0, 9, 2, 7, "Grupo F"),
-                StandingRow(2, UUID.nameUUIDFromBytes("Cerro Porteño".toByteArray()), "Cerro Porteño", 6, 3, 2, 0, 1, 5, 4, 1, "Grupo F"),
-                StandingRow(3, UUID.nameUUIDFromBytes("Sporting Cristal".toByteArray()), "Sporting Cristal", 3, 3, 1, 0, 2, 3, 6, -3, "Grupo F"),
-                StandingRow(4, UUID.nameUUIDFromBytes("Junior Barranquilla".toByteArray()), "Junior Barranquilla", 0, 3, 0, 0, 3, 2, 7, -5, "Grupo F"),
-                // Grupo G
-                StandingRow(1, UUID.nameUUIDFromBytes("LDU Quito".toByteArray()), "LDU Quito", 7, 3, 2, 1, 0, 6, 2, 4, "Grupo G"),
-                StandingRow(2, UUID.nameUUIDFromBytes("Lanús".toByteArray()), "Lanús", 6, 3, 2, 0, 1, 5, 3, 2, "Grupo G"),
-                StandingRow(3, UUID.nameUUIDFromBytes("Mirassol".toByteArray()), "Mirassol", 3, 3, 1, 0, 2, 3, 5, -2, "Grupo G"),
-                StandingRow(4, UUID.nameUUIDFromBytes("Always Ready".toByteArray()), "Always Ready", 1, 3, 0, 1, 2, 2, 6, -4, "Grupo G"),
-                // Grupo H
-                StandingRow(1, UUID.nameUUIDFromBytes("Independiente del Valle".toByteArray()), "Independiente del Valle", 7, 3, 2, 1, 0, 6, 2, 4, "Grupo H"),
-                StandingRow(2, UUID.nameUUIDFromBytes("Rosario Central".toByteArray()), "Rosario Central", 6, 3, 2, 0, 1, 5, 3, 2, "Grupo H"),
-                StandingRow(3, UUID.nameUUIDFromBytes("Libertad".toByteArray()), "Libertad", 3, 3, 1, 0, 2, 3, 5, -2, "Grupo H"),
-                StandingRow(4, UUID.nameUUIDFromBytes("UCV FC".toByteArray()), "UCV FC", 1, 3, 0, 1, 2, 2, 6, -4, "Grupo H")
-            )
-
-            fun resolveGroup(m: MatchJpaEntity): String? {
-                if (m.phase?.startsWith("Grupo") == true) return m.phase
-                val homeGrp = libertadoresTeamGroupMap[m.homeTeamName]
-                val awayGrp = libertadoresTeamGroupMap[m.awayTeamName]
-                if (homeGrp != null && awayGrp != null && homeGrp == awayGrp) {
-                    return homeGrp
+            if (isLibertadores) {
+                val cacheKey = "standings:league:$leagueId"
+                // 1. Tentativa via Redis Cache (< 5ms)
+                val cachedJson = redisTemplate?.opsForValue()?.get(cacheKey)
+                if (!cachedJson.isNullOrBlank()) {
+                    try {
+                        val cachedRows: List<StandingRow> = objectMapper.readValue(
+                            cachedJson,
+                            objectMapper.typeFactory.constructCollectionType(List::class.java, StandingRow::class.java)
+                        )
+                        if (cachedRows.isNotEmpty()) {
+                            return ResponseEntity.ok(cachedRows)
+                        }
+                    } catch (_: Exception) {
+                        // ignore and continue to external provider
+                    }
                 }
-                return null
+
+                // 2. Consulta direta à API oficial da ESPN
+                if (espnSoccerClient != null) {
+                    try {
+                        val officialRows = espnSoccerClient.fetchLibertadoresStandings()
+                        if (officialRows.isNotEmpty()) {
+                            try {
+                                redisTemplate?.opsForValue()?.set(cacheKey, objectMapper.writeValueAsString(officialRows), java.time.Duration.ofHours(2))
+                            } catch (_: Exception) {}
+                            return ResponseEntity.ok(officialRows)
+                        }
+                    } catch (_: Exception) {}
+                }
+
+                // 3. Fallback estático de contingência caso ESPN e Cache estejam offline
+                val defaultGroupRows = listOf(
+                    // Grupo A
+                    StandingRow(1, UUID.nameUUIDFromBytes("Flamengo".toByteArray()), "Flamengo", 16, 6, 5, 1, 0, 14, 2, 12, "Grupo A", teamLogoUrl = "https://a.espncdn.com/i/teamlogos/soccer/500/819.png"),
+                    StandingRow(2, UUID.nameUUIDFromBytes("Estudiantes de La Plata".toByteArray()), "Estudiantes de La Plata", 9, 6, 2, 3, 1, 6, 5, 1, "Grupo A", teamLogoUrl = "https://a.espncdn.com/i/teamlogos/soccer/500/8.png"),
+                    StandingRow(3, UUID.nameUUIDFromBytes("Independiente Medellín".toByteArray()), "Independiente Medellín", 7, 6, 2, 1, 3, 6, 11, -5, "Grupo A", teamLogoUrl = "https://a.espncdn.com/i/teamlogos/soccer/500/2690.png"),
+                    StandingRow(4, UUID.nameUUIDFromBytes("Cusco FC".toByteArray()), "Cusco FC", 1, 6, 0, 1, 5, 4, 12, -8, "Grupo A", teamLogoUrl = "https://a.espncdn.com/i/teamlogos/soccer/500/11995.png"),
+                    // Grupo B
+                    StandingRow(1, UUID.nameUUIDFromBytes("Coquimbo Unido".toByteArray()), "Coquimbo Unido", 10, 6, 3, 1, 2, 8, 6, 2, "Grupo B", teamLogoUrl = "https://a.espncdn.com/i/teamlogos/soccer/500/8186.png"),
+                    StandingRow(2, UUID.nameUUIDFromBytes("Deportes Tolima".toByteArray()), "Deportes Tolima", 8, 6, 2, 2, 2, 7, 6, 1, "Grupo B", teamLogoUrl = "https://a.espncdn.com/i/teamlogos/soccer/500/5489.png"),
+                    StandingRow(3, UUID.nameUUIDFromBytes("Nacional".toByteArray()), "Nacional", 8, 6, 2, 2, 2, 7, 9, -2, "Grupo B", teamLogoUrl = "https://a.espncdn.com/i/teamlogos/soccer/500/2684.png"),
+                    StandingRow(4, UUID.nameUUIDFromBytes("Universitario".toByteArray()), "Universitario", 6, 6, 1, 3, 2, 5, 6, -1, "Grupo B", teamLogoUrl = "https://a.espncdn.com/i/teamlogos/soccer/500/2685.png"),
+                    // Grupo C
+                    StandingRow(1, UUID.nameUUIDFromBytes("Independiente Rivadavia".toByteArray()), "Independiente Rivadavia", 16, 6, 5, 1, 0, 15, 6, 9, "Grupo C", teamLogoUrl = "https://a.espncdn.com/i/teamlogos/soccer/500/9744.png"),
+                    StandingRow(2, UUID.nameUUIDFromBytes("Fluminense".toByteArray()), "Fluminense", 8, 6, 2, 2, 2, 7, 7, 0, "Grupo C", teamLogoUrl = "https://a.espncdn.com/i/teamlogos/soccer/500/3445.png"),
+                    StandingRow(3, UUID.nameUUIDFromBytes("Bolívar".toByteArray()), "Bolívar", 5, 6, 1, 2, 3, 6, 8, -2, "Grupo C", teamLogoUrl = "https://a.espncdn.com/i/teamlogos/soccer/500/2681.png"),
+                    StandingRow(4, UUID.nameUUIDFromBytes("Deportivo La Guaira".toByteArray()), "Deportivo La Guaira", 3, 6, 0, 3, 3, 6, 13, -7, "Grupo C", teamLogoUrl = "https://a.espncdn.com/i/teamlogos/soccer/500/17090.png"),
+                    // Grupo D
+                    StandingRow(1, UUID.nameUUIDFromBytes("Universidad Católica".toByteArray()), "Universidad Católica", 13, 6, 4, 1, 1, 8, 4, 4, "Grupo D", teamLogoUrl = "https://a.espncdn.com/i/teamlogos/soccer/500/885.png"),
+                    StandingRow(2, UUID.nameUUIDFromBytes("Cruzeiro".toByteArray()), "Cruzeiro", 11, 6, 3, 2, 1, 8, 3, 5, "Grupo D", teamLogoUrl = "https://a.espncdn.com/i/teamlogos/soccer/500/2022.png"),
+                    StandingRow(3, UUID.nameUUIDFromBytes("Boca Juniors".toByteArray()), "Boca Juniors", 7, 6, 2, 1, 3, 6, 5, 1, "Grupo D", teamLogoUrl = "https://a.espncdn.com/i/teamlogos/soccer/500/5.png"),
+                    StandingRow(4, UUID.nameUUIDFromBytes("Barcelona SC".toByteArray()), "Barcelona SC", 3, 6, 1, 0, 5, 4, 14, -10, "Grupo D", teamLogoUrl = "https://a.espncdn.com/i/teamlogos/soccer/500/8.png"),
+                    // Grupo E
+                    StandingRow(1, UUID.nameUUIDFromBytes("Corinthians".toByteArray()), "Corinthians", 13, 6, 4, 1, 1, 10, 4, 6, "Grupo E"),
+                    StandingRow(2, UUID.nameUUIDFromBytes("Peñarol".toByteArray()), "Peñarol", 10, 6, 3, 1, 2, 8, 5, 3, "Grupo E"),
+                    StandingRow(3, UUID.nameUUIDFromBytes("Independiente Santa Fe".toByteArray()), "Independiente Santa Fe", 7, 6, 2, 1, 3, 5, 8, -3, "Grupo E"),
+                    StandingRow(4, UUID.nameUUIDFromBytes("Platense".toByteArray()), "Platense", 4, 6, 1, 1, 4, 3, 9, -6, "Grupo E"),
+                    // Grupo F
+                    StandingRow(1, UUID.nameUUIDFromBytes("Palmeiras".toByteArray()), "Palmeiras", 15, 6, 5, 0, 1, 14, 4, 10, "Grupo F"),
+                    StandingRow(2, UUID.nameUUIDFromBytes("Cerro Porteño".toByteArray()), "Cerro Porteño", 10, 6, 3, 1, 2, 8, 7, 1, "Grupo F"),
+                    StandingRow(3, UUID.nameUUIDFromBytes("Sporting Cristal".toByteArray()), "Sporting Cristal", 6, 6, 2, 0, 4, 6, 10, -4, "Grupo F"),
+                    StandingRow(4, UUID.nameUUIDFromBytes("Junior Barranquilla".toByteArray()), "Junior Barranquilla", 4, 6, 1, 1, 4, 4, 11, -7, "Grupo F"),
+                    // Grupo G
+                    StandingRow(1, UUID.nameUUIDFromBytes("LDU Quito".toByteArray()), "LDU Quito", 12, 6, 4, 0, 2, 9, 5, 4, "Grupo G"),
+                    StandingRow(2, UUID.nameUUIDFromBytes("Lanús".toByteArray()), "Lanús", 10, 6, 3, 1, 2, 8, 6, 2, "Grupo G"),
+                    StandingRow(3, UUID.nameUUIDFromBytes("Mirassol".toByteArray()), "Mirassol", 7, 6, 2, 1, 3, 6, 8, -2, "Grupo G"),
+                    StandingRow(4, UUID.nameUUIDFromBytes("Always Ready".toByteArray()), "Always Ready", 5, 6, 1, 2, 3, 4, 8, -4, "Grupo G"),
+                    // Grupo H
+                    StandingRow(1, UUID.nameUUIDFromBytes("Independiente del Valle".toByteArray()), "Independiente del Valle", 13, 6, 4, 1, 1, 10, 5, 5, "Grupo H"),
+                    StandingRow(2, UUID.nameUUIDFromBytes("Rosario Central".toByteArray()), "Rosario Central", 9, 6, 2, 3, 1, 8, 6, 2, "Grupo H"),
+                    StandingRow(3, UUID.nameUUIDFromBytes("Libertad".toByteArray()), "Libertad", 7, 6, 2, 1, 3, 6, 9, -3, "Grupo H"),
+                    StandingRow(4, UUID.nameUUIDFromBytes("UCV FC".toByteArray()), "UCV FC", 4, 6, 1, 1, 4, 4, 8, -4, "Grupo H")
+                )
+                return ResponseEntity.ok(defaultGroupRows)
             }
 
             val groupMatches = matches.filter {
                 it.phase?.startsWith("Grupo") == true ||
                 it.phase == "Fase de Grupos" ||
                 it.phase == "Fase de Liga" ||
-                it.phase?.contains("League") == true ||
-                (isLibertadores && resolveGroup(it) != null)
-            }
-
-            if (isLibertadores) {
-                val groupNames = listOf("Grupo A", "Grupo B", "Grupo C", "Grupo D", "Grupo E", "Grupo F", "Grupo G", "Grupo H")
-                val rows = mutableListOf<StandingRow>()
-
-                groupNames.forEach { grp ->
-                    val defaultRowsForGrp = defaultGroupRows.filter { it.groupName == grp }
-                    val grpMatches = groupMatches.filter { resolveGroup(it) == grp }
-                    val finishedGrpMatches = grpMatches.filter { it.status == MatchStatus.FINISHED }
-
-                    if (finishedGrpMatches.isNotEmpty()) {
-                        val teamNamesInGrp = (defaultRowsForGrp.map { it.teamName } + grpMatches.map { it.homeTeamName } + grpMatches.map { it.awayTeamName }).distinct()
-                        val computedGrpRows = teamNamesInGrp.map { teamName ->
-                            var played = 0
-                            var won = 0
-                            var drawn = 0
-                            var lost = 0
-                            var goalsFor = 0
-                            var goalsAgainst = 0
-
-                            finishedGrpMatches.forEach { m ->
-                                if (m.homeTeamName == teamName) {
-                                    played++
-                                    val hScore = m.homeScore ?: 0
-                                    val aScore = m.awayScore ?: 0
-                                    goalsFor += hScore
-                                    goalsAgainst += aScore
-                                    when {
-                                        hScore > aScore -> won++
-                                        hScore == aScore -> drawn++
-                                        else -> lost++
-                                    }
-                                } else if (m.awayTeamName == teamName) {
-                                    played++
-                                    val aScore = m.awayScore ?: 0
-                                    val hScore = m.homeScore ?: 0
-                                    goalsFor += aScore
-                                    goalsAgainst += hScore
-                                    when {
-                                        aScore > hScore -> won++
-                                        aScore == hScore -> drawn++
-                                        else -> lost++
-                                    }
-                                }
-                            }
-                            val points = won * 3 + drawn
-                            val goalDifference = goalsFor - goalsAgainst
-                            StandingRow(
-                                position = 0,
-                                teamId = UUID.nameUUIDFromBytes(teamName.toByteArray()),
-                                teamName = teamName,
-                                points = points,
-                                played = played,
-                                won = won,
-                                drawn = drawn,
-                                lost = lost,
-                                goalsFor = goalsFor,
-                                goalsAgainst = goalsAgainst,
-                                goalDifference = goalDifference,
-                                groupName = grp
-                            )
-                        }
-
-                        val sortedGrpRows = computedGrpRows.sortedWith(
-                            compareByDescending<StandingRow> { it.points }
-                                .thenByDescending { it.goalDifference }
-                                .thenByDescending { it.goalsFor }
-                                .thenBy { it.teamName }
-                        ).mapIndexed { idx, r -> r.copy(position = idx + 1) }
-
-                        rows.addAll(sortedGrpRows)
-                    } else {
-                        rows.addAll(defaultRowsForGrp)
-                    }
-                }
-
-                return ResponseEntity.ok(rows)
+                it.phase?.contains("League") == true
             }
 
             if (groupMatches.isNotEmpty()) {
