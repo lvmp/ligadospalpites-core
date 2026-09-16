@@ -24,10 +24,11 @@ EXPOSE 8080
 ENTRYPOINT ["java", \
             "-XX:+UseG1GC", \
             "-XX:MaxGCPauseMillis=200", \
-            "-XX:MaxRAMPercentage=65.0", \
-            "-XX:MaxMetaspaceSize=192m", \
-            "-XX:ReservedCodeCacheSize=128m", \
+            "-XX:MaxRAMPercentage=60.0", \
+            "-XX:MaxMetaspaceSize=160m", \
+            "-XX:ReservedCodeCacheSize=96m", \
             "-XX:MaxDirectMemorySize=32m", \
             "-Xss256k", \
+            "-Dspring.backgroundpreinitializer=false", \
             "-jar", \
             "app.jar"]

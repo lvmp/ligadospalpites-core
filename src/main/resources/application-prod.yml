@@ -4,7 +4,7 @@ spring:
       on-profile: prod
 
   main:
-    lazy-initialization: false
+    lazy-initialization: true
   jmx:
     enabled: false
   threads:
@@ -46,7 +46,7 @@ spring:
         shutdown-timeout: 100ms
 
 server:
-  port: 8080
+  port: ${PORT:8080}
   shutdown: graceful
   tomcat:
     threads:
