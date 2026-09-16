@@ -20,20 +20,14 @@ COPY --from=builder /app/build/libs/*-SNAPSHOT.jar app.jar
 
 EXPOSE 8080
 
-# Inicialização altamente otimizada para recursos severamente limitados (GCP Free-Tier 512MB)
+# Inicialização de alta performance para Cloud Run (1GB RAM)
 ENTRYPOINT ["java", \
-            "-XX:+UseSerialGC", \
-            "-Xms128m", \
-            "-Xmx140m", \
-            "-XX:MaxMetaspaceSize=160m", \
-            "-XX:ReservedCodeCacheSize=48m", \
-            "-XX:MaxDirectMemorySize=16m", \
-            "-Dio.netty.allocator.numDirectArenas=1", \
-            "-Dio.netty.allocator.numHeapArenas=1", \
-            "-Dio.netty.allocator.maxOrder=3", \
-            "-Dio.netty.noPreferDirect=true", \
+            "-XX:+UseG1GC", \
+            "-XX:MaxGCPauseMillis=200", \
+            "-XX:MaxRAMPercentage=65.0", \
+            "-XX:MaxMetaspaceSize=192m", \
+            "-XX:ReservedCodeCacheSize=128m", \
+            "-XX:MaxDirectMemorySize=32m", \
             "-Xss256k", \
-            "-XX:TieredStopAtLevel=1", \
-            "-Dspring.backgroundpreinitializer=false", \
             "-jar", \
             "app.jar"]

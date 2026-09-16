@@ -4,9 +4,12 @@ spring:
       on-profile: prod
 
   main:
-    lazy-initialization: true
+    lazy-initialization: false
   jmx:
     enabled: false
+  threads:
+    virtual:
+      enabled: true
 
   # Supabase PostgreSQL configuration (pooled endpoint: jdbc:postgresql://aws-0-<region>.pooler.supabase.com:6543/postgres?sslmode=require)
   datasource:
@@ -15,8 +18,8 @@ spring:
     password: ${DATABASE_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE:3}
-      minimum-idle: 1
+      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE:8}
+      minimum-idle: 2
       idle-timeout: 30000
       connection-timeout: 20000
       max-lifetime: 1800000
@@ -47,6 +50,6 @@ server:
   shutdown: graceful
   tomcat:
     threads:
-      max: 35
-      min-spare: 5
-    accept-count: 50
+      max: 80
+      min-spare: 10
+    accept-count: 100

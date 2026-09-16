@@ -12,6 +12,8 @@ import com.ligadospalpites.sportsfeed.infrastructure.client.EspnSoccerClient
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.MatchEventJpaEntity
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.MatchJpaEntity
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataMatchEventRepository
+import com.github.benmanes.caffeine.cache.Cache
+import com.github.benmanes.caffeine.cache.Caffeine
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataMatchRepository
 import com.ligadospalpites.users.domain.models.EntitlementType
 import com.ligadospalpites.users.infrastructure.persistence.SpringDataUserEntitlementRepository
@@ -32,13 +34,14 @@ class GetMatchTimelineUseCase(
     private val entitlementRepository: SpringDataUserEntitlementRepository,
     private val espnSoccerClient: EspnSoccerClient,
     @Autowired(required = false) private val redisTemplate: StringRedisTemplate? = null,
-    private val objectMapper: ObjectMapper = ObjectMapper()
-        .registerModule(KotlinModule.Builder().build())
-        .registerModule(JavaTimeModule())
-        .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-        .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+    @Autowired(required = false) private val objectMapper: ObjectMapper = createDefaultObjectMapper()
 ) {
     private val logger = LoggerFactory.getLogger(GetMatchTimelineUseCase::class.java)
+
+    private val accessCache: Cache<Pair<UUID, UUID>, Boolean> = Caffeine.newBuilder()
+        .maximumSize(5_000)
+        .expireAfterWrite(Duration.ofMinutes(1))
+        .build()
 
     fun execute(matchId: UUID, userId: UUID): List<MatchTimelineEvent> {
         val match = matchRepository.findById(matchId).orElseThrow {
@@ -100,6 +103,11 @@ class GetMatchTimelineUseCase(
     }
 
     private fun validateUserAccess(userId: UUID, sportId: UUID) {
+        val cacheKey = Pair(userId, sportId)
+        if (accessCache.getIfPresent(cacheKey) == true) {
+            return
+        }
+
         val now = Instant.now()
         val entitlements = entitlementRepository.findByUserId(userId)
         val hasAccess = entitlements.any { ent ->
@@ -114,6 +122,8 @@ class GetMatchTimelineUseCase(
         if (!hasAccess) {
             throw AccessDeniedException("PREMIUM_REQUIRED")
         }
+
+        accessCache.put(cacheKey, true)
     }
 
     private fun fetchFromEspnOrFallback(match: MatchJpaEntity): List<MatchTimelineEvent> {
@@ -155,13 +165,15 @@ class GetMatchTimelineUseCase(
                 )
             }
 
+            val seenEvents = parsedEvents.mapTo(HashSet()) { Pair(it.minute, it.description) }
+
             summary?.commentary?.forEach { comment ->
                 val minuteStr = comment.time?.displayValue?.replace("'", "")?.trim()
                 val (minute, extra) = parseMinute(minuteStr)
                 val text = comment.text ?: ""
                 val type = detectCommentaryType(text)
 
-                if (parsedEvents.none { it.minute == minute && it.description == text }) {
+                if (seenEvents.add(Pair(minute, text))) {
                     parsedEvents.add(
                         MatchTimelineEvent(
                             id = UUID.randomUUID(),
@@ -334,3 +346,9 @@ class GetMatchTimelineUseCase(
         return codeMap[leagueId]
     }
 }
+
+private fun createDefaultObjectMapper(): ObjectMapper = ObjectMapper()
+    .registerModule(KotlinModule.Builder().build())
+    .registerModule(JavaTimeModule())
+    .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+    .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
