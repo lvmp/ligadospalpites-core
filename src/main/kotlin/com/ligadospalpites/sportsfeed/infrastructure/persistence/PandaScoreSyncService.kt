@@ -14,12 +14,14 @@ import org.springframework.context.ApplicationEventPublisher
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Service
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 data class EsportsLeagueMetadata(
     val id: UUID,
     val defaultName: String,
-    val pandaScoreSlug: String? = null,
+    val searchTerm: String,
+    val videogameSlug: String,
     val logoUrl: String? = null
 )
 
@@ -45,43 +47,50 @@ class PandaScoreSyncService(
         UUID.fromString("7c1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("7c1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             defaultName = "League of Legends - CBLOL",
-            pandaScoreSlug = "cblol",
+            searchTerm = "CBLOL",
+            videogameSlug = "league-of-legends",
             logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/league-of-legends.png"
         ),
         UUID.fromString("8c1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("8c1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             defaultName = "Valorant - VCT Americas",
-            pandaScoreSlug = "vct-americas",
+            searchTerm = "Americas",
+            videogameSlug = "valorant",
             logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/valorant.png"
         ),
         UUID.fromString("9c1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("9c1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             defaultName = "Counter-Strike 2 - Major",
-            pandaScoreSlug = "pgl-major",
+            searchTerm = "Major",
+            videogameSlug = "csgo",
             logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/csgo.png"
         ),
         UUID.fromString("ac1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("ac1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             defaultName = "League of Legends - Worlds",
-            pandaScoreSlug = "worlds",
+            searchTerm = "World Championship",
+            videogameSlug = "league-of-legends",
             logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/league-of-legends.png"
         ),
         UUID.fromString("bc1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("bc1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             defaultName = "Counter-Strike 2 - ESL Pro League",
-            pandaScoreSlug = "esl-pro-league",
+            searchTerm = "ESL Pro League",
+            videogameSlug = "csgo",
             logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/csgo.png"
         ),
         UUID.fromString("cc1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("cc1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             defaultName = "Counter-Strike 2 - BLAST Premier",
-            pandaScoreSlug = "blast-premier",
+            searchTerm = "BLAST Premier",
+            videogameSlug = "csgo",
             logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/csgo.png"
         ),
         UUID.fromString("dc1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("dc1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             defaultName = "Valorant - VCT Champions",
-            pandaScoreSlug = "valorant-champions",
+            searchTerm = "Champions",
+            videogameSlug = "valorant",
             logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/valorant.png"
         )
     )
@@ -94,6 +103,9 @@ class PandaScoreSyncService(
         val metadata = leaguesMetadata[leagueId] ?: return
         logger.info("Starting eSports games sync for league: ${metadata.defaultName}")
         ensureLeagueLogo(leagueId, metadata.logoUrl)
+
+        // Always purge synthetic baseline placeholder matches
+        purgeSyntheticBaselineMatches(leagueId)
 
         val incomingMatches = try {
             self.fetchFromPandaScore(sportId, leagueId)
@@ -111,7 +123,7 @@ class PandaScoreSyncService(
                 val baseline = generateBaselineFixtures(leagueId, metadata)
                 performUpsert(leagueId, baseline)
             } else {
-                logger.warn("No games retrieved for eSports league ${metadata.defaultName}. Local database unchanged.")
+                logger.warn("No new games retrieved for eSports league ${metadata.defaultName}. Local database updated.")
             }
         }
     }
@@ -123,8 +135,21 @@ class PandaScoreSyncService(
         val activeSeason = seasonRepository.findByLeagueIdAndIsActiveTrue(leagueId)
         val targetSeasonId = activeSeason?.id ?: throw IllegalStateException("No active season found for eSports league: $leagueId")
 
-        val externalGames = pandaScoreClient.fetchMatches(leagueSlug = metadata.pandaScoreSlug)
-        return externalGames.mapNotNull { game ->
+        val externalGames = pandaScoreClient.fetchMatches(
+            searchTerm = metadata.searchTerm,
+            videogameSlug = metadata.videogameSlug
+        )
+
+        // If returned from videogame-wide fallback, filter relevant games
+        val relevantGames = externalGames.filter { game ->
+            val leagueMatches = game.league?.name?.contains(metadata.searchTerm, ignoreCase = true) == true
+            val serieMatches = game.serie?.full_name?.contains(metadata.searchTerm, ignoreCase = true) == true
+            val nameMatches = game.name?.contains(metadata.searchTerm, ignoreCase = true) == true
+            leagueMatches || serieMatches || nameMatches
+        }
+        val targetGames = if (relevantGames.isNotEmpty()) relevantGames else externalGames
+
+        return targetGames.mapNotNull { game ->
             if (game.opponents.size < 2) return@mapNotNull null
             val homeOpponent = game.opponents[0].opponent ?: return@mapNotNull null
             val awayOpponent = game.opponents[1].opponent ?: return@mapNotNull null
@@ -247,16 +272,8 @@ class PandaScoreSyncService(
         logger.info("Performing intelligent upsert on ${incoming.size} eSports matches for league: $leagueId")
         val existing = matchRepository.findByLeagueId(leagueId)
 
-        val syntheticBaseline = existing.filter { it.homeTeamLogoUrl?.contains("dicebear") == true }
-        if (syntheticBaseline.isNotEmpty()) {
-            logger.info("Purging ${syntheticBaseline.size} synthetic baseline matches for league: $leagueId")
-            matchRepository.deleteAll(syntheticBaseline)
-        }
-        val cleanExisting = if (syntheticBaseline.isNotEmpty()) {
-            matchRepository.findByLeagueId(leagueId)
-        } else {
-            existing
-        }
+        purgeSyntheticBaselineMatches(leagueId)
+        val cleanExisting = matchRepository.findByLeagueId(leagueId)
 
         val toSave = incoming.map { inc ->
             val matchMatch = cleanExisting.find { ext ->
@@ -303,6 +320,17 @@ class PandaScoreSyncService(
 
         matchRepository.saveAll(toSave)
         logger.info("Successfully saved ${toSave.size} eSports matches for league $leagueId")
+    }
+
+    private fun purgeSyntheticBaselineMatches(leagueId: UUID) {
+        val existing = matchRepository.findByLeagueId(leagueId)
+        val syntheticBaseline = existing.filter {
+            it.homeTeamLogoUrl?.contains("dicebear") == true || it.awayTeamLogoUrl?.contains("dicebear") == true
+        }
+        if (syntheticBaseline.isNotEmpty()) {
+            logger.info("Purging ${syntheticBaseline.size} synthetic baseline matches for league: $leagueId")
+            matchRepository.deleteAll(syntheticBaseline)
+        }
     }
 
     private fun mapPandaScoreStatus(status: String?): MatchStatus {

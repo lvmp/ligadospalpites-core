@@ -6,6 +6,9 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.client.SimpleClientHttpRequestFactory
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
+import java.util.concurrent.ConcurrentHashMap
 
 @Component
 class PandaScoreClient(
@@ -13,6 +16,7 @@ class PandaScoreClient(
     @Value("\${app.sportsfeed.pandascore.token:}") private val apiToken: String
 ) {
     private val logger = LoggerFactory.getLogger(PandaScoreClient::class.java)
+    private val leagueIdCache = ConcurrentHashMap<String, Long>()
 
     private val restClient: RestClient by lazy {
         val builder = RestClient.builder()
@@ -28,29 +32,112 @@ class PandaScoreClient(
         builder.build()
     }
 
-    fun fetchMatches(leagueSlug: String? = null, page: Int = 1, size: Int = 50): List<PandaScoreMatchResponse> {
+    fun resolveLeagueId(searchTerm: String): Long? {
+        if (apiToken.isBlank() || searchTerm.isBlank()) return null
+        val key = searchTerm.lowercase().trim()
+        val cached = leagueIdCache[key]
+        if (cached != null) return cached
+
+        return try {
+            val encoded = URLEncoder.encode(searchTerm.trim(), StandardCharsets.UTF_8)
+            val uri = "/leagues?token=$apiToken&search[name]=$encoded&page[size]=10"
+            logger.info("Resolving PandaScore league ID for '$searchTerm': $uri")
+            val response = restClient.get()
+                .uri(uri)
+                .retrieve()
+                .body(Array<PandaScoreLeague>::class.java)
+
+            val leagues = response?.toList() ?: emptyList()
+            val match = leagues.firstOrNull { it.name.contains(searchTerm.trim(), ignoreCase = true) }
+                ?: leagues.firstOrNull()
+            val id = match?.id
+            if (id != null) {
+                logger.info("Resolved PandaScore league '$searchTerm' to ID: $id (${match.name})")
+                leagueIdCache[key] = id
+            } else {
+                logger.warn("Could not find any PandaScore league matching search term '$searchTerm'")
+            }
+            id
+        } catch (e: Exception) {
+            logger.warn("Failed to resolve PandaScore league ID for '$searchTerm': ${e.message}")
+            null
+        }
+    }
+
+    fun fetchMatches(
+        leagueIdOrSlug: String? = null,
+        videogameSlug: String? = null,
+        searchTerm: String? = null,
+        page: Int = 1,
+        size: Int = 50
+    ): List<PandaScoreMatchResponse> {
         if (apiToken.isBlank()) {
             logger.warn("PandaScore API token is empty. Skipping external API call.")
             return emptyList()
         }
 
-        return try {
-            val endpoint = if (!leagueSlug.isNullOrBlank()) {
-                "/leagues/$leagueSlug/matches"
-            } else {
-                "/matches"
+        // 1. Determine target league ID (numeric if resolved or provided)
+        var targetLeagueIdentifier = leagueIdOrSlug
+        if (targetLeagueIdentifier.isNullOrBlank() && !searchTerm.isNullOrBlank()) {
+            val resolvedId = resolveLeagueId(searchTerm)
+            if (resolvedId != null) {
+                targetLeagueIdentifier = resolvedId.toString()
             }
-            val uri = "$endpoint?token=$apiToken&page[number]=$page&page[size]=$size&sort=-begin_at"
+        }
 
-            logger.info("Fetching eSports matches from PandaScore: $uri")
-            val response = restClient.get()
-                .uri(uri)
+        // 2. Try fetching from league endpoint if we have an identifier
+        if (!targetLeagueIdentifier.isNullOrBlank()) {
+            try {
+                val uri = "/leagues/$targetLeagueIdentifier/matches?token=$apiToken&page[number]=$page&page[size]=$size&sort=-begin_at"
+                logger.info("Fetching eSports matches from PandaScore league endpoint: $uri")
+                val response = restClient.get()
+                    .uri(uri)
+                    .retrieve()
+                    .body(Array<PandaScoreMatchResponse>::class.java)
+
+                val matches = response?.toList() ?: emptyList()
+                if (matches.isNotEmpty()) {
+                    return matches
+                }
+            } catch (e: Exception) {
+                logger.warn("Could not fetch matches for league '$targetLeagueIdentifier' from PandaScore: ${e.message}. Attempting fallback...")
+            }
+        }
+
+        // 3. Fallback to /matches?filter[videogame]=... or /matches
+        return try {
+            val baseEndpoint = if (!videogameSlug.isNullOrBlank()) {
+                "/matches?filter[videogame]=$videogameSlug&token=$apiToken&page[number]=$page&page[size]=$size&sort=-begin_at"
+            } else {
+                "/matches?token=$apiToken&page[number]=$page&page[size]=$size&sort=-begin_at"
+            }
+            logger.info("Fetching eSports matches from PandaScore fallback endpoint: $baseEndpoint")
+            val pastResponse = restClient.get()
+                .uri(baseEndpoint)
                 .retrieve()
                 .body(Array<PandaScoreMatchResponse>::class.java)
+                ?.toList() ?: emptyList()
 
-            response?.toList() ?: emptyList()
+            // Also check upcoming matches
+            val upcomingEndpoint = if (!videogameSlug.isNullOrBlank()) {
+                "/matches/upcoming?filter[videogame]=$videogameSlug&token=$apiToken&page[size]=25&sort=begin_at"
+            } else {
+                "/matches/upcoming?token=$apiToken&page[size]=25&sort=begin_at"
+            }
+            val upcomingResponse = try {
+                restClient.get()
+                    .uri(upcomingEndpoint)
+                    .retrieve()
+                    .body(Array<PandaScoreMatchResponse>::class.java)
+                    ?.toList() ?: emptyList()
+            } catch (e: Exception) {
+                logger.warn("Could not fetch upcoming matches from $upcomingEndpoint: ${e.message}")
+                emptyList()
+            }
+
+            (upcomingResponse + pastResponse).distinctBy { it.id }
         } catch (e: Exception) {
-            logger.error("Error communicating with PandaScore API: ${e.message}", e)
+            logger.error("Error communicating with PandaScore fallback API: ${e.message}", e)
             emptyList()
         }
     }
@@ -97,9 +184,17 @@ data class PandaScoreMatchResponse(
     val number_of_games: Int? = 1,
     val league: PandaScoreLeague? = null,
     val serie: PandaScoreSerie? = null,
+    val videogame: PandaScoreVideogame? = null,
     val opponents: List<PandaScoreOpponentWrapper> = emptyList(),
     val results: List<PandaScoreResult> = emptyList(),
     val streams_list: List<PandaScoreStream> = emptyList()
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class PandaScoreVideogame(
+    val id: Long? = null,
+    val name: String? = null,
+    val slug: String? = null
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -140,3 +235,4 @@ data class PandaScoreStream(
     val embed_url: String? = null,
     val main: Boolean = false
 )
+

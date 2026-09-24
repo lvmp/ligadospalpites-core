@@ -12,11 +12,13 @@ class PandaScoreClientTest {
     @Test
     fun `should return empty list when apiToken is blank`() {
         val client = PandaScoreClient("https://api.pandascore.co", "")
-        val matches = client.fetchMatches("cblol")
+        val matches = client.fetchMatches(leagueIdOrSlug = "cblol")
         val standings = client.fetchStandings("cblol-split-2-2024")
+        val resolvedId = client.resolveLeagueId("CBLOL")
 
         assertTrue(matches.isEmpty())
         assertTrue(standings.isEmpty())
+        assertNull(resolvedId)
     }
 
     @Test
@@ -34,6 +36,11 @@ class PandaScoreClientTest {
               "name": "CBLOL",
               "slug": "cblol",
               "image_url": "https://cdn.pandascore.co/cblol.png"
+            },
+            "videogame": {
+              "id": 1,
+              "name": "LoL",
+              "slug": "league-of-legends"
             },
             "serie": {
               "id": 200,
@@ -81,6 +88,8 @@ class PandaScoreClientTest {
         val match = matches.first()
         assertEquals(998877L, match.id)
         assertEquals("finished", match.status)
+        assertEquals("league-of-legends", match.videogame?.slug)
+        assertEquals("LoL", match.videogame?.name)
         assertEquals(3, match.number_of_games)
         assertEquals(2, match.opponents.size)
         assertEquals("LOUD", match.opponents[0].opponent?.name)
