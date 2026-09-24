@@ -45,7 +45,7 @@ class PandaScoreSyncService(
         UUID.fromString("7c1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("7c1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             defaultName = "League of Legends - CBLOL",
-            pandaScoreSlug = "league-of-legends-cblol",
+            pandaScoreSlug = "cblol",
             logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/league-of-legends.png"
         ),
         UUID.fromString("8c1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
@@ -57,31 +57,31 @@ class PandaScoreSyncService(
         UUID.fromString("9c1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("9c1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             defaultName = "Counter-Strike 2 - Major",
-            pandaScoreSlug = "cs-go-major",
+            pandaScoreSlug = "pgl-major",
             logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/csgo.png"
         ),
         UUID.fromString("ac1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("ac1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             defaultName = "League of Legends - Worlds",
-            pandaScoreSlug = "league-of-legends-world-championship",
+            pandaScoreSlug = "worlds",
             logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/league-of-legends.png"
         ),
         UUID.fromString("bc1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("bc1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             defaultName = "Counter-Strike 2 - ESL Pro League",
-            pandaScoreSlug = "cs-go-esl-pro-league",
+            pandaScoreSlug = "esl-pro-league",
             logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/csgo.png"
         ),
         UUID.fromString("cc1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("cc1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             defaultName = "Counter-Strike 2 - BLAST Premier",
-            pandaScoreSlug = "cs-go-blast-premier",
+            pandaScoreSlug = "blast-premier",
             logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/csgo.png"
         ),
         UUID.fromString("dc1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("dc1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             defaultName = "Valorant - VCT Champions",
-            pandaScoreSlug = "vct-champions",
+            pandaScoreSlug = "valorant-champions",
             logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/valorant.png"
         )
     )
@@ -247,8 +247,19 @@ class PandaScoreSyncService(
         logger.info("Performing intelligent upsert on ${incoming.size} eSports matches for league: $leagueId")
         val existing = matchRepository.findByLeagueId(leagueId)
 
+        val syntheticBaseline = existing.filter { it.homeTeamLogoUrl?.contains("dicebear") == true }
+        if (syntheticBaseline.isNotEmpty()) {
+            logger.info("Purging ${syntheticBaseline.size} synthetic baseline matches for league: $leagueId")
+            matchRepository.deleteAll(syntheticBaseline)
+        }
+        val cleanExisting = if (syntheticBaseline.isNotEmpty()) {
+            matchRepository.findByLeagueId(leagueId)
+        } else {
+            existing
+        }
+
         val toSave = incoming.map { inc ->
-            val matchMatch = existing.find { ext ->
+            val matchMatch = cleanExisting.find { ext ->
                 val sameTeams = ext.homeTeamName.equals(inc.homeTeamName, ignoreCase = true) &&
                                 ext.awayTeamName.equals(inc.awayTeamName, ignoreCase = true)
                 if (!sameTeams) return@find false

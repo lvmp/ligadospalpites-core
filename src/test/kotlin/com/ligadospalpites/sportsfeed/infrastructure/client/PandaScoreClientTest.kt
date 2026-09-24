@@ -12,7 +12,7 @@ class PandaScoreClientTest {
     @Test
     fun `should return empty list when apiToken is blank`() {
         val client = PandaScoreClient("https://api.pandascore.co", "")
-        val matches = client.fetchMatches("league-of-legends-cblol")
+        val matches = client.fetchMatches("cblol")
         val standings = client.fetchStandings("cblol-split-2-2024")
 
         assertTrue(matches.isEmpty())
@@ -32,7 +32,7 @@ class PandaScoreClientTest {
             "league": {
               "id": 100,
               "name": "CBLOL",
-              "slug": "league-of-legends-cblol",
+              "slug": "cblol",
               "image_url": "https://cdn.pandascore.co/cblol.png"
             },
             "serie": {

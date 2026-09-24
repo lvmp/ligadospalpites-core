@@ -581,13 +581,13 @@ class FixtureController(
 
             // 2. Consulta direta à API do PandaScore se cliente estiver disponível
             val pandaScoreLeagueSlugMap = mapOf(
-                UUID.fromString("7c1e3a11-b9db-44ab-ba02-411a0c0bcf14") to "league-of-legends-cblol",
+                UUID.fromString("7c1e3a11-b9db-44ab-ba02-411a0c0bcf14") to "cblol",
                 UUID.fromString("8c1e3a11-b9db-44ab-ba02-411a0c0bcf14") to "vct-americas",
-                UUID.fromString("9c1e3a11-b9db-44ab-ba02-411a0c0bcf14") to "cs-go-major",
-                UUID.fromString("ac1e3a11-b9db-44ab-ba02-411a0c0bcf14") to "league-of-legends-world-championship",
-                UUID.fromString("bc1e3a11-b9db-44ab-ba02-411a0c0bcf14") to "cs-go-esl-pro-league",
-                UUID.fromString("cc1e3a11-b9db-44ab-ba02-411a0c0bcf14") to "cs-go-blast-premier",
-                UUID.fromString("dc1e3a11-b9db-44ab-ba02-411a0c0bcf14") to "vct-champions"
+                UUID.fromString("9c1e3a11-b9db-44ab-ba02-411a0c0bcf14") to "pgl-major",
+                UUID.fromString("ac1e3a11-b9db-44ab-ba02-411a0c0bcf14") to "worlds",
+                UUID.fromString("bc1e3a11-b9db-44ab-ba02-411a0c0bcf14") to "esl-pro-league",
+                UUID.fromString("cc1e3a11-b9db-44ab-ba02-411a0c0bcf14") to "blast-premier",
+                UUID.fromString("dc1e3a11-b9db-44ab-ba02-411a0c0bcf14") to "valorant-champions"
             )
             val slug = pandaScoreLeagueSlugMap[leagueId]
             if (pandaScoreClient != null && !slug.isNullOrBlank()) {
