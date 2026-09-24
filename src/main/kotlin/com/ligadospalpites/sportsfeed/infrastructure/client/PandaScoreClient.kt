@@ -88,30 +88,48 @@ class PandaScoreClient(
         // 2. Try fetching from league endpoint if we have an identifier
         if (!targetLeagueIdentifier.isNullOrBlank()) {
             try {
-                val uri = "/leagues/$targetLeagueIdentifier/matches?token=$apiToken&page[number]=$page&page[size]=$size&sort=-begin_at"
-                logger.info("Fetching eSports matches from PandaScore league endpoint: $uri")
-                val response = restClient.get()
-                    .uri(uri)
-                    .retrieve()
-                    .body(Array<PandaScoreMatchResponse>::class.java)
+                val pastUri = "/leagues/$targetLeagueIdentifier/matches/past?token=$apiToken&page[number]=$page&page[size]=$size&sort=-begin_at"
+                logger.info("Fetching past eSports matches from PandaScore league endpoint: $pastUri")
+                val pastResponse = try {
+                    restClient.get()
+                        .uri(pastUri)
+                        .retrieve()
+                        .body(Array<PandaScoreMatchResponse>::class.java)
+                        ?.toList() ?: emptyList()
+                } catch (e: Exception) {
+                    logger.warn("Could not fetch past matches for league '$targetLeagueIdentifier': ${e.message}")
+                    emptyList()
+                }
 
-                val matches = response?.toList() ?: emptyList()
-                if (matches.isNotEmpty()) {
-                    return matches
+                val upcomingUri = "/leagues/$targetLeagueIdentifier/matches/upcoming?token=$apiToken&page[size]=25&sort=begin_at"
+                val upcomingResponse = try {
+                    restClient.get()
+                        .uri(upcomingUri)
+                        .retrieve()
+                        .body(Array<PandaScoreMatchResponse>::class.java)
+                        ?.toList() ?: emptyList()
+                } catch (e: Exception) {
+                    emptyList()
+                }
+
+                val allLeagueMatches = (upcomingResponse + pastResponse).distinctBy { it.id }
+                if (allLeagueMatches.isNotEmpty()) {
+                    logger.info("PandaScore league endpoint returned ${allLeagueMatches.size} matches for '$targetLeagueIdentifier'")
+                    return allLeagueMatches
                 }
             } catch (e: Exception) {
                 logger.warn("Could not fetch matches for league '$targetLeagueIdentifier' from PandaScore: ${e.message}. Attempting fallback...")
             }
         }
 
-        // 3. Fallback to /matches?filter[videogame]=... or /matches
+        // 3. Fallback to /matches/past?filter[videogame]=... and /matches/upcoming
         return try {
             val baseEndpoint = if (!videogameSlug.isNullOrBlank()) {
-                "/matches?filter[videogame]=$videogameSlug&token=$apiToken&page[number]=$page&page[size]=$size&sort=-begin_at"
+                "/matches/past?filter[videogame]=$videogameSlug&token=$apiToken&page[number]=$page&page[size]=$size&sort=-begin_at"
             } else {
-                "/matches?token=$apiToken&page[number]=$page&page[size]=$size&sort=-begin_at"
+                "/matches/past?token=$apiToken&page[number]=$page&page[size]=$size&sort=-begin_at"
             }
-            logger.info("Fetching eSports matches from PandaScore fallback endpoint: $baseEndpoint")
+            logger.info("Fetching eSports past matches from PandaScore fallback endpoint: $baseEndpoint")
             val pastResponse = restClient.get()
                 .uri(baseEndpoint)
                 .retrieve()

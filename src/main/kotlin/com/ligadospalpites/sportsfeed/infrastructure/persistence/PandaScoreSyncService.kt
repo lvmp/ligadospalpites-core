@@ -117,14 +117,7 @@ class PandaScoreSyncService(
         if (incomingMatches.isNotEmpty()) {
             performUpsert(leagueId, incomingMatches)
         } else {
-            val existing = matchRepository.findByLeagueId(leagueId)
-            if (existing.isEmpty()) {
-                logger.warn("No games retrieved for eSports league ${metadata.defaultName} and local database is empty. Seeding initial baseline fixtures.")
-                val baseline = generateBaselineFixtures(leagueId, metadata)
-                performUpsert(leagueId, baseline)
-            } else {
-                logger.warn("No new games retrieved for eSports league ${metadata.defaultName}. Local database updated.")
-            }
+            logger.info("No active or historical games retrieved for eSports league ${metadata.defaultName}. League is currently off-season.")
         }
     }
 
@@ -184,84 +177,6 @@ class PandaScoreSyncService(
     fun fetchMatchesLocalFallback(sportId: UUID, leagueId: UUID, exception: Throwable): List<MatchJpaEntity> {
         logger.error("PandaScore circuit breaker activated or call failed. Error: ${exception.message}")
         return emptyList()
-    }
-
-    private fun generateBaselineFixtures(leagueId: UUID, metadata: EsportsLeagueMetadata): List<MatchJpaEntity> {
-        val activeSeason = seasonRepository.findByLeagueIdAndIsActiveTrue(leagueId)
-        val targetSeasonId = activeSeason?.id ?: UUID.randomUUID()
-        val now = Instant.now()
-
-        val fixtures = when {
-            metadata.defaultName.contains("CBLOL") -> listOf(
-                Tuple4("LOUD", "paiN Gaming", 2 to 1, 3),
-                Tuple4("FURIA", "RED Canids", 0 to 2, 3),
-                Tuple4("Kabum!", "Vivo Keyd", null to null, 3),
-                Tuple4("Fluxo", "INTZ", null to null, 1)
-            )
-            metadata.defaultName.contains("VCT Champions") || metadata.defaultName.contains("Champions") -> listOf(
-                Tuple4("Sentinels", "Fnatic", 2 to 1, 3),
-                Tuple4("Paper Rex", "Team Heretics", 2 to 0, 3),
-                Tuple4("EDward Gaming", "Leviatán", null to null, 3),
-                Tuple4("LOUD", "DRX", null to null, 3)
-            )
-            metadata.defaultName.contains("VCT") -> listOf(
-                Tuple4("LOUD", "Sentinels", 2 to 0, 3),
-                Tuple4("NRG", "100 Thieves", 1 to 2, 3),
-                Tuple4("Cloud9", "KRÜ Esports", null to null, 3),
-                Tuple4("Leviatán", "FURIA", null to null, 3)
-            )
-            metadata.defaultName.contains("ESL Pro League") -> listOf(
-                Tuple4("MOUZ", "Eternal Fire", 2 to 1, 3),
-                Tuple4("Natus Vincere", "G2 Esports", 2 to 0, 3),
-                Tuple4("FURIA", "Team Liquid", null to null, 3),
-                Tuple4("Vitality", "FaZe Clan", null to null, 3)
-            )
-            metadata.defaultName.contains("BLAST Premier") -> listOf(
-                Tuple4("Team Spirit", "Natus Vincere", 2 to 1, 3),
-                Tuple4("FaZe Clan", "Astralis", 2 to 0, 3),
-                Tuple4("G2 Esports", "Virtus.pro", null to null, 3),
-                Tuple4("Vitality", "Heroic", null to null, 3)
-            )
-            metadata.defaultName.contains("CS2") || metadata.defaultName.contains("Major") -> listOf(
-                Tuple4("FURIA", "Natus Vincere", 1 to 2, 3),
-                Tuple4("FaZe Clan", "G2 Esports", 2 to 0, 3),
-                Tuple4("MOUZ", "Vitality", null to null, 3),
-                Tuple4("Complexity", "Team Liquid", null to null, 1)
-            )
-            else -> listOf(
-                Tuple4("T1", "Gen.G", 3 to 2, 5),
-                Tuple4("G2 Esports", "Bilibili Gaming", 1 to 3, 5),
-                Tuple4("Hanwha Life", "Top Esports", null to null, 5),
-                Tuple4("Fnatic", "Team Liquid", null to null, 3)
-            )
-        }
-
-        return fixtures.mapIndexed { index, (home, away, scores, boCount) ->
-            val offsetDays = (index - 1).toLong()
-            val status = when {
-                scores.first != null -> MatchStatus.FINISHED
-                offsetDays == 0L -> MatchStatus.LIVE
-                else -> MatchStatus.SCHEDULED
-            }
-            MatchJpaEntity(
-                id = UUID.randomUUID(),
-                sportId = esportsId,
-                leagueId = leagueId,
-                seasonId = targetSeasonId,
-                homeTeamName = home,
-                awayTeamName = away,
-                homeTeamLogoUrl = "https://api.dicebear.com/7.x/initials/svg?seed=$home&radius=50",
-                awayTeamLogoUrl = "https://api.dicebear.com/7.x/initials/svg?seed=$away&radius=50",
-                kickoffTime = now.plus(offsetDays * 2, java.time.temporal.ChronoUnit.DAYS),
-                status = status,
-                homeScore = scores.first,
-                awayScore = scores.second,
-                phase = "Fase Principal",
-                numberOfGames = boCount,
-                streamUrl = "https://www.twitch.tv/gaules",
-                updatedAt = now
-            )
-        }
     }
 
     override fun syncNews(sportId: UUID) {
@@ -368,6 +283,4 @@ class PandaScoreSyncService(
             }
         }
     }
-
-    private data class Tuple4<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 }

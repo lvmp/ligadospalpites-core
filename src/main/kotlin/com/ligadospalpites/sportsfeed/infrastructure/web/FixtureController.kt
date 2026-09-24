@@ -40,6 +40,7 @@ class FixtureController(
     fun getLeaguesGroupedBySport(): ResponseEntity<List<SportWithLeaguesResponse>> {
         val activeLeagues = leagueRepository.findByIsActiveTrue()
         val sports = sportRepository.findAll()
+        val allMatches = matchRepository.findAll()
 
         val grouped = sports.map { sport ->
             val leaguesForSport = activeLeagues
@@ -54,13 +55,20 @@ class FixtureController(
                             displayLabel = "Temporada ${it.name}"
                         )
                     }
+                    val leagueMatches = allMatches.filter { it.leagueId == league.id }
+                    val hasActiveMatches = leagueMatches.any {
+                        it.status == MatchStatus.SCHEDULED || it.status == MatchStatus.LIVE
+                    }
+                    val isOffSeason = !hasActiveMatches
+
                     LeagueResponse(
                         leagueId = league.id,
                         name = league.name,
                         isActive = league.isActive,
                         logoUrl = league.logoUrl,
                         format = league.format,
-                        currentSeason = currentSeasonRes
+                        currentSeason = currentSeasonRes,
+                        isOffSeason = isOffSeason
                     )
                 }
 
@@ -936,7 +944,8 @@ data class LeagueResponse(
     val isActive: Boolean,
     val logoUrl: String? = null,
     val format: String = "POINTS",
-    val currentSeason: SeasonResponse? = null
+    val currentSeason: SeasonResponse? = null,
+    val isOffSeason: Boolean = false
 )
 
 data class MatchResponse(
