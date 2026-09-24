@@ -156,6 +156,28 @@ class SyncOrchestratorTest {
     }
 
     @Test
+    fun `should sync league when it has past matches still marked as SCHEDULED even when force is false`() {
+        val activeLeagues = listOf(
+            LeagueJpaEntity(id = leagueId1, name = "League 1", sportId = sportId, isActive = true)
+        )
+        `when`(leagueRepository.findByIsActiveTrue()).thenReturn(activeLeagues)
+        `when`(leagueSyncService1.supports(sportId, leagueId1)).thenReturn(true)
+
+        val pastPendingMatch = MatchJpaEntity(
+            id = UUID.randomUUID(), sportId = sportId, leagueId = leagueId1, seasonId = UUID.randomUUID(),
+            homeTeamName = "A", awayTeamName = "B", kickoffTime = Instant.now().minus(48, ChronoUnit.HOURS),
+            status = MatchStatus.SCHEDULED
+        )
+        `when`(matchRepository.findByLeagueId(leagueId1)).thenReturn(listOf(pastPendingMatch))
+
+        val results = orchestrator.syncAllActiveLeagues(force = false)
+
+        assertEquals(1, results.size)
+        assertEquals("SUCCESS", results[0]["status"])
+        verify(leagueSyncService1).syncMatches(sportId, leagueId1)
+    }
+
+    @Test
     fun `should handle individual league sync failure without crashing the whole execution`() {
         val activeLeagues = listOf(
             LeagueJpaEntity(id = leagueId1, name = "League 1", sportId = sportId, isActive = true),

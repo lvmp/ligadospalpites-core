@@ -242,7 +242,7 @@ class FootballGenericSyncService(
         }
     }
 
-    @CircuitBreaker(name = "goalApi", fallbackMethod = "fetchMatchesLocalFallback")
+    @CircuitBreaker(name = "goalApi", fallbackMethod = "fetchGoalApiFallback")
     @Retry(name = "goalApi")
     fun fetchFromGoalApi(sportId: UUID, leagueId: UUID): List<MatchJpaEntity> {
         val metadata = leaguesMetadata[leagueId] ?: throw IllegalArgumentException("Invalid league ID: $leagueId")
@@ -279,6 +279,17 @@ class FootballGenericSyncService(
                 phase = phase,
                 updatedAt = Instant.now()
             )
+        }
+    }
+
+    fun fetchGoalApiFallback(sportId: UUID, leagueId: UUID, exception: Throwable): List<MatchJpaEntity> {
+        val metadata = leaguesMetadata[leagueId]
+        logger.warn("GoalApi failed for ${metadata?.defaultName ?: leagueId} (${exception.message}). Falling back to ESPN.")
+        return try {
+            self.fetchFromEspnLibertadores(sportId, leagueId)
+        } catch (e: Exception) {
+            logger.error("Fallback to ESPN also failed: ${e.message}")
+            emptyList()
         }
     }
 

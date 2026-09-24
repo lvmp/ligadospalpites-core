@@ -1,5 +1,6 @@
 package com.ligadospalpites.sportsfeed.infrastructure.client
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.client.SimpleClientHttpRequestFactory
@@ -34,11 +35,12 @@ class PandaScoreClient(
         }
 
         return try {
-            val uri = if (!leagueSlug.isNullOrBlank()) {
-                "/leagues/$leagueSlug/matches?page[number]=$page&page[size]=$size&sort=-begin_at"
+            val endpoint = if (!leagueSlug.isNullOrBlank()) {
+                "/leagues/$leagueSlug/matches"
             } else {
-                "/matches?page[number]=$page&page[size]=$size&sort=-begin_at"
+                "/matches"
             }
+            val uri = "$endpoint?token=$apiToken&page[number]=$page&page[size]=$size&sort=-begin_at"
 
             logger.info("Fetching eSports matches from PandaScore: $uri")
             val response = restClient.get()
@@ -60,7 +62,7 @@ class PandaScoreClient(
         }
 
         return try {
-            val uri = "/tournaments/$tournamentSlugOrId/standings"
+            val uri = "/tournaments/$tournamentSlugOrId/standings?token=$apiToken"
             logger.info("Fetching tournament standings from PandaScore: $uri")
             val response = restClient.get()
                 .uri(uri)
@@ -75,6 +77,7 @@ class PandaScoreClient(
     }
 }
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class PandaScoreStandingResponse(
     val rank: Int,
     val team: PandaScoreTeam,
@@ -85,6 +88,7 @@ data class PandaScoreStandingResponse(
     val matches_played: Int? = 0
 )
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class PandaScoreMatchResponse(
     val id: Long,
     val name: String? = null,
@@ -98,6 +102,7 @@ data class PandaScoreMatchResponse(
     val streams_list: List<PandaScoreStream> = emptyList()
 )
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class PandaScoreLeague(
     val id: Long,
     val name: String,
@@ -105,14 +110,17 @@ data class PandaScoreLeague(
     val slug: String? = null
 )
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class PandaScoreSerie(
     val full_name: String? = null
 )
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class PandaScoreOpponentWrapper(
     val opponent: PandaScoreTeam? = null
 )
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class PandaScoreTeam(
     val id: Long,
     val name: String,
@@ -120,11 +128,13 @@ data class PandaScoreTeam(
     val acronym: String? = null
 )
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class PandaScoreResult(
     val team_id: Long,
     val score: Int
 )
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class PandaScoreStream(
     val raw_url: String? = null,
     val embed_url: String? = null,
