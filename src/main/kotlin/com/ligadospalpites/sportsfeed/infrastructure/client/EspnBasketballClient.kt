@@ -38,6 +38,12 @@ class EspnBasketballClient(
 
     private val restClient: RestClient = RestClient.builder()
         .baseUrl(baseUrl)
+        .defaultHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+        .defaultHeader("Accept", "application/json, text/plain, */*")
+        .defaultHeader("Accept-Language", "en-US,en;q=0.9")
+        .defaultHeader("Referer", "https://www.espn.com/")
+        .defaultHeader("Origin", "https://www.espn.com")
+        .defaultHeader("Connection", "keep-alive")
         .requestFactory(SimpleClientHttpRequestFactory().apply {
             setConnectTimeout(5000)
             setReadTimeout(10000)
@@ -104,7 +110,7 @@ class EspnBasketballClient(
             logger.info("ESPN Public API returned ${rows.size} standing rows for NBA")
             rows
         } catch (e: Exception) {
-            logger.error("Failed to fetch ESPN NBA standings: ${e.message}", e)
+            logger.warn("Could not fetch ESPN NBA standings: ${e.message}")
             emptyList()
         }
     }
@@ -129,7 +135,7 @@ class EspnBasketballClient(
             logger.info("ESPN Public API returned ${games.size} games for $leagueSlug")
             games
         } catch (e: Exception) {
-            logger.error("Failed to fetch ESPN basketball scoreboard for $leagueSlug: ${e.message}", e)
+            logger.warn("Could not fetch ESPN basketball scoreboard for $leagueSlug: ${e.message}")
             emptyList()
         }
     }

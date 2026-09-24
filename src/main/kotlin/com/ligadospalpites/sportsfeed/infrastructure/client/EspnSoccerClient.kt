@@ -17,6 +17,12 @@ class EspnSoccerClient(
 
     private val restClient: RestClient = RestClient.builder()
         .baseUrl(baseUrl)
+        .defaultHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+        .defaultHeader("Accept", "application/json, text/plain, */*")
+        .defaultHeader("Accept-Language", "en-US,en;q=0.9")
+        .defaultHeader("Referer", "https://www.espn.com/")
+        .defaultHeader("Origin", "https://www.espn.com")
+        .defaultHeader("Connection", "keep-alive")
         .requestFactory(SimpleClientHttpRequestFactory().apply {
             setConnectTimeout(5000)
             setReadTimeout(15000)
