@@ -73,8 +73,9 @@ class SyncOrchestrator(
                             kickoff.isAfter(startWindow) && kickoff.isBefore(endWindow)
                         }
                         val isPendingPastMatch = match.status == MatchStatus.SCHEDULED && match.kickoffTime.isBefore(now)
+                        val isRecentlyFinished = match.status == MatchStatus.FINISHED && match.kickoffTime.isAfter(now.minus(24, ChronoUnit.HOURS))
 
-                        isLive || isNearKickoff || isPendingPastMatch
+                        isLive || isNearKickoff || isPendingPastMatch || isRecentlyFinished
                     }
 
                     if (!hasActiveMatch) {

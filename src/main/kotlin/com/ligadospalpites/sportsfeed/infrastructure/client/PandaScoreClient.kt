@@ -101,6 +101,17 @@ class PandaScoreClient(
                     emptyList()
                 }
 
+                val runningUri = "/leagues/$targetLeagueIdentifier/matches/running?token=$apiToken"
+                val runningResponse = try {
+                    restClient.get()
+                        .uri(runningUri)
+                        .retrieve()
+                        .body(Array<PandaScoreMatchResponse>::class.java)
+                        ?.toList() ?: emptyList()
+                } catch (e: Exception) {
+                    emptyList()
+                }
+
                 val upcomingUri = "/leagues/$targetLeagueIdentifier/matches/upcoming?token=$apiToken&page[size]=25&sort=begin_at"
                 val upcomingResponse = try {
                     restClient.get()
@@ -112,7 +123,7 @@ class PandaScoreClient(
                     emptyList()
                 }
 
-                val allLeagueMatches = (upcomingResponse + pastResponse).distinctBy { it.id }
+                val allLeagueMatches = (upcomingResponse + runningResponse + pastResponse).distinctBy { it.id }
                 if (allLeagueMatches.isNotEmpty()) {
                     logger.info("PandaScore league endpoint returned ${allLeagueMatches.size} matches for '$targetLeagueIdentifier'")
                     return allLeagueMatches
@@ -122,7 +133,7 @@ class PandaScoreClient(
             }
         }
 
-        // 3. Fallback to /matches/past?filter[videogame]=... and /matches/upcoming
+        // 3. Fallback to /matches/past, /matches/running, and /matches/upcoming
         return try {
             val baseEndpoint = if (!videogameSlug.isNullOrBlank()) {
                 "/matches/past?filter[videogame]=$videogameSlug&token=$apiToken&page[number]=$page&page[size]=$size&sort=-begin_at"
@@ -135,6 +146,23 @@ class PandaScoreClient(
                 .retrieve()
                 .body(Array<PandaScoreMatchResponse>::class.java)
                 ?.toList() ?: emptyList()
+
+            // Also check running (live) matches
+            val runningEndpoint = if (!videogameSlug.isNullOrBlank()) {
+                "/matches/running?filter[videogame]=$videogameSlug&token=$apiToken"
+            } else {
+                "/matches/running?token=$apiToken"
+            }
+            val runningResponse = try {
+                restClient.get()
+                    .uri(runningEndpoint)
+                    .retrieve()
+                    .body(Array<PandaScoreMatchResponse>::class.java)
+                    ?.toList() ?: emptyList()
+            } catch (e: Exception) {
+                logger.warn("Could not fetch running matches from $runningEndpoint: ${e.message}")
+                emptyList()
+            }
 
             // Also check upcoming matches
             val upcomingEndpoint = if (!videogameSlug.isNullOrBlank()) {
@@ -153,7 +181,7 @@ class PandaScoreClient(
                 emptyList()
             }
 
-            (upcomingResponse + pastResponse).distinctBy { it.id }
+            (upcomingResponse + runningResponse + pastResponse).distinctBy { it.id }
         } catch (e: Exception) {
             logger.error("Error communicating with PandaScore fallback API: ${e.message}", e)
             emptyList()
@@ -251,6 +279,7 @@ data class PandaScoreResult(
 data class PandaScoreStream(
     val raw_url: String? = null,
     val embed_url: String? = null,
-    val main: Boolean = false
+    val main: Boolean = false,
+    val language: String? = null
 )
 

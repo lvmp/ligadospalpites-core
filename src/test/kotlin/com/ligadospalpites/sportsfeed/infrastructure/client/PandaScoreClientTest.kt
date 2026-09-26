@@ -130,4 +130,33 @@ class PandaScoreClientTest {
         assertEquals(42, standing.points)
         assertEquals("LOUD", standing.team.name)
     }
+
+    @Test
+    fun `should deserialize running live match correctly`() {
+        val jsonPayload = """
+        [
+          {
+            "id": 112233,
+            "name": "Sentinels vs LOUD",
+            "begin_at": "2026-09-26T20:00:00Z",
+            "status": "running",
+            "number_of_games": 3,
+            "videogame": { "id": 2, "name": "Valorant", "slug": "valorant" },
+            "opponents": [
+              { "opponent": { "id": 201, "name": "Sentinels" } },
+              { "opponent": { "id": 202, "name": "LOUD" } }
+            ],
+            "results": [
+              { "team_id": 201, "score": 1 },
+              { "team_id": 202, "score": 0 }
+            ]
+          }
+        ]
+        """.trimIndent()
+
+        val matches: List<PandaScoreMatchResponse> = objectMapper.readValue(jsonPayload)
+        assertEquals(1, matches.size)
+        assertEquals("running", matches.first().status)
+        assertEquals(1, matches.first().results.find { it.team_id == 201L }?.score)
+    }
 }

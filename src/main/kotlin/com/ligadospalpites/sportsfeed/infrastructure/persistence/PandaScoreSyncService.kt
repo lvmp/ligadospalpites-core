@@ -54,7 +54,7 @@ class PandaScoreSyncService(
         UUID.fromString("8c1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("8c1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             defaultName = "Valorant - VCT Americas",
-            searchTerm = "Americas",
+            searchTerm = "VCT Americas",
             videogameSlug = "valorant",
             logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/valorant.png"
         ),
@@ -89,7 +89,7 @@ class PandaScoreSyncService(
         UUID.fromString("dc1e3a11-b9db-44ab-ba02-411a0c0bcf14") to EsportsLeagueMetadata(
             id = UUID.fromString("dc1e3a11-b9db-44ab-ba02-411a0c0bcf14"),
             defaultName = "Valorant - VCT Champions",
-            searchTerm = "Champions",
+            searchTerm = "VCT Champions",
             videogameSlug = "valorant",
             logoUrl = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/valorant.png"
         )
@@ -142,15 +142,26 @@ class PandaScoreSyncService(
         }
         val targetGames = if (relevantGames.isNotEmpty()) relevantGames else externalGames
 
+        val seasonStart = activeSeason.startDate.minus(14, ChronoUnit.DAYS)
+        val seasonEnd = activeSeason.endDate.plus(14, ChronoUnit.DAYS)
+
         return targetGames.mapNotNull { game ->
             if (game.opponents.size < 2) return@mapNotNull null
             val homeOpponent = game.opponents[0].opponent ?: return@mapNotNull null
             val awayOpponent = game.opponents[1].opponent ?: return@mapNotNull null
 
-            val homeScore = game.results.find { it.team_id == homeOpponent.id }?.score
-            val awayScore = game.results.find { it.team_id == awayOpponent.id }?.score
+            val kickoffInstant = parseIsoInstant(game.begin_at)
+            // Filtra rigorosamente por partidas pertencentes à janela da temporada ativa
+            if (kickoffInstant.isBefore(seasonStart) || kickoffInstant.isAfter(seasonEnd)) {
+                return@mapNotNull null
+            }
 
-            val streamUrl = game.streams_list.firstOrNull { it.main }?.raw_url
+            val mappedStatus = mapPandaScoreStatus(game.status)
+            val homeScore = if (mappedStatus == MatchStatus.SCHEDULED) null else game.results.find { it.team_id == homeOpponent.id }?.score
+            val awayScore = if (mappedStatus == MatchStatus.SCHEDULED) null else game.results.find { it.team_id == awayOpponent.id }?.score
+
+            val streamUrl = game.streams_list.firstOrNull { it.language?.startsWith("pt", ignoreCase = true) == true }?.raw_url
+                ?: game.streams_list.firstOrNull { it.main }?.raw_url
                 ?: game.streams_list.firstOrNull()?.raw_url
 
             MatchJpaEntity(
@@ -162,8 +173,8 @@ class PandaScoreSyncService(
                 awayTeamName = awayOpponent.name,
                 homeTeamLogoUrl = homeOpponent.image_url,
                 awayTeamLogoUrl = awayOpponent.image_url,
-                kickoffTime = parseIsoInstant(game.begin_at),
-                status = mapPandaScoreStatus(game.status),
+                kickoffTime = kickoffInstant,
+                status = mappedStatus,
                 homeScore = homeScore,
                 awayScore = awayScore,
                 phase = game.serie?.full_name ?: "Fase Principal",
@@ -185,18 +196,29 @@ class PandaScoreSyncService(
 
     internal fun performUpsert(leagueId: UUID, incoming: List<MatchJpaEntity>) {
         logger.info("Performing intelligent upsert on ${incoming.size} eSports matches for league: $leagueId")
-        val existing = matchRepository.findByLeagueId(leagueId)
-
         purgeSyntheticBaselineMatches(leagueId)
         val cleanExisting = matchRepository.findByLeagueId(leagueId)
 
         val toSave = incoming.map { inc ->
+            var isReversed = false
             val matchMatch = cleanExisting.find { ext ->
-                val sameTeams = ext.homeTeamName.equals(inc.homeTeamName, ignoreCase = true) &&
-                                ext.awayTeamName.equals(inc.awayTeamName, ignoreCase = true)
-                if (!sameTeams) return@find false
-                // Se a diferença de kickoff for inferior a 48h, consideramos o mesmo jogo
-                java.time.Duration.between(ext.kickoffTime, inc.kickoffTime).abs().toHours() < 48
+                val direct = ext.homeTeamName.equals(inc.homeTeamName, ignoreCase = true) &&
+                             ext.awayTeamName.equals(inc.awayTeamName, ignoreCase = true)
+                if (direct) {
+                    val hoursDiff = java.time.Duration.between(ext.kickoffTime, inc.kickoffTime).abs().toHours()
+                    if (hoursDiff < 72) return@find true
+                }
+
+                val reversed = ext.homeTeamName.equals(inc.awayTeamName, ignoreCase = true) &&
+                               ext.awayTeamName.equals(inc.homeTeamName, ignoreCase = true)
+                if (reversed) {
+                    val hoursDiff = java.time.Duration.between(ext.kickoffTime, inc.kickoffTime).abs().toHours()
+                    if (hoursDiff < 72) {
+                        isReversed = true
+                        return@find true
+                    }
+                }
+                false
             }
 
             if (matchMatch != null) {
@@ -205,9 +227,12 @@ class PandaScoreSyncService(
                     eventPublisher.publishEvent(MatchStartedEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, inc.sportId, inc.leagueId))
                 }
 
+                val targetHomeScore = if (inc.status == MatchStatus.SCHEDULED) null else if (isReversed) inc.awayScore else inc.homeScore
+                val targetAwayScore = if (inc.status == MatchStatus.SCHEDULED) null else if (isReversed) inc.homeScore else inc.awayScore
+
                 if (matchMatch.status != MatchStatus.FINISHED && inc.status == MatchStatus.FINISHED) {
                     logger.info("eSports match finished event published: ${matchMatch.id} (${inc.homeTeamName} x ${inc.awayTeamName})")
-                    eventPublisher.publishEvent(MatchFinishedEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, inc.homeScore ?: 0, inc.awayScore ?: 0, inc.sportId, inc.leagueId))
+                    eventPublisher.publishEvent(MatchFinishedEvent(matchMatch.id, matchMatch.homeTeamName, matchMatch.awayTeamName, targetHomeScore ?: 0, targetAwayScore ?: 0, inc.sportId, inc.leagueId))
                 }
 
                 MatchJpaEntity(
@@ -217,12 +242,12 @@ class PandaScoreSyncService(
                     seasonId = matchMatch.seasonId,
                     homeTeamName = matchMatch.homeTeamName,
                     awayTeamName = matchMatch.awayTeamName,
-                    homeTeamLogoUrl = inc.homeTeamLogoUrl ?: matchMatch.homeTeamLogoUrl,
-                    awayTeamLogoUrl = inc.awayTeamLogoUrl ?: matchMatch.awayTeamLogoUrl,
+                    homeTeamLogoUrl = (if (isReversed) inc.awayTeamLogoUrl else inc.homeTeamLogoUrl) ?: matchMatch.homeTeamLogoUrl,
+                    awayTeamLogoUrl = (if (isReversed) inc.homeTeamLogoUrl else inc.awayTeamLogoUrl) ?: matchMatch.awayTeamLogoUrl,
                     kickoffTime = inc.kickoffTime,
                     status = inc.status,
-                    homeScore = inc.homeScore,
-                    awayScore = inc.awayScore,
+                    homeScore = targetHomeScore,
+                    awayScore = targetAwayScore,
                     phase = inc.phase,
                     numberOfGames = inc.numberOfGames ?: matchMatch.numberOfGames,
                     streamUrl = inc.streamUrl ?: matchMatch.streamUrl,
@@ -239,12 +264,51 @@ class PandaScoreSyncService(
 
     private fun purgeSyntheticBaselineMatches(leagueId: UUID) {
         val existing = matchRepository.findByLeagueId(leagueId)
-        val syntheticBaseline = existing.filter {
-            it.homeTeamLogoUrl?.contains("dicebear") == true || it.awayTeamLogoUrl?.contains("dicebear") == true
+        val activeSeason = seasonRepository.findByLeagueIdAndIsActiveTrue(leagueId)
+        val toDelete = mutableListOf<MatchJpaEntity>()
+        val toUpdate = mutableListOf<MatchJpaEntity>()
+
+        for (match in existing) {
+            val isSynthetic = match.homeTeamLogoUrl?.contains("dicebear") == true || match.awayTeamLogoUrl?.contains("dicebear") == true
+            val isOutOfSeason = if (activeSeason != null && match.seasonId == activeSeason.id) {
+                match.kickoffTime.isBefore(activeSeason.startDate.minus(14, ChronoUnit.DAYS)) ||
+                match.kickoffTime.isAfter(activeSeason.endDate.plus(14, ChronoUnit.DAYS))
+            } else false
+
+            if (isSynthetic || isOutOfSeason) {
+                toDelete.add(match)
+            } else if (match.status == MatchStatus.SCHEDULED && (match.homeScore != null || match.awayScore != null)) {
+                toUpdate.add(
+                    MatchJpaEntity(
+                        id = match.id,
+                        sportId = match.sportId,
+                        leagueId = match.leagueId,
+                        seasonId = match.seasonId,
+                        homeTeamName = match.homeTeamName,
+                        awayTeamName = match.awayTeamName,
+                        homeTeamLogoUrl = match.homeTeamLogoUrl,
+                        awayTeamLogoUrl = match.awayTeamLogoUrl,
+                        kickoffTime = match.kickoffTime,
+                        status = match.status,
+                        homeScore = null,
+                        awayScore = null,
+                        phase = match.phase,
+                        periodScoresJson = match.periodScoresJson,
+                        numberOfGames = match.numberOfGames,
+                        streamUrl = match.streamUrl,
+                        updatedAt = Instant.now()
+                    )
+                )
+            }
         }
-        if (syntheticBaseline.isNotEmpty()) {
-            logger.info("Purging ${syntheticBaseline.size} synthetic baseline matches for league: $leagueId")
-            matchRepository.deleteAll(syntheticBaseline)
+
+        if (toDelete.isNotEmpty()) {
+            logger.info("Purging ${toDelete.size} synthetic or out-of-season matches for league: $leagueId")
+            matchRepository.deleteAll(toDelete)
+        }
+        if (toUpdate.isNotEmpty()) {
+            logger.info("Sanitizing ${toUpdate.size} scheduled matches with non-null scores for league: $leagueId")
+            matchRepository.saveAll(toUpdate)
         }
     }
 

@@ -142,9 +142,10 @@ class FixtureController(
             }
         }
 
-        val filtered = allMatches.filter { match ->
-            (sportId == null || match.sportId == sportId)
-        }.map { MatchResponse.fromEntity(it) }
+        val filtered = allMatches
+            .filter { match -> (sportId == null || match.sportId == sportId) }
+            .sortedBy { it.kickoffTime }
+            .map { MatchResponse.fromEntity(it) }
 
         return ResponseEntity.ok(filtered)
     }
@@ -966,23 +967,26 @@ data class MatchResponse(
     val streamUrl: String? = null
 ) {
     companion object {
-        fun fromEntity(entity: MatchJpaEntity) = MatchResponse(
-            matchId = entity.id,
-            sportId = entity.sportId,
-            leagueId = entity.leagueId,
-            homeTeam = entity.homeTeamName,
-            awayTeam = entity.awayTeamName,
-            kickoffTime = entity.kickoffTime.toString(),
-            status = entity.status.name,
-            scoreHome = entity.homeScore,
-            scoreAway = entity.awayScore,
-            phase = formatMatchPhase(entity.phase),
-            homeTeamLogoUrl = entity.homeTeamLogoUrl,
-            awayTeamLogoUrl = entity.awayTeamLogoUrl,
-            periodScoresJson = entity.periodScoresJson,
-            numberOfGames = entity.numberOfGames,
-            streamUrl = entity.streamUrl
-        )
+        fun fromEntity(entity: MatchJpaEntity): MatchResponse {
+            val isScheduled = entity.status == MatchStatus.SCHEDULED
+            return MatchResponse(
+                matchId = entity.id,
+                sportId = entity.sportId,
+                leagueId = entity.leagueId,
+                homeTeam = entity.homeTeamName,
+                awayTeam = entity.awayTeamName,
+                kickoffTime = entity.kickoffTime.toString(),
+                status = entity.status.name,
+                scoreHome = if (isScheduled) null else entity.homeScore,
+                scoreAway = if (isScheduled) null else entity.awayScore,
+                phase = formatMatchPhase(entity.phase),
+                homeTeamLogoUrl = entity.homeTeamLogoUrl,
+                awayTeamLogoUrl = entity.awayTeamLogoUrl,
+                periodScoresJson = entity.periodScoresJson,
+                numberOfGames = entity.numberOfGames,
+                streamUrl = entity.streamUrl
+            )
+        }
     }
 }
 

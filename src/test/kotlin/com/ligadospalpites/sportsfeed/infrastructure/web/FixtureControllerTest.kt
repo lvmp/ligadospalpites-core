@@ -415,4 +415,50 @@ class FixtureControllerTest {
         assertTrue(teamNames.contains("MOUZ"), "ESL Pro League standings must contain MOUZ")
         assertTrue(teamNames.contains("Eternal Fire"), "ESL Pro League standings must contain Eternal Fire")
     }
+
+    @Test
+    fun `should return fixtures sorted by kickoffTime ascending and sanitize scheduled scores to null`() {
+        val now = Instant.now()
+        val laterMatch = MatchJpaEntity(
+            id = UUID.randomUUID(),
+            sportId = footballSportId,
+            leagueId = libertadoresLeagueId,
+            seasonId = seasonId,
+            homeTeamName = "Flamengo",
+            awayTeamName = "River Plate",
+            kickoffTime = now.plusSeconds(7200), // Mais tarde (+2h)
+            status = MatchStatus.SCHEDULED,
+            homeScore = 0, // Incorretamente veio 0 no banco
+            awayScore = 0
+        )
+        val earlierMatch = MatchJpaEntity(
+            id = UUID.randomUUID(),
+            sportId = footballSportId,
+            leagueId = libertadoresLeagueId,
+            seasonId = seasonId,
+            homeTeamName = "Palmeiras",
+            awayTeamName = "Boca Juniors",
+            kickoffTime = now.plusSeconds(3600), // Mais cedo (+1h)
+            status = MatchStatus.SCHEDULED,
+            homeScore = null,
+            awayScore = null
+        )
+
+        // Mock retorna em ordem inversa no banco (laterMatch primeiro)
+        `when`(matchRepository.findBySeasonId(seasonId)).thenReturn(listOf(laterMatch, earlierMatch))
+
+        val response = controller.getFixtures(sportId = footballSportId, leagueId = libertadoresLeagueId, seasonId = seasonId, userIdHeader = null)
+
+        assertEquals(200, response.statusCode.value())
+        val body = response.body as List<MatchResponse>
+        assertEquals(2, body.size)
+
+        // 1. Deve estar ordenado por kickoffTime ASC
+        assertEquals("Palmeiras", body[0].homeTeam, "Earlier match should come first")
+        assertEquals("Flamengo", body[1].homeTeam, "Later match should come second")
+
+        // 2. Partidas SCHEDULED devem ter scoreHome e scoreAway nulos (mesmo que estivessem como 0 no banco)
+        assertNull(body[1].scoreHome, "Scheduled match must not display 0 as scoreHome")
+        assertNull(body[1].scoreAway, "Scheduled match must not display 0 as scoreAway")
+    }
 }
