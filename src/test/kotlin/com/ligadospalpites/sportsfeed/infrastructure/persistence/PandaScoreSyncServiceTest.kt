@@ -158,4 +158,133 @@ class PandaScoreSyncServiceTest {
         assertEquals(2, updated.homeScore, "LOUD was local homeTeam, so homeScore must be LOUD's score (2)")
         assertEquals(1, updated.awayScore, "paiN was local awayTeam, so awayScore must be paiN's score (1)")
     }
+
+    @Test
+    fun `should reconcile teams with esports suffixes like FURIA and FURIA Esports`() {
+        val existingMatch = MatchJpaEntity(
+            id = UUID.randomUUID(),
+            sportId = syncService.esportsId,
+            leagueId = cblolLeagueId,
+            seasonId = season2026Id,
+            homeTeamName = "FURIA",
+            awayTeamName = "LOUD",
+            kickoffTime = Instant.parse("2026-07-02T16:00:00Z"),
+            status = MatchStatus.LIVE,
+            homeScore = null,
+            awayScore = null
+        )
+        `when`(matchRepository.findByLeagueId(cblolLeagueId)).thenReturn(listOf(existingMatch))
+
+        val incomingFinished = MatchJpaEntity(
+            id = UUID.randomUUID(),
+            sportId = syncService.esportsId,
+            leagueId = cblolLeagueId,
+            seasonId = season2026Id,
+            homeTeamName = "FURIA Esports",
+            awayTeamName = "LOUD Esports",
+            kickoffTime = Instant.parse("2026-07-02T16:00:00Z"),
+            status = MatchStatus.FINISHED,
+            homeScore = 2,
+            awayScore = 0
+        )
+
+        syncService.performUpsert(cblolLeagueId, listOf(incomingFinished))
+
+        val captor = ArgumentCaptor.forClass(List::class.java) as ArgumentCaptor<List<MatchJpaEntity>>
+        verify(matchRepository, atLeastOnce()).saveAll(captor.capture())
+
+        val savedList = captor.value
+        assertEquals(1, savedList.size)
+        val updated = savedList.first()
+
+        assertEquals(existingMatch.id, updated.id, "Must reconcile and update existing match ID even with suffix variation")
+        assertEquals(MatchStatus.FINISHED, updated.status)
+        assertEquals(2, updated.homeScore)
+        assertEquals(0, updated.awayScore)
+    }
+
+    @Test
+    fun `should actively query provider for pending LIVE match and conclude it if provider confirms finished`() {
+        val liveMatch = MatchJpaEntity(
+            id = UUID.randomUUID(),
+            sportId = syncService.esportsId,
+            leagueId = cblolLeagueId,
+            seasonId = season2026Id,
+            homeTeamName = "FURIA",
+            awayTeamName = "paiN Gaming",
+            kickoffTime = Instant.parse("2026-07-03T16:00:00Z"),
+            status = MatchStatus.LIVE,
+            homeScore = null,
+            awayScore = null
+        )
+        `when`(matchRepository.findByLeagueId(cblolLeagueId)).thenReturn(listOf(liveMatch))
+
+        val providerFinishedGame = PandaScoreMatchResponse(
+            id = 555666,
+            name = "FURIA vs paiN Gaming",
+            begin_at = "2026-07-03T16:00:00Z",
+            status = "finished",
+            opponents = listOf(
+                PandaScoreOpponentWrapper(PandaScoreTeam(id = 10, name = "FURIA")),
+                PandaScoreOpponentWrapper(PandaScoreTeam(id = 20, name = "paiN Gaming"))
+            ),
+            results = listOf(
+                PandaScoreResult(team_id = 10, score = 2),
+                PandaScoreResult(team_id = 20, score = 1)
+            )
+        )
+
+        `when`(pandaScoreClient.searchMatchesByTeam("FURIA", "league-of-legends"))
+            .thenReturn(listOf(providerFinishedGame))
+
+        // performUpsert com lista incoming vazia (simulando que o jogo não veio na listagem geral)
+        syncService.performUpsert(cblolLeagueId, emptyList())
+
+        val singleCaptor = ArgumentCaptor.forClass(MatchJpaEntity::class.java)
+        verify(matchRepository).save(singleCaptor.capture())
+
+        val concludedMatch = singleCaptor.value
+        assertEquals(liveMatch.id, concludedMatch.id)
+        assertEquals(MatchStatus.FINISHED, concludedMatch.status)
+        assertEquals(2, concludedMatch.homeScore)
+        assertEquals(1, concludedMatch.awayScore)
+        verify(eventPublisher).publishEvent(any(com.ligadospalpites.sportsfeed.domain.events.MatchFinishedEvent::class.java))
+    }
+
+    @Test
+    fun `should purge orphaned LIVE duplicate if FINISHED match already exists for same teams`() {
+        val finishedMatch = MatchJpaEntity(
+            id = UUID.randomUUID(),
+            sportId = syncService.esportsId,
+            leagueId = cblolLeagueId,
+            seasonId = season2026Id,
+            homeTeamName = "FURIA",
+            awayTeamName = "LOUD",
+            kickoffTime = Instant.parse("2026-07-04T16:00:00Z"),
+            status = MatchStatus.FINISHED,
+            homeScore = 2,
+            awayScore = 1
+        )
+        val orphanedLiveDuplicate = MatchJpaEntity(
+            id = UUID.randomUUID(),
+            sportId = syncService.esportsId,
+            leagueId = cblolLeagueId,
+            seasonId = season2026Id,
+            homeTeamName = "FURIA Esports",
+            awayTeamName = "LOUD Esports",
+            kickoffTime = Instant.parse("2026-07-04T16:00:00Z"),
+            status = MatchStatus.LIVE,
+            homeScore = null,
+            awayScore = null
+        )
+        `when`(matchRepository.findByLeagueId(cblolLeagueId)).thenReturn(listOf(finishedMatch, orphanedLiveDuplicate))
+
+        syncService.performUpsert(cblolLeagueId, emptyList())
+
+        val deleteCaptor = ArgumentCaptor.forClass(List::class.java) as ArgumentCaptor<List<MatchJpaEntity>>
+        verify(matchRepository).deleteAll(deleteCaptor.capture())
+
+        val deletedList = deleteCaptor.value
+        assertTrue(deletedList.any { it.id == orphanedLiveDuplicate.id }, "Orphaned LIVE duplicate must be purged")
+    }
 }

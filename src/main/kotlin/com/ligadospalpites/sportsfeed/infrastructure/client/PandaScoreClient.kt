@@ -123,7 +123,7 @@ class PandaScoreClient(
                     emptyList()
                 }
 
-                val allLeagueMatches = (upcomingResponse + runningResponse + pastResponse).distinctBy { it.id }
+                val allLeagueMatches = (pastResponse + runningResponse + upcomingResponse).distinctBy { it.id }
                 if (allLeagueMatches.isNotEmpty()) {
                     logger.info("PandaScore league endpoint returned ${allLeagueMatches.size} matches for '$targetLeagueIdentifier'")
                     return allLeagueMatches
@@ -181,9 +181,36 @@ class PandaScoreClient(
                 emptyList()
             }
 
-            (upcomingResponse + runningResponse + pastResponse).distinctBy { it.id }
+            (pastResponse + runningResponse + upcomingResponse).distinctBy { it.id }
         } catch (e: Exception) {
             logger.error("Error communicating with PandaScore fallback API: ${e.message}", e)
+            emptyList()
+        }
+    }
+
+    fun searchMatchesByTeam(
+        teamName: String,
+        videogameSlug: String? = null
+    ): List<PandaScoreMatchResponse> {
+        if (apiToken.isBlank() || teamName.isBlank()) {
+            return emptyList()
+        }
+        return try {
+            val encoded = URLEncoder.encode(teamName.trim(), StandardCharsets.UTF_8)
+            val baseUri = if (!videogameSlug.isNullOrBlank()) {
+                "/matches?search[name]=$encoded&filter[videogame]=$videogameSlug&token=$apiToken&page[size]=20&sort=-begin_at"
+            } else {
+                "/matches?search[name]=$encoded&token=$apiToken&page[size]=20&sort=-begin_at"
+            }
+            logger.info("Searching PandaScore matches for team '$teamName': $baseUri")
+            val response = restClient.get()
+                .uri(baseUri)
+                .retrieve()
+                .body(Array<PandaScoreMatchResponse>::class.java)
+                ?.toList() ?: emptyList()
+            response
+        } catch (e: Exception) {
+            logger.warn("Failed to search PandaScore matches for team '$teamName': ${e.message}")
             emptyList()
         }
     }
