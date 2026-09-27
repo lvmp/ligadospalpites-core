@@ -159,8 +159,14 @@ class PandaScoreSyncService(
             }
 
             val mappedStatus = mapPandaScoreStatus(game.status)
-            val homeScore = if (mappedStatus == MatchStatus.SCHEDULED) null else game.results.find { it.team_id == homeOpponent.id }?.score
-            val awayScore = if (mappedStatus == MatchStatus.SCHEDULED) null else game.results.find { it.team_id == awayOpponent.id }?.score
+            val homeScore = if (mappedStatus == MatchStatus.SCHEDULED) null else {
+                game.results.find { it.team_id == homeOpponent.id }?.score
+                    ?: if (game.results.size >= 2) game.results[0].score else null
+            }
+            val awayScore = if (mappedStatus == MatchStatus.SCHEDULED) null else {
+                game.results.find { it.team_id == awayOpponent.id }?.score
+                    ?: if (game.results.size >= 2) game.results[1].score else null
+            }
 
             val streamUrl = game.streams_list.firstOrNull { it.language?.startsWith("pt", ignoreCase = true) == true }?.raw_url
                 ?: game.streams_list.firstOrNull { it.main }?.raw_url
@@ -250,8 +256,11 @@ class PandaScoreSyncService(
                     eventPublisher.publishEvent(MatchStartedEvent(matchMatch.id, inc.homeTeamName, inc.awayTeamName, inc.sportId, inc.leagueId))
                 }
 
-                val targetHomeScore = if (inc.status == MatchStatus.SCHEDULED) null else if (isReversed) inc.awayScore else inc.homeScore
-                val targetAwayScore = if (inc.status == MatchStatus.SCHEDULED) null else if (isReversed) inc.homeScore else inc.awayScore
+                val incomingHomeScore = if (isReversed) inc.awayScore else inc.homeScore
+                val incomingAwayScore = if (isReversed) inc.homeScore else inc.awayScore
+
+                val targetHomeScore = if (inc.status == MatchStatus.SCHEDULED) null else incomingHomeScore ?: matchMatch.homeScore
+                val targetAwayScore = if (inc.status == MatchStatus.SCHEDULED) null else incomingAwayScore ?: matchMatch.awayScore
 
                 if (matchMatch.status != MatchStatus.FINISHED && inc.status == MatchStatus.FINISHED) {
                     logger.info("eSports match finished event published: ${matchMatch.id} (${inc.homeTeamName} x ${inc.awayTeamName})")
@@ -286,20 +295,21 @@ class PandaScoreSyncService(
             logger.info("Successfully saved ${toSave.size} eSports matches for league $leagueId")
         }
 
-        // Active validation with provider for any remaining LIVE matches
-        val remainingLiveMatches = cleanExisting.filter { ext ->
-            ext.status == MatchStatus.LIVE && !matchedExistingIds.contains(ext.id)
+        // Active validation with provider for any remaining LIVE matches or FINISHED matches missing scores
+        val remainingMatchesToVerify = cleanExisting.filter { ext ->
+            (ext.status == MatchStatus.LIVE || (ext.status == MatchStatus.FINISHED && (ext.homeScore == null || ext.awayScore == null))) &&
+            !matchedExistingIds.contains(ext.id)
         }
-        if (remainingLiveMatches.isNotEmpty()) {
-            logger.info("Found ${remainingLiveMatches.size} LIVE match(es) needing provider verification for league: $leagueId")
-            for (liveMatch in remainingLiveMatches) {
-                verifyAndUpdateLiveMatchWithProvider(liveMatch, metadata?.videogameSlug)
+        if (remainingMatchesToVerify.isNotEmpty()) {
+            logger.info("Found ${remainingMatchesToVerify.size} match(es) needing provider verification for league: $leagueId")
+            for (matchToVerify in remainingMatchesToVerify) {
+                verifyAndUpdateLiveMatchWithProvider(matchToVerify, metadata?.videogameSlug)
             }
         }
     }
 
     private fun verifyAndUpdateLiveMatchWithProvider(liveMatch: MatchJpaEntity, videogameSlug: String?) {
-        logger.info("Validating LIVE match ${liveMatch.id} (${liveMatch.homeTeamName} x ${liveMatch.awayTeamName}) with PandaScore provider...")
+        logger.info("Validating match ${liveMatch.id} (${liveMatch.homeTeamName} x ${liveMatch.awayTeamName}, status=${liveMatch.status}) with PandaScore provider...")
 
         var candidates = pandaScoreClient.searchMatchesByTeam(liveMatch.homeTeamName, videogameSlug)
         if (candidates.isEmpty()) {
@@ -340,7 +350,16 @@ class PandaScoreSyncService(
             val awayOpponent = matchedGame.opponents.find { areTeamNamesMatching(liveMatch.awayTeamName, it.opponent?.name ?: "") }?.opponent
 
             val finalHomeScore = matchedGame.results.find { it.team_id == homeOpponent?.id }?.score
+                ?: if (matchedGame.results.size >= 2) {
+                    val idx = matchedGame.opponents.indexOfFirst { areTeamNamesMatching(liveMatch.homeTeamName, it.opponent?.name ?: "") }
+                    if (idx in matchedGame.results.indices) matchedGame.results[idx].score else matchedGame.results[0].score
+                } else null
+
             val finalAwayScore = matchedGame.results.find { it.team_id == awayOpponent?.id }?.score
+                ?: if (matchedGame.results.size >= 2) {
+                    val idx = matchedGame.opponents.indexOfFirst { areTeamNamesMatching(liveMatch.awayTeamName, it.opponent?.name ?: "") }
+                    if (idx in matchedGame.results.indices) matchedGame.results[idx].score else matchedGame.results[1].score
+                } else null
 
             val resolvedHomeScore = finalHomeScore ?: liveMatch.homeScore ?: 0
             val resolvedAwayScore = finalAwayScore ?: liveMatch.awayScore ?: 0

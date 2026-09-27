@@ -959,6 +959,8 @@ data class MatchResponse(
     val status: String,
     val scoreHome: Int?,
     val scoreAway: Int?,
+    val homeScore: Int? = scoreHome,
+    val awayScore: Int? = scoreAway,
     val phase: String? = null,
     val homeTeamLogoUrl: String? = null,
     val awayTeamLogoUrl: String? = null,
@@ -969,6 +971,8 @@ data class MatchResponse(
     companion object {
         fun fromEntity(entity: MatchJpaEntity): MatchResponse {
             val isScheduled = entity.status == MatchStatus.SCHEDULED
+            val sHome = if (isScheduled) null else entity.homeScore
+            val sAway = if (isScheduled) null else entity.awayScore
             return MatchResponse(
                 matchId = entity.id,
                 sportId = entity.sportId,
@@ -977,8 +981,10 @@ data class MatchResponse(
                 awayTeam = entity.awayTeamName,
                 kickoffTime = entity.kickoffTime.toString(),
                 status = entity.status.name,
-                scoreHome = if (isScheduled) null else entity.homeScore,
-                scoreAway = if (isScheduled) null else entity.awayScore,
+                scoreHome = sHome,
+                scoreAway = sAway,
+                homeScore = sHome,
+                awayScore = sAway,
                 phase = formatMatchPhase(entity.phase),
                 homeTeamLogoUrl = entity.homeTeamLogoUrl,
                 awayTeamLogoUrl = entity.awayTeamLogoUrl,
