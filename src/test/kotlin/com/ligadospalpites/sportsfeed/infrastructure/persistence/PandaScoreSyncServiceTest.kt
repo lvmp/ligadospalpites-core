@@ -75,7 +75,7 @@ class PandaScoreSyncServiceTest {
             results = listOf(PandaScoreResult(team_id = 1, score = 3), PandaScoreResult(team_id = 2, score = 0))
         )
 
-        `when`(pandaScoreClient.fetchMatches(searchTerm = "CBLOL", videogameSlug = "league-of-legends"))
+        `when`(pandaScoreClient.fetchMatches(leagueIdOrSlug = "cblol", searchTerm = "CBLOL", videogameSlug = "league-of-legends"))
             .thenReturn(listOf(gameFrom2024, gameFrom2026))
 
         val result = syncService.fetchFromPandaScore(syncService.esportsId, cblolLeagueId)
@@ -100,7 +100,7 @@ class PandaScoreSyncServiceTest {
             results = listOf(PandaScoreResult(team_id = 10, score = 0), PandaScoreResult(team_id = 20, score = 0))
         )
 
-        `when`(pandaScoreClient.fetchMatches(searchTerm = "CBLOL", videogameSlug = "league-of-legends"))
+        `when`(pandaScoreClient.fetchMatches(leagueIdOrSlug = "cblol", searchTerm = "CBLOL", videogameSlug = "league-of-legends"))
             .thenReturn(listOf(futureGameWithZeroResults))
 
         val result = syncService.fetchFromPandaScore(syncService.esportsId, cblolLeagueId)
@@ -286,5 +286,62 @@ class PandaScoreSyncServiceTest {
 
         val deletedList = deleteCaptor.value
         assertTrue(deletedList.any { it.id == orphanedLiveDuplicate.id }, "Orphaned LIVE duplicate must be purged")
+    }
+
+    @Test
+    fun `should auto-conclude stale LIVE match when running for more than 6 hours with a score`() {
+        val eightHoursAgo = Instant.now().minus(8, ChronoUnit.HOURS)
+        val staleLiveMatch = MatchJpaEntity(
+            id = UUID.randomUUID(),
+            sportId = syncService.esportsId,
+            leagueId = cblolLeagueId,
+            seasonId = season2026Id,
+            homeTeamName = "LOUD",
+            awayTeamName = "paiN Gaming",
+            kickoffTime = eightHoursAgo,
+            status = MatchStatus.LIVE,
+            homeScore = 2,
+            awayScore = 1
+        )
+        `when`(matchRepository.findByLeagueId(cblolLeagueId)).thenReturn(listOf(staleLiveMatch))
+        `when`(pandaScoreClient.searchMatchesByTeam("LOUD", "league-of-legends")).thenReturn(emptyList())
+        `when`(pandaScoreClient.searchMatchesByTeam("paiN Gaming", "league-of-legends")).thenReturn(emptyList())
+
+        syncService.performUpsert(cblolLeagueId, emptyList())
+
+        val saveCaptor = ArgumentCaptor.forClass(MatchJpaEntity::class.java)
+        verify(matchRepository).save(saveCaptor.capture())
+
+        val saved = saveCaptor.value
+        assertEquals(staleLiveMatch.id, saved.id)
+        assertEquals(MatchStatus.FINISHED, saved.status)
+        assertEquals(2, saved.homeScore)
+        assertEquals(1, saved.awayScore)
+        verify(eventPublisher).publishEvent(any(com.ligadospalpites.sportsfeed.domain.events.MatchFinishedEvent::class.java))
+    }
+
+    @Test
+    fun `should purge out-of-season matches regardless of seasonId`() {
+        val outOfSeasonMatch = MatchJpaEntity(
+            id = UUID.randomUUID(),
+            sportId = syncService.esportsId,
+            leagueId = cblolLeagueId,
+            seasonId = UUID.randomUUID(), // Temporada antiga
+            homeTeamName = "LOUD",
+            awayTeamName = "paiN Gaming",
+            kickoffTime = Instant.parse("2024-05-10T16:00:00Z"), // 2024
+            status = MatchStatus.FINISHED,
+            homeScore = 2,
+            awayScore = 0
+        )
+        `when`(matchRepository.findByLeagueId(cblolLeagueId)).thenReturn(listOf(outOfSeasonMatch))
+
+        syncService.performUpsert(cblolLeagueId, emptyList())
+
+        val deleteCaptor = ArgumentCaptor.forClass(List::class.java) as ArgumentCaptor<List<MatchJpaEntity>>
+        verify(matchRepository).deleteAll(deleteCaptor.capture())
+
+        val deletedList = deleteCaptor.value
+        assertTrue(deletedList.any { it.id == outOfSeasonMatch.id }, "Matches outside active season window must be purged")
     }
 }

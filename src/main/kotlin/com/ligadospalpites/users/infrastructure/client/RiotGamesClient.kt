@@ -38,9 +38,7 @@ class RiotGamesClient(
 
     fun getAccountByRiotId(gameName: String, tagLine: String): RiotAccountResponse? {
         if (apiKey.isBlank()) {
-            logger.warn("Riot API key is empty. Generating synthetic PUUID for $gameName#$tagLine.")
-            val syntheticPuuid = "puuid-synth-${(gameName + tagLine).lowercase().hashCode()}"
-            return RiotAccountResponse(puuid = syntheticPuuid, gameName = gameName, tagLine = tagLine)
+            throw IllegalStateException("Serviço de integração Riot indisponível: chave de API não configurada.")
         }
 
         return try {
@@ -49,16 +47,21 @@ class RiotGamesClient(
                 .uri("/riot/account/v1/accounts/by-riot-id/{gameName}/{tagLine}", gameName, tagLine)
                 .retrieve()
                 .body(RiotAccountResponse::class.java)
+        } catch (e: org.springframework.web.client.HttpClientErrorException.NotFound) {
+            logger.warn("Riot account not found: $gameName#$tagLine")
+            throw IllegalArgumentException("Conta Riot não encontrada para o Riot ID: $gameName#$tagLine.")
+        } catch (e: org.springframework.web.client.HttpClientErrorException.Forbidden) {
+            logger.error("Riot API token forbidden or expired: ${e.message}")
+            throw IllegalStateException("Chave da API da Riot Games expirada ou inválida.")
         } catch (e: Exception) {
             logger.error("Failed to query Riot Account API: ${e.message}")
-            val syntheticPuuid = "puuid-synth-${(gameName + tagLine).lowercase().hashCode()}"
-            RiotAccountResponse(puuid = syntheticPuuid, gameName = gameName, tagLine = tagLine)
+            throw IllegalStateException("Falha na comunicação com o servidor da Riot Games: ${e.message}")
         }
     }
 
     fun getLolRankByPuuid(puuid: String): String {
         if (apiKey.isBlank()) {
-            return "Ouro IV"
+            return "Unranked"
         }
 
         return try {
@@ -80,7 +83,7 @@ class RiotGamesClient(
             }
         } catch (e: Exception) {
             logger.error("Failed to query Riot LoL Rank API: ${e.message}")
-            "Ouro IV"
+            "Unranked"
         }
     }
 

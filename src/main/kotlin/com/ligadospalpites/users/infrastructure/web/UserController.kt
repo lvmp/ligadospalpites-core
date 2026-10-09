@@ -7,6 +7,7 @@ import com.ligadospalpites.users.application.usecases.GetUserStateUseCase
 import com.ligadospalpites.users.application.usecases.LinkRiotProfileUseCase
 import com.ligadospalpites.users.domain.models.UserRiotProfile
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
+import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
@@ -102,15 +103,25 @@ class UserController(
         @RequestHeader(value = "X-User-Id", required = false) userIdHeader: String?,
         authentication: Authentication?,
         @RequestBody request: LinkRiotProfileRequest
-    ): ResponseEntity<UserRiotProfile> {
+    ): ResponseEntity<Any> {
         val userUUID = userResolver.resolveAuthenticatedUser(userIdHeader, authentication)
-        val profile = linkRiotProfileUseCase.execute(
-            LinkRiotProfileUseCase.Command(
-                userId = userUUID,
-                gameName = request.gameName,
-                tagLine = request.tagLine
+        return try {
+            val profile = linkRiotProfileUseCase.execute(
+                LinkRiotProfileUseCase.Command(
+                    userId = userUUID,
+                    gameName = request.gameName,
+                    tagLine = request.tagLine
+                )
             )
-        )
-        return ResponseEntity.ok(profile)
+            ResponseEntity.ok(profile)
+        } catch (e: IllegalArgumentException) {
+            ResponseEntity.status(HttpStatus.NOT_FOUND).body(
+                mapOf("error" to "RIOT_ACCOUNT_NOT_FOUND", "message" to (e.message ?: "Conta Riot não encontrada."))
+            )
+        } catch (e: IllegalStateException) {
+            ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(
+                mapOf("error" to "RIOT_SERVICE_UNAVAILABLE", "message" to (e.message ?: "Serviço Riot indisponível."))
+            )
+        }
     }
 }

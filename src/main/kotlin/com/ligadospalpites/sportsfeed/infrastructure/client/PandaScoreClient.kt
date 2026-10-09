@@ -253,6 +253,8 @@ data class PandaScoreMatchResponse(
     val id: Long,
     val name: String? = null,
     val begin_at: String? = null,
+    val scheduled_at: String? = null,
+    val original_scheduled_at: String? = null,
     val status: String? = null,
     val number_of_games: Int? = 1,
     val league: PandaScoreLeague? = null,
