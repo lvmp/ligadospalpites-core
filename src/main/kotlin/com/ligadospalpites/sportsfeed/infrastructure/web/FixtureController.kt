@@ -154,8 +154,28 @@ class FixtureController(
             }
         }
 
+        val esportsId = UUID.fromString("9b1e3a11-b9db-44ab-ba02-411a0c0bcf14")
+        val nowInstant = java.time.Instant.now()
+
         val filtered = allMatches
             .filter { match -> (sportId == null || match.sportId == sportId) }
+            .filter { match ->
+                if (match.sportId == esportsId) {
+                    // Não exibe partidas de eSports encerradas sem placar real (0x0)
+                    if (match.status == MatchStatus.FINISHED && (match.homeScore ?: 0) == 0 && (match.awayScore ?: 0) == 0) {
+                        return@filter false
+                    }
+                    // Não exibe partidas agendadas que ficaram no passado há mais de 24h sem início
+                    if (match.status == MatchStatus.SCHEDULED && match.kickoffTime.isBefore(nowInstant.minus(24, java.time.temporal.ChronoUnit.HOURS))) {
+                        return@filter false
+                    }
+                    // Não exibe partidas com fases de anos passados (ex: 2024, 2025)
+                    if (match.phase?.contains("2024") == true || match.phase?.contains("2025") == true) {
+                        return@filter false
+                    }
+                }
+                true
+            }
             .sortedBy { it.kickoffTime }
             .map { MatchResponse.fromEntity(it) }
 

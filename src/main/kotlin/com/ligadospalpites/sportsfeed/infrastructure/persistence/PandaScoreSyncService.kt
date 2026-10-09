@@ -144,14 +144,19 @@ class PandaScoreSyncService(
             videogameSlug = metadata.videogameSlug
         )
 
-        // If returned from videogame-wide fallback, filter relevant games
-        val relevantGames = externalGames.filter { game ->
-            val leagueMatches = game.league?.name?.contains(metadata.searchTerm, ignoreCase = true) == true
-            val serieMatches = game.serie?.full_name?.contains(metadata.searchTerm, ignoreCase = true) == true
-            val nameMatches = game.name?.contains(metadata.searchTerm, ignoreCase = true) == true
-            leagueMatches || serieMatches || nameMatches
+        // Filter only games genuinely related to this league, rejecting foreign leagues or past seasons
+        val targetGames = externalGames.filter { game ->
+            val hasForeignLeague = game.league != null &&
+                !game.league.slug.equals(metadata.leagueSlug, ignoreCase = true) &&
+                game.league.name.contains(metadata.searchTerm, ignoreCase = true) == false
+            if (hasForeignLeague) return@filter false
+
+            val hasForeignSerie = game.serie?.full_name != null &&
+                (game.serie.full_name.contains("2024") || game.serie.full_name.contains("2025"))
+            if (hasForeignSerie) return@filter false
+
+            true
         }
-        val targetGames = if (relevantGames.isNotEmpty()) relevantGames else externalGames
 
         val seasonStart = activeSeason.startDate.minus(14, ChronoUnit.DAYS)
         val seasonEnd = activeSeason.endDate.plus(14, ChronoUnit.DAYS)
@@ -161,6 +166,12 @@ class PandaScoreSyncService(
             val homeOpponent = game.opponents[0].opponent ?: return@mapNotNull null
             val awayOpponent = game.opponents[1].opponent ?: return@mapNotNull null
 
+            // Rejeita partidas vinculadas a anos passados (ex: "Split 2 2025" ou "2024")
+            val serieName = game.serie?.full_name ?: ""
+            if (serieName.contains("2024") || serieName.contains("2025")) {
+                return@mapNotNull null
+            }
+
             val dateStr = game.begin_at ?: game.scheduled_at ?: game.original_scheduled_at
             val kickoffInstant = parseIsoInstant(dateStr) ?: return@mapNotNull null
             // Filtra rigorosamente por partidas pertencentes à janela da temporada ativa
@@ -168,14 +179,24 @@ class PandaScoreSyncService(
                 return@mapNotNull null
             }
 
-            val mappedStatus = mapPandaScoreStatus(game.status)
-            val homeScore = if (mappedStatus == MatchStatus.SCHEDULED) null else {
+            var mappedStatus = mapPandaScoreStatus(game.status)
+            var homeScore = if (mappedStatus == MatchStatus.SCHEDULED) null else {
                 game.results.find { it.team_id == homeOpponent.id }?.score
                     ?: if (game.results.size >= 2) game.results[0].score else null
             }
-            val awayScore = if (mappedStatus == MatchStatus.SCHEDULED) null else {
+            var awayScore = if (mappedStatus == MatchStatus.SCHEDULED) null else {
                 game.results.find { it.team_id == awayOpponent.id }?.score
                     ?: if (game.results.size >= 2) game.results[1].score else null
+            }
+
+            // Em eSports partidas finalizadas com placar 0x0 ou sem placar representam jogos cancelados/não disputados
+            if (mappedStatus == MatchStatus.FINISHED) {
+                val totalMaps = (homeScore ?: 0) + (awayScore ?: 0)
+                if (totalMaps == 0) {
+                    mappedStatus = MatchStatus.CANCELLED
+                    homeScore = null
+                    awayScore = null
+                }
             }
 
             val streamUrl = game.streams_list.firstOrNull { it.language?.startsWith("pt", ignoreCase = true) == true }?.raw_url
@@ -305,9 +326,12 @@ class PandaScoreSyncService(
             logger.info("Successfully saved ${toSave.size} eSports matches for league $leagueId")
         }
 
-        // Active validation with provider for any remaining LIVE matches or FINISHED matches missing scores
+        // Active validation with provider for remaining LIVE matches, FINISHED matches missing scores/0x0, or SCHEDULED matches past kickoff
+        val now = Instant.now()
         val remainingMatchesToVerify = cleanExisting.filter { ext ->
-            (ext.status == MatchStatus.LIVE || (ext.status == MatchStatus.FINISHED && (ext.homeScore == null || ext.awayScore == null))) &&
+            (ext.status == MatchStatus.LIVE ||
+             (ext.status == MatchStatus.FINISHED && (ext.homeScore == null || ext.awayScore == null || (ext.homeScore == 0 && ext.awayScore == 0))) ||
+             (ext.status == MatchStatus.SCHEDULED && ext.kickoffTime.isBefore(now.minus(24, ChronoUnit.HOURS)))) &&
             !matchedExistingIds.contains(ext.id)
         }
         if (remainingMatchesToVerify.isNotEmpty()) {
@@ -323,6 +347,32 @@ class PandaScoreSyncService(
 
         val now = Instant.now()
         val hoursSinceKickoff = java.time.Duration.between(liveMatch.kickoffTime, now).toHours()
+
+        // Se a partida for SCHEDULED e o kickoff já passou há mais de 24h sem início
+        if (liveMatch.status == MatchStatus.SCHEDULED && hoursSinceKickoff >= 24) {
+            logger.warn("Match ${liveMatch.id} has been SCHEDULED and kickoff was $hoursSinceKickoff hours ago. Auto-cancelling abandoned match.")
+            val cancelledMatch = MatchJpaEntity(
+                id = liveMatch.id,
+                sportId = liveMatch.sportId,
+                leagueId = liveMatch.leagueId,
+                seasonId = liveMatch.seasonId,
+                homeTeamName = liveMatch.homeTeamName,
+                awayTeamName = liveMatch.awayTeamName,
+                homeTeamLogoUrl = liveMatch.homeTeamLogoUrl,
+                awayTeamLogoUrl = liveMatch.awayTeamLogoUrl,
+                kickoffTime = liveMatch.kickoffTime,
+                status = MatchStatus.CANCELLED,
+                homeScore = null,
+                awayScore = null,
+                phase = liveMatch.phase,
+                periodScoresJson = liveMatch.periodScoresJson,
+                numberOfGames = liveMatch.numberOfGames,
+                streamUrl = liveMatch.streamUrl,
+                updatedAt = Instant.now()
+            )
+            matchRepository.save(cancelledMatch)
+            return
+        }
 
         var candidates = pandaScoreClient.searchMatchesByTeam(liveMatch.homeTeamName, videogameSlug)
         if (candidates.isEmpty()) {
@@ -350,11 +400,11 @@ class PandaScoreSyncService(
         } else null
 
         if (matchedGame == null) {
-            logger.warn("Could not correlate LIVE match ${liveMatch.id} with any match returned from PandaScore")
-            // Auto-resolução para partidas presas como LIVE há mais de 6 horas
+            logger.warn("Could not correlate match ${liveMatch.id} with any match returned from PandaScore")
+            // Auto-resolução para partidas presas há mais de 6 horas
             if (hoursSinceKickoff >= 6) {
-                logger.warn("Match ${liveMatch.id} has been marked LIVE for $hoursSinceKickoff hours. Auto-resolving stale match.")
-                if (liveMatch.homeScore != null && liveMatch.awayScore != null && (liveMatch.homeScore != 0 || liveMatch.awayScore != 0)) {
+                val totalMaps = (liveMatch.homeScore ?: 0) + (liveMatch.awayScore ?: 0)
+                if (liveMatch.homeScore != null && liveMatch.awayScore != null && totalMaps > 0) {
                     val finishedMatch = MatchJpaEntity(
                         id = liveMatch.id,
                         sportId = liveMatch.sportId,
@@ -385,7 +435,7 @@ class PandaScoreSyncService(
                         leagueId = finishedMatch.leagueId
                     ))
                     logger.info("Auto-concluded stale LIVE match ${liveMatch.id} as FINISHED with score ${liveMatch.homeScore} x ${liveMatch.awayScore}")
-                } else if (hoursSinceKickoff >= 24) {
+                } else if (hoursSinceKickoff >= 24 || liveMatch.status == MatchStatus.SCHEDULED) {
                     val cancelledMatch = MatchJpaEntity(
                         id = liveMatch.id,
                         sportId = liveMatch.sportId,
@@ -406,7 +456,7 @@ class PandaScoreSyncService(
                         updatedAt = Instant.now()
                     )
                     matchRepository.save(cancelledMatch)
-                    logger.info("Auto-cancelled stale LIVE match ${liveMatch.id} ($hoursSinceKickoff hours since kickoff with no scores)")
+                    logger.info("Auto-cancelled stale match ${liveMatch.id} ($hoursSinceKickoff hours since kickoff with no valid score)")
                 }
             }
             return
@@ -431,8 +481,37 @@ class PandaScoreSyncService(
                     if (idx in matchedGame.results.indices) matchedGame.results[idx].score else matchedGame.results[1].score
                 } else null
 
-            val resolvedHomeScore = finalHomeScore ?: liveMatch.homeScore ?: 0
-            val resolvedAwayScore = finalAwayScore ?: liveMatch.awayScore ?: 0
+            val resolvedHomeScore = finalHomeScore ?: liveMatch.homeScore
+            val resolvedAwayScore = finalAwayScore ?: liveMatch.awayScore
+            val totalMaps = (resolvedHomeScore ?: 0) + (resolvedAwayScore ?: 0)
+
+            if (totalMaps == 0) {
+                logger.warn("Match ${liveMatch.id} reported finished by provider with 0x0 or no score. Marking as CANCELLED.")
+                val cancelledMatch = MatchJpaEntity(
+                    id = liveMatch.id,
+                    sportId = liveMatch.sportId,
+                    leagueId = liveMatch.leagueId,
+                    seasonId = liveMatch.seasonId,
+                    homeTeamName = liveMatch.homeTeamName,
+                    awayTeamName = liveMatch.awayTeamName,
+                    homeTeamLogoUrl = homeOpponent?.image_url ?: liveMatch.homeTeamLogoUrl,
+                    awayTeamLogoUrl = awayOpponent?.image_url ?: liveMatch.awayTeamLogoUrl,
+                    kickoffTime = liveMatch.kickoffTime,
+                    status = MatchStatus.CANCELLED,
+                    homeScore = null,
+                    awayScore = null,
+                    phase = matchedGame.serie?.full_name ?: liveMatch.phase,
+                    periodScoresJson = liveMatch.periodScoresJson,
+                    numberOfGames = matchedGame.number_of_games ?: liveMatch.numberOfGames,
+                    streamUrl = liveMatch.streamUrl,
+                    updatedAt = Instant.now()
+                )
+                matchRepository.save(cancelledMatch)
+                return
+            }
+
+            val targetHome = resolvedHomeScore ?: 0
+            val targetAway = resolvedAwayScore ?: 0
             val resolvedKickoff = parseIsoInstant(matchedGame.begin_at ?: matchedGame.scheduled_at) ?: liveMatch.kickoffTime
 
             val finishedMatch = MatchJpaEntity(
@@ -446,8 +525,8 @@ class PandaScoreSyncService(
                 awayTeamLogoUrl = awayOpponent?.image_url ?: liveMatch.awayTeamLogoUrl,
                 kickoffTime = resolvedKickoff,
                 status = MatchStatus.FINISHED,
-                homeScore = resolvedHomeScore,
-                awayScore = resolvedAwayScore,
+                homeScore = targetHome,
+                awayScore = targetAway,
                 phase = matchedGame.serie?.full_name ?: liveMatch.phase,
                 periodScoresJson = liveMatch.periodScoresJson,
                 numberOfGames = matchedGame.number_of_games ?: liveMatch.numberOfGames,
@@ -460,12 +539,12 @@ class PandaScoreSyncService(
                 matchId = finishedMatch.id,
                 homeTeamName = finishedMatch.homeTeamName,
                 awayTeamName = finishedMatch.awayTeamName,
-                homeScore = resolvedHomeScore,
-                awayScore = resolvedAwayScore,
+                homeScore = targetHome,
+                awayScore = targetAway,
                 sportId = finishedMatch.sportId,
                 leagueId = finishedMatch.leagueId
             ))
-            logger.info("Concluded LIVE match ${liveMatch.id} as FINISHED based on PandaScore data. Score: $resolvedHomeScore x $resolvedAwayScore")
+            logger.info("Concluded match ${liveMatch.id} as FINISHED based on PandaScore data. Score: $targetHome x $targetAway")
         } else if (mappedStatus == MatchStatus.CANCELLED) {
             val cancelledMatch = MatchJpaEntity(
                 id = liveMatch.id,
@@ -525,13 +604,15 @@ class PandaScoreSyncService(
         val finishedMatches = existing.filter { it.status == MatchStatus.FINISHED }
         val toDelete = mutableListOf<MatchJpaEntity>()
         val toUpdate = mutableListOf<MatchJpaEntity>()
+        val now = Instant.now()
 
         for (match in existing) {
             val isSynthetic = match.homeTeamLogoUrl?.contains("dicebear") == true || match.awayTeamLogoUrl?.contains("dicebear") == true
-            val isOutOfSeason = if (activeSeason != null) {
+            val kickoffYear = match.kickoffTime.atZone(java.time.ZoneId.of("UTC")).year
+            val isOutOfSeason = (activeSeason != null && (
                 match.kickoffTime.isBefore(activeSeason.startDate.minus(14, ChronoUnit.DAYS)) ||
                 match.kickoffTime.isAfter(activeSeason.endDate.plus(14, ChronoUnit.DAYS))
-            } else false
+            )) || kickoffYear < 2026 || match.phase?.contains("2024") == true || match.phase?.contains("2025") == true
 
             val isOrphanedLiveDuplicate = match.status == MatchStatus.LIVE && finishedMatches.any { fin ->
                 fin.id != match.id &&
@@ -540,8 +621,36 @@ class PandaScoreSyncService(
                 java.time.Duration.between(match.kickoffTime, fin.kickoffTime).abs().toHours() < 168
             }
 
-            if (isSynthetic || isOutOfSeason || isOrphanedLiveDuplicate) {
+            // Partidas com 0x0 marcadas como FINISHED são inválidas em eSports
+            val isInvalidFinishedZero = match.status == MatchStatus.FINISHED && (match.homeScore ?: 0) == 0 && (match.awayScore ?: 0) == 0
+            // Partidas SCHEDULED com mais de 7 dias de atraso que nunca aconteceram
+            val isAbandonedScheduled = match.status == MatchStatus.SCHEDULED && match.kickoffTime.isBefore(now.minus(7, ChronoUnit.DAYS))
+
+            if (isSynthetic || isOutOfSeason || isOrphanedLiveDuplicate || isInvalidFinishedZero || isAbandonedScheduled) {
                 toDelete.add(match)
+            } else if (match.status == MatchStatus.SCHEDULED && match.kickoffTime.isBefore(now.minus(24, ChronoUnit.HOURS))) {
+                // Se o kickoff foi há mais de 24h e o jogo nunca iniciou, marca como CANCELLED
+                toUpdate.add(
+                    MatchJpaEntity(
+                        id = match.id,
+                        sportId = match.sportId,
+                        leagueId = match.leagueId,
+                        seasonId = match.seasonId,
+                        homeTeamName = match.homeTeamName,
+                        awayTeamName = match.awayTeamName,
+                        homeTeamLogoUrl = match.homeTeamLogoUrl,
+                        awayTeamLogoUrl = match.awayTeamLogoUrl,
+                        kickoffTime = match.kickoffTime,
+                        status = MatchStatus.CANCELLED,
+                        homeScore = null,
+                        awayScore = null,
+                        phase = match.phase,
+                        periodScoresJson = match.periodScoresJson,
+                        numberOfGames = match.numberOfGames,
+                        streamUrl = match.streamUrl,
+                        updatedAt = Instant.now()
+                    )
+                )
             } else if (match.status == MatchStatus.SCHEDULED && (match.homeScore != null || match.awayScore != null)) {
                 toUpdate.add(
                     MatchJpaEntity(
@@ -568,11 +677,11 @@ class PandaScoreSyncService(
         }
 
         if (toDelete.isNotEmpty()) {
-            logger.info("Purging ${toDelete.size} synthetic or out-of-season matches for league: $leagueId")
+            logger.info("Purging ${toDelete.size} synthetic, out-of-season, 0x0 or abandoned matches for league: $leagueId")
             matchRepository.deleteAll(toDelete)
         }
         if (toUpdate.isNotEmpty()) {
-            logger.info("Sanitizing ${toUpdate.size} scheduled matches with non-null scores for league: $leagueId")
+            logger.info("Sanitizing/cancelling ${toUpdate.size} stale scheduled matches for league: $leagueId")
             matchRepository.saveAll(toUpdate)
         }
     }

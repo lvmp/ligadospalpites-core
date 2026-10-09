@@ -344,4 +344,104 @@ class PandaScoreSyncServiceTest {
         val deletedList = deleteCaptor.value
         assertTrue(deletedList.any { it.id == outOfSeasonMatch.id }, "Matches outside active season window must be purged")
     }
+
+    @Test
+    fun `should mark match with 0x0 as CANCELLED instead of FINISHED in eSports`() {
+        val gameFinishedZeroScore = PandaScoreMatchResponse(
+            id = 201,
+            name = "LEC vs FAR",
+            begin_at = "2026-06-15T16:00:00Z",
+            status = "finished",
+            opponents = listOf(
+                PandaScoreOpponentWrapper(PandaScoreTeam(id = 50, name = "CBLOL Team A")),
+                PandaScoreOpponentWrapper(PandaScoreTeam(id = 51, name = "CBLOL Team B"))
+            ),
+            results = listOf(PandaScoreResult(team_id = 50, score = 0), PandaScoreResult(team_id = 51, score = 0)),
+            serie = PandaScoreSerie(full_name = "CBLOL 2026")
+        )
+
+        `when`(pandaScoreClient.fetchMatches(leagueIdOrSlug = "cblol", searchTerm = "CBLOL", videogameSlug = "league-of-legends"))
+            .thenReturn(listOf(gameFinishedZeroScore))
+
+        val result = syncService.fetchFromPandaScore(syncService.esportsId, cblolLeagueId)
+
+        assertEquals(1, result.size)
+        assertEquals(MatchStatus.CANCELLED, result.first().status, "0x0 in eSports must be treated as CANCELLED")
+        assertNull(result.first().homeScore)
+        assertNull(result.first().awayScore)
+    }
+
+    @Test
+    fun `should reject matches from previous splits like Split 2 2025`() {
+        val gameFrom2025Split = PandaScoreMatchResponse(
+            id = 202,
+            name = "Team A vs Team B",
+            begin_at = "2026-02-10T16:00:00Z",
+            status = "finished",
+            opponents = listOf(
+                PandaScoreOpponentWrapper(PandaScoreTeam(id = 50, name = "CBLOL Team A")),
+                PandaScoreOpponentWrapper(PandaScoreTeam(id = 51, name = "CBLOL Team B"))
+            ),
+            results = listOf(PandaScoreResult(team_id = 50, score = 2), PandaScoreResult(team_id = 51, score = 1)),
+            serie = PandaScoreSerie(full_name = "Split 2 2025")
+        )
+
+        `when`(pandaScoreClient.fetchMatches(leagueIdOrSlug = "cblol", searchTerm = "CBLOL", videogameSlug = "league-of-legends"))
+            .thenReturn(listOf(gameFrom2025Split))
+
+        val result = syncService.fetchFromPandaScore(syncService.esportsId, cblolLeagueId)
+
+        assertTrue(result.isEmpty(), "Matches explicitly referring to 2025 split must be rejected")
+    }
+
+    @Test
+    fun `should auto-cancel scheduled match that passed more than 24 hours ago`() {
+        val threeDaysAgo = Instant.now().minus(3, ChronoUnit.DAYS)
+        val staleScheduledMatch = MatchJpaEntity(
+            id = UUID.randomUUID(),
+            sportId = syncService.esportsId,
+            leagueId = cblolLeagueId,
+            seasonId = season2026Id,
+            homeTeamName = "CUP",
+            awayTeamName = "DPL",
+            kickoffTime = threeDaysAgo,
+            status = MatchStatus.SCHEDULED,
+            homeScore = null,
+            awayScore = null
+        )
+
+        `when`(matchRepository.findByLeagueId(cblolLeagueId)).thenReturn(listOf(staleScheduledMatch))
+
+        syncService.performUpsert(cblolLeagueId, emptyList())
+
+        val saveCaptor = ArgumentCaptor.forClass(List::class.java) as ArgumentCaptor<List<MatchJpaEntity>>
+        verify(matchRepository).saveAll(saveCaptor.capture())
+
+        val savedList = saveCaptor.value
+        val cancelled = savedList.find { it.id == staleScheduledMatch.id }
+        assertNotNull(cancelled)
+        assertEquals(MatchStatus.CANCELLED, cancelled?.status, "Stale SCHEDULED match must be cancelled")
+    }
+
+    @Test
+    fun `should reject games belonging to foreign leagues like DPL or LEC`() {
+        val foreignGame = PandaScoreMatchResponse(
+            id = 205,
+            name = "CUP vs DPL",
+            begin_at = "2026-06-15T16:00:00Z",
+            status = "not_started",
+            opponents = listOf(
+                PandaScoreOpponentWrapper(PandaScoreTeam(id = 80, name = "CUP")),
+                PandaScoreOpponentWrapper(PandaScoreTeam(id = 81, name = "DPL"))
+            ),
+            league = PandaScoreLeague(id = 999, name = "Dota Professional League", slug = "dpl")
+        )
+
+        `when`(pandaScoreClient.fetchMatches(leagueIdOrSlug = "cblol", searchTerm = "CBLOL", videogameSlug = "league-of-legends"))
+            .thenReturn(listOf(foreignGame))
+
+        val result = syncService.fetchFromPandaScore(syncService.esportsId, cblolLeagueId)
+
+        assertTrue(result.isEmpty(), "Games belonging to a foreign league must be rejected")
+    }
 }
