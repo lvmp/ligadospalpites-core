@@ -183,59 +183,67 @@ class BasketballSyncService(
         val seasonYear = activeSeason.externalSeasonCode
 
         if (metadata.defaultName.equals("NBA", ignoreCase = true)) {
+            if (espnBasketballClient != null) {
+                try {
+                    val espnGames = espnBasketballClient.fetchNbaScoreboard()
+                    if (espnGames.isNotEmpty()) {
+                        logger.info("Using ESPN Public API as primary NBA data provider")
+                        return espnGames
+                            .filter { it.seasonType != 1 && !it.phase.contains("Pré-Temporada", ignoreCase = true) && !it.phase.contains("Preseason", ignoreCase = true) }
+                            .map { game ->
+                                MatchJpaEntity(
+                                    id = UUID.randomUUID(),
+                                    sportId = basketballId,
+                                    leagueId = leagueId,
+                                    seasonId = targetSeasonId,
+                                    homeTeamName = translateTeamName(game.homeTeamName),
+                                    awayTeamName = translateTeamName(game.awayTeamName),
+                                    homeTeamLogoUrl = resolveTeamLogo(game.homeTeamName, game.homeTeamLogoUrl),
+                                    awayTeamLogoUrl = resolveTeamLogo(game.awayTeamName, game.awayTeamLogoUrl),
+                                    kickoffTime = parseIsoInstant(game.date),
+                                    status = mapBasketballStatus(game.statusShort),
+                                    homeScore = game.homeScore,
+                                    awayScore = game.awayScore,
+                                    phase = game.phase,
+                                    periodScoresJson = game.periodScoresJson,
+                                    updatedAt = Instant.now()
+                                )
+                            }
+                    }
+                } catch (e: Exception) {
+                    logger.warn("Primary ESPN API failed for NBA, trying secondary balldontlie fallback: ${e.message}")
+                }
+            }
+
             if (balldontlieClient != null) {
                 try {
                     val bdlGames = balldontlieClient.fetchNbaGames()
                     if (bdlGames.isNotEmpty()) {
-                        logger.info("Using balldontlie.io as primary NBA data provider")
-                        return bdlGames.map { game ->
-                            MatchJpaEntity(
-                                id = UUID.randomUUID(),
-                                sportId = basketballId,
-                                leagueId = leagueId,
-                                seasonId = targetSeasonId,
-                                homeTeamName = translateTeamName(game.homeTeamName),
-                                awayTeamName = translateTeamName(game.awayTeamName),
-                                homeTeamLogoUrl = game.homeTeamLogoUrl,
-                                awayTeamLogoUrl = game.awayTeamLogoUrl,
-                                kickoffTime = parseIsoInstant(game.date),
-                                status = mapBasketballStatus(game.statusShort),
-                                homeScore = game.homeScore,
-                                awayScore = game.awayScore,
-                                phase = game.phase,
-                                periodScoresJson = null,
-                                updatedAt = Instant.now()
-                            )
-                        }
+                        logger.info("Using balldontlie.io as secondary NBA data provider")
+                        return bdlGames
+                            .filter { !it.phase.contains("Pré-Temporada", ignoreCase = true) && !it.phase.contains("Preseason", ignoreCase = true) }
+                            .map { game ->
+                                MatchJpaEntity(
+                                    id = UUID.randomUUID(),
+                                    sportId = basketballId,
+                                    leagueId = leagueId,
+                                    seasonId = targetSeasonId,
+                                    homeTeamName = translateTeamName(game.homeTeamName),
+                                    awayTeamName = translateTeamName(game.awayTeamName),
+                                    homeTeamLogoUrl = resolveTeamLogo(game.homeTeamName, game.homeTeamLogoUrl),
+                                    awayTeamLogoUrl = resolveTeamLogo(game.awayTeamName, game.awayTeamLogoUrl),
+                                    kickoffTime = parseIsoInstant(game.date),
+                                    status = mapBasketballStatus(game.statusShort),
+                                    homeScore = game.homeScore,
+                                    awayScore = game.awayScore,
+                                    phase = game.phase,
+                                    periodScoresJson = null,
+                                    updatedAt = Instant.now()
+                                )
+                            }
                     }
                 } catch (e: Exception) {
-                    logger.warn("Primary balldontlie.io API failed for NBA, trying secondary ESPN fallback: ${e.message}")
-                }
-            }
-
-            if (espnBasketballClient != null) {
-                val espnGames = espnBasketballClient.fetchNbaScoreboard()
-                if (espnGames.isNotEmpty()) {
-                    logger.info("Using ESPN Public API as secondary NBA fallback provider")
-                    return espnGames.map { game ->
-                        MatchJpaEntity(
-                            id = UUID.randomUUID(),
-                            sportId = basketballId,
-                            leagueId = leagueId,
-                            seasonId = targetSeasonId,
-                            homeTeamName = translateTeamName(game.homeTeamName),
-                            awayTeamName = translateTeamName(game.awayTeamName),
-                            homeTeamLogoUrl = game.homeTeamLogoUrl,
-                            awayTeamLogoUrl = game.awayTeamLogoUrl,
-                            kickoffTime = parseIsoInstant(game.date),
-                            status = mapBasketballStatus(game.statusShort),
-                            homeScore = game.homeScore,
-                            awayScore = game.awayScore,
-                            phase = game.phase,
-                            periodScoresJson = game.periodScoresJson,
-                            updatedAt = Instant.now()
-                        )
-                    }
+                    logger.warn("Secondary balldontlie.io API failed for NBA: ${e.message}")
                 }
             }
         }
@@ -328,8 +336,12 @@ class BasketballSyncService(
 
         val toSave = incoming.map { inc ->
             val matchMatch = existing.find { ext ->
-                ext.homeTeamName.lowercase() == inc.homeTeamName.lowercase() &&
-                ext.awayTeamName.lowercase() == inc.awayTeamName.lowercase()
+                val namesMatch = ext.homeTeamName.lowercase() == inc.homeTeamName.lowercase() &&
+                                 ext.awayTeamName.lowercase() == inc.awayTeamName.lowercase()
+                if (namesMatch) {
+                    val hoursDiff = java.time.Duration.between(ext.kickoffTime, inc.kickoffTime).abs().toHours()
+                    hoursDiff < 48
+                } else false
             }
 
             if (matchMatch != null) {
@@ -432,11 +444,12 @@ class BasketballSyncService(
             .trim()
     }
 
-    private fun mapBasketballStatus(shortStatus: String): MatchStatus {
+    internal fun mapBasketballStatus(shortStatus: String): MatchStatus {
         val upper = shortStatus.uppercase().trim()
         return when {
             upper == "NS" || upper == "TBD" || upper == "PRE" || upper == "SCHEDULED" -> MatchStatus.SCHEDULED
-            upper.startsWith("Q") || upper == "OT" || upper == "BT" || upper == "HT" || upper == "LIVE" || upper == "IN" -> MatchStatus.LIVE
+            upper == "LIVE" || upper == "IN" || upper.startsWith("Q") || upper == "OT" || upper == "BT" || upper == "HT" || upper == "HALFTIME" ||
+                upper.contains("1ST") || upper.contains("2ND") || upper.contains("3RD") || upper.contains("4TH") || upper.contains("HALF") -> MatchStatus.LIVE
             upper.contains("FINAL") || upper == "FT" || upper == "AOT" || upper == "POST" || upper.contains("END") -> MatchStatus.FINISHED
             upper.contains("CANCEL") || upper.contains("POSTPONED") || upper == "CAN" || upper == "PST" || upper == "ABD" -> MatchStatus.CANCELLED
             else -> MatchStatus.SCHEDULED

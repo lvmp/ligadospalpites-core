@@ -26,7 +26,8 @@ data class EspnBasketballGame(
     val awayScore: Int?,
     val statusShort: String,
     val periodScoresJson: String?,
-    val phase: String
+    val phase: String,
+    val seasonType: Int = 2
 )
 
 @Component
@@ -115,19 +116,24 @@ class EspnBasketballClient(
         }
     }
 
-    fun fetchWnbaScoreboard(): List<EspnBasketballGame> {
-        return fetchScoreboardForSport("wnba")
+    fun fetchNbaScoreboard(dates: String? = null): List<EspnBasketballGame> {
+        return fetchScoreboardForSport("nba", dates)
     }
 
-    fun fetchNcaaScoreboard(): List<EspnBasketballGame> {
-        return fetchScoreboardForSport("mens-college-basketball")
+    fun fetchWnbaScoreboard(dates: String? = null): List<EspnBasketballGame> {
+        return fetchScoreboardForSport("wnba", dates)
     }
 
-    fun fetchScoreboardForSport(leagueSlug: String): List<EspnBasketballGame> {
-        logger.info("Fetching basketball scoreboard from ESPN Public API for slug: $leagueSlug")
+    fun fetchNcaaScoreboard(dates: String? = null): List<EspnBasketballGame> {
+        return fetchScoreboardForSport("mens-college-basketball", dates)
+    }
+
+    fun fetchScoreboardForSport(leagueSlug: String, dates: String? = null): List<EspnBasketballGame> {
+        val uri = if (!dates.isNullOrBlank()) "/$leagueSlug/scoreboard?dates=$dates&limit=500" else "/$leagueSlug/scoreboard?limit=100"
+        logger.info("Fetching basketball scoreboard from ESPN Public API for slug: $leagueSlug with uri: $uri")
         return try {
             val response = restClient.get()
-                .uri("/$leagueSlug/scoreboard")
+                .uri(uri)
                 .retrieve()
                 .body(EspnScoreboardResponse::class.java)
 
@@ -154,7 +160,23 @@ class EspnBasketballClient(
         val homeScore = homeCompetitor.score?.toIntOrNull()
         val awayScore = awayCompetitor.score?.toIntOrNull()
 
-        val statusShort = event.status?.type?.shortDetail ?: event.status?.type?.state ?: "SCHEDULED"
+        val state = event.status?.type?.state?.lowercase()
+        val shortDetail = event.status?.type?.shortDetail ?: ""
+        val isLive = state == "in" ||
+                     shortDetail.contains("1st", ignoreCase = true) ||
+                     shortDetail.contains("2nd", ignoreCase = true) ||
+                     shortDetail.contains("3rd", ignoreCase = true) ||
+                     shortDetail.contains("4th", ignoreCase = true) ||
+                     shortDetail.contains("half", ignoreCase = true) ||
+                     shortDetail.contains("ot", ignoreCase = true)
+
+        val isFinished = state == "post" || shortDetail.contains("final", ignoreCase = true)
+
+        val statusShort = when {
+            isFinished -> "FINAL"
+            isLive -> "LIVE"
+            else -> shortDetail.ifBlank { "SCHEDULED" }
+        }
 
         // Build period scores breakdown
         val homeQuarterScores = homeCompetitor.linescores?.mapNotNull { it.value?.toInt() } ?: emptyList()
@@ -197,7 +219,8 @@ class EspnBasketballClient(
             awayScore = awayScore,
             statusShort = statusShort,
             periodScoresJson = periodScoresJsonString,
-            phase = phaseName
+            phase = phaseName,
+            seasonType = seasonType
         )
     }
 }

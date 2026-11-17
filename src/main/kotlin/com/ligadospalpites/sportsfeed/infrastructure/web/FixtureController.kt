@@ -167,6 +167,10 @@ class FixtureController(
         val filtered = allMatches
             .filter { match -> (sportId == null || match.sportId == sportId) }
             .filter { match ->
+                val phaseNorm = (match.phase ?: "").lowercase()
+                if (phaseNorm.contains("pré-temporada") || phaseNorm.contains("preseason") || phaseNorm.contains("amistoso")) {
+                    return@filter false
+                }
                 if (match.sportId == esportsId) {
                     if (match.status == MatchStatus.FINISHED && (match.homeScore ?: 0) == 0 && (match.awayScore ?: 0) == 0) {
                         return@filter false

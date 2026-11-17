@@ -78,7 +78,7 @@ class PandaScoreClient(
 
         // 1. Determine target league ID (numeric if resolved or provided)
         var targetLeagueIdentifier = leagueIdOrSlug
-        if (targetLeagueIdentifier.isNullOrBlank() && !searchTerm.isNullOrBlank()) {
+        if (!searchTerm.isNullOrBlank()) {
             val resolvedId = resolveLeagueId(searchTerm)
             if (resolvedId != null) {
                 targetLeagueIdentifier = resolvedId.toString()
@@ -262,7 +262,24 @@ data class PandaScoreMatchResponse(
     val videogame: PandaScoreVideogame? = null,
     val opponents: List<PandaScoreOpponentWrapper> = emptyList(),
     val results: List<PandaScoreResult> = emptyList(),
+    val games: List<PandaScoreGame> = emptyList(),
     val streams_list: List<PandaScoreStream> = emptyList()
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class PandaScoreGame(
+    val id: Long = 0,
+    val position: Int? = 1,
+    val status: String? = null,
+    val winner: PandaScoreWinner? = null,
+    val end_at: String? = null,
+    val begin_at: String? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class PandaScoreWinner(
+    val id: Long? = null,
+    val type: String? = null
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)

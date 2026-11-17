@@ -180,19 +180,29 @@ class PandaScoreSyncService(
             }
 
             var mappedStatus = mapPandaScoreStatus(game.status)
+
+            // Extract map scores from completed sub-games or from results array
+            val homeGamesWon = game.games.count { it.winner?.id == homeOpponent.id }
+            val awayGamesWon = game.games.count { it.winner?.id == awayOpponent.id }
+            val mapsFromGames = homeGamesWon + awayGamesWon
+
             var homeScore = if (mappedStatus == MatchStatus.SCHEDULED) null else {
-                game.results.find { it.team_id == homeOpponent.id }?.score
-                    ?: if (game.results.size >= 2) game.results[0].score else null
+                val fromResults = game.results.find { it.team_id == homeOpponent.id }?.score
+                if (fromResults != null && fromResults > 0) fromResults
+                else if (mapsFromGames > 0) homeGamesWon
+                else fromResults ?: (if (game.results.size >= 2) game.results[0].score else null)
             }
             var awayScore = if (mappedStatus == MatchStatus.SCHEDULED) null else {
-                game.results.find { it.team_id == awayOpponent.id }?.score
-                    ?: if (game.results.size >= 2) game.results[1].score else null
+                val fromResults = game.results.find { it.team_id == awayOpponent.id }?.score
+                if (fromResults != null && fromResults > 0) fromResults
+                else if (mapsFromGames > 0) awayGamesWon
+                else fromResults ?: (if (game.results.size >= 2) game.results[1].score else null)
             }
 
-            // Em eSports partidas finalizadas com placar 0x0 ou sem placar representam jogos cancelados/não disputados
+            // Only mark as CANCELLED if PandaScore explicitly set status to canceled/postponed
             if (mappedStatus == MatchStatus.FINISHED) {
                 val totalMaps = (homeScore ?: 0) + (awayScore ?: 0)
-                if (totalMaps == 0) {
+                if (totalMaps == 0 && (game.status?.lowercase() == "canceled" || game.status?.lowercase() == "postponed")) {
                     mappedStatus = MatchStatus.CANCELLED
                     homeScore = null
                     awayScore = null
