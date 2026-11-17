@@ -64,6 +64,7 @@ class AdminStatsRepositoryImpl(
                 sportId = existing.sportId,
                 isActive = isActive,
                 logoUrl = existing.logoUrl,
+                format = existing.format,
                 createdAt = existing.createdAt
             )
             leagueRepository.save(updated)

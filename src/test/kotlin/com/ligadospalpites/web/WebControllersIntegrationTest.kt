@@ -1035,4 +1035,13 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.points", equalTo(25)))
     }
+
+    @Test
+    fun `should return 400 Bad Request with INVALID_ARGUMENT when querying fixtures with non-uuid leagueId`() {
+        mockMvc.perform(get("/api/v1/sports/fixtures")
+            .param("leagueId", "libertadores"))
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.error", equalTo("INVALID_ARGUMENT")))
+            .andExpect(jsonPath("$.message", equalTo("O parâmetro 'leagueId' deve ser um UUID válido.")))
+    }
 }

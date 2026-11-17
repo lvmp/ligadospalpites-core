@@ -3,6 +3,7 @@ package com.ligadospalpites.shared.web
 import com.ligadospalpites.groups.domain.exceptions.GroupDomainException
 import com.ligadospalpites.groups.domain.exceptions.GroupNotFoundException
 import com.ligadospalpites.groups.domain.exceptions.NotGroupAdminException
+import com.ligadospalpites.predictions.domain.exceptions.LeagueNotFoundException
 import com.ligadospalpites.predictions.domain.exceptions.MatchNotFoundException
 import com.ligadospalpites.predictions.domain.exceptions.PredictionDomainException
 import com.ligadospalpites.predictions.domain.exceptions.PredictionLockedException
@@ -12,9 +13,13 @@ import com.ligadospalpites.sportsfeed.domain.exceptions.SportLockedException
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.bind.MethodArgumentNotValidException
+import org.springframework.web.bind.MissingServletRequestParameterException
 import org.springframework.web.bind.annotation.ControllerAdvice
 import org.springframework.web.bind.annotation.ExceptionHandler
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
+import java.util.UUID
 
 data class ErrorResponse(
     val error: String,
@@ -45,6 +50,13 @@ class GlobalExceptionHandler {
         log.warn("Partida não encontrada: {}", ex.message)
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
             .body(ErrorResponse(error = "MATCH_NOT_FOUND", message = ex.message ?: "Partida não encontrada."))
+    }
+
+    @ExceptionHandler(LeagueNotFoundException::class)
+    fun handleLeagueNotFound(ex: LeagueNotFoundException): ResponseEntity<ErrorResponse> {
+        log.warn("Liga não encontrada: {}", ex.message)
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+            .body(ErrorResponse(error = "LEAGUE_NOT_FOUND", message = ex.message ?: "Liga não encontrada."))
     }
 
     @ExceptionHandler(PredictionDomainException::class)
@@ -94,6 +106,33 @@ class GlobalExceptionHandler {
         log.warn("Argumento inválido: {}", ex.message)
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
             .body(ErrorResponse(error = "INVALID_ARGUMENT", message = ex.message ?: "Requisição inválida."))
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException::class)
+    fun handleMethodArgumentTypeMismatch(ex: MethodArgumentTypeMismatchException): ResponseEntity<ErrorResponse> {
+        val typeName = ex.requiredType?.simpleName ?: "tipo esperado"
+        val message = if (ex.requiredType == UUID::class.java || typeName.equals("UUID", ignoreCase = true)) {
+            "O parâmetro '${ex.name}' deve ser um UUID válido."
+        } else {
+            "O parâmetro '${ex.name}' possui um formato inválido. Esperado: $typeName."
+        }
+        log.warn("Falha de conversão do parâmetro '{}' com valor '{}': {}", ex.name, ex.value, ex.message)
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(ErrorResponse(error = "INVALID_ARGUMENT", message = message))
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException::class)
+    fun handleHttpMessageNotReadable(ex: HttpMessageNotReadableException): ResponseEntity<ErrorResponse> {
+        log.warn("Corpo da requisição inválido ou mal formatado: {}", ex.message)
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(ErrorResponse(error = "INVALID_ARGUMENT", message = "Corpo da requisição inválido ou mal formatado."))
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException::class)
+    fun handleMissingParams(ex: MissingServletRequestParameterException): ResponseEntity<ErrorResponse> {
+        log.warn("Parâmetro obrigatório ausente: {}", ex.parameterName)
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(ErrorResponse(error = "INVALID_ARGUMENT", message = "O parâmetro obrigatório '${ex.parameterName}' não foi informado."))
     }
 
     @ExceptionHandler(MethodArgumentNotValidException::class)

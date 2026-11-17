@@ -4,6 +4,7 @@ import com.ligadospalpites.shared.identity.UserResolver
 import com.ligadospalpites.sportsfeed.application.usecases.GetBracketsUseCase
 import com.ligadospalpites.sportsfeed.application.usecases.GetMatchTimelineUseCase
 import com.ligadospalpites.sportsfeed.application.usecases.GetStandingsUseCase
+import com.ligadospalpites.predictions.domain.exceptions.LeagueNotFoundException
 import com.ligadospalpites.sportsfeed.domain.exceptions.LeagueInactiveException
 import com.ligadospalpites.sportsfeed.domain.exceptions.SportLockedException
 import com.ligadospalpites.sportsfeed.domain.models.MatchStatus
@@ -100,7 +101,8 @@ class FixtureController(
         // Validation A: If leagueId is specified, check if it's active
         if (leagueId != null) {
             val league = leagueRepository.findById(leagueId).orElse(null)
-            if (league == null || !league.isActive) {
+                ?: throw LeagueNotFoundException("Liga não encontrada.")
+            if (!league.isActive) {
                 throw LeagueInactiveException("Esta liga está inativa.")
             }
         }
@@ -273,10 +275,13 @@ data class LeagueResponse(
 
 data class MatchResponse(
     val matchId: UUID,
+    val id: UUID = matchId,
     val sportId: UUID,
     val leagueId: UUID,
     val homeTeam: String,
     val awayTeam: String,
+    val homeTeamName: String = homeTeam,
+    val awayTeamName: String = awayTeam,
     val kickoffTime: String,
     val status: String,
     val scoreHome: Int?,
@@ -286,6 +291,8 @@ data class MatchResponse(
     val phase: String? = null,
     val homeTeamLogoUrl: String? = null,
     val awayTeamLogoUrl: String? = null,
+    val homeTeamLogo: String? = homeTeamLogoUrl,
+    val awayTeamLogo: String? = awayTeamLogoUrl,
     val periodScoresJson: String? = null,
     val numberOfGames: Int? = null,
     val streamUrl: String? = null
@@ -350,7 +357,8 @@ data class StandingRow(
 
 data class BracketResponse(
     val leagueId: UUID,
-    val phases: Map<String, List<MatchResponse>>
+    val phases: Map<String, List<MatchResponse>>,
+    val rounds: Map<String, List<MatchResponse>> = phases
 )
 
 data class MatchTimelineEventResponse(
