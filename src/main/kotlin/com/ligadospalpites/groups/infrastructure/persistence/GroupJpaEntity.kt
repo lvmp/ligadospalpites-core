@@ -1,5 +1,8 @@
 package com.ligadospalpites.groups.infrastructure.persistence
 
+import com.ligadospalpites.groups.domain.models.Group
+import com.ligadospalpites.shared.domain.models.GroupId
+import com.ligadospalpites.shared.domain.models.UserId
 import jakarta.persistence.*
 import java.time.Instant
 import java.util.UUID
@@ -24,4 +27,24 @@ class GroupJpaEntity(
 
     @Column(name = "created_at", nullable = false)
     val createdAt: Instant = Instant.now()
-)
+) {
+    fun toDomain(): Group = Group(
+        id = GroupId(id),
+        name = name,
+        creatorId = UserId(creatorId),
+        scoringRulesJson = scoringRulesJson,
+        logoUrl = logoUrl,
+        createdAt = createdAt
+    )
+
+    companion object {
+        fun fromDomain(domain: Group): GroupJpaEntity = GroupJpaEntity(
+            id = domain.id.value,
+            name = domain.name,
+            creatorId = domain.creatorId.value,
+            scoringRulesJson = domain.scoringRulesJson,
+            logoUrl = domain.logoUrl,
+            createdAt = domain.createdAt
+        )
+    }
+}

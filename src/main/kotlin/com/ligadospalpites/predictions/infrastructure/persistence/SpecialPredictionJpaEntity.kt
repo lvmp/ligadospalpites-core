@@ -1,5 +1,10 @@
 package com.ligadospalpites.predictions.infrastructure.persistence
 
+import com.ligadospalpites.predictions.domain.models.SpecialPrediction
+import com.ligadospalpites.predictions.domain.models.SpecialPredictionId
+import com.ligadospalpites.predictions.domain.models.SpecialPredictionType
+import com.ligadospalpites.shared.domain.models.LeagueId
+import com.ligadospalpites.shared.domain.models.UserId
 import jakarta.persistence.*
 import java.time.Instant
 import java.util.UUID
@@ -30,4 +35,28 @@ class SpecialPredictionJpaEntity(
 
     @Column(name = "created_at", nullable = false)
     val createdAt: Instant = Instant.now()
-)
+) {
+    fun toDomain(): SpecialPrediction = SpecialPrediction(
+        id = SpecialPredictionId(id),
+        userId = UserId(userId),
+        leagueId = LeagueId(leagueId),
+        type = SpecialPredictionType.of(type),
+        predictionValue = predictionValue,
+        pointsAwarded = pointsAwarded,
+        isProcessed = isProcessed,
+        createdAt = createdAt
+    )
+
+    companion object {
+        fun fromDomain(domain: SpecialPrediction): SpecialPredictionJpaEntity = SpecialPredictionJpaEntity(
+            id = domain.id.value,
+            userId = domain.userId.value,
+            leagueId = domain.leagueId.value,
+            type = domain.type.value,
+            predictionValue = domain.predictionValue,
+            pointsAwarded = domain.pointsAwarded,
+            isProcessed = domain.isProcessed,
+            createdAt = domain.createdAt
+        )
+    }
+}

@@ -1,32 +1,27 @@
 package com.ligadospalpites.predictions.infrastructure.web
 
-import com.ligadospalpites.predictions.infrastructure.persistence.SpringDataPredictionRepository
-import com.ligadospalpites.predictions.infrastructure.persistence.SpringDataSpecialPredictionRepository
-import com.ligadospalpites.predictions.infrastructure.persistence.PredictionJpaEntity
-import com.ligadospalpites.predictions.infrastructure.persistence.SpecialPredictionJpaEntity
-import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataMatchRepository
-import com.ligadospalpites.sportsfeed.infrastructure.persistence.SpringDataLeagueRepository
-import io.swagger.v3.oas.annotations.security.SecurityRequirement
-import org.springframework.http.HttpStatus
+import com.ligadospalpites.predictions.application.usecases.*
+import com.ligadospalpites.predictions.domain.models.SpecialPredictionType
+import com.ligadospalpites.predictions.infrastructure.web.dtos.*
+import com.ligadospalpites.shared.domain.models.LeagueId
+import com.ligadospalpites.shared.domain.models.MatchId
+import com.ligadospalpites.shared.domain.models.UserId
 import com.ligadospalpites.shared.identity.UserResolver
+import io.swagger.v3.oas.annotations.security.SecurityRequirement
+import jakarta.validation.Valid
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
-import org.springframework.context.ApplicationEventPublisher
-import com.ligadospalpites.predictions.domain.events.PredictionsProcessedEvent
-import com.ligadospalpites.predictions.domain.events.UserScoreUpdateDto
-import org.springframework.transaction.annotation.Transactional
-import java.time.Instant
 import java.util.UUID
 
 @RestController
 @RequestMapping("/api/v1")
 class PredictionController(
-    private val predictionRepository: SpringDataPredictionRepository,
-    private val specialPredictionRepository: SpringDataSpecialPredictionRepository,
-    private val matchRepository: SpringDataMatchRepository,
-    private val leagueRepository: SpringDataLeagueRepository,
-    private val userResolver: UserResolver,
-    private val eventPublisher: ApplicationEventPublisher
+    private val submitPredictionUseCase: SubmitPredictionUseCase,
+    private val submitSpecialPredictionUseCase: SubmitSpecialPredictionUseCase,
+    private val getPredictionsUseCase: GetPredictionsUseCase,
+    private val getSpecialPredictionsUseCase: GetSpecialPredictionsUseCase,
+    private val evaluateSpecialPredictionsUseCase: EvaluateSpecialPredictionsUseCase,
+    private val userResolver: UserResolver
 ) {
 
     // 1. Submit match prediction
@@ -34,52 +29,19 @@ class PredictionController(
     @SecurityRequirement(name = "X-User-Id")
     @PostMapping("/predictions")
     fun submitPrediction(
-        @RequestBody request: MatchPredictionRequest,
+        @RequestBody @Valid request: MatchPredictionRequest,
         @RequestHeader(value = "X-User-Id", required = false) userIdHeader: String?
-    ): ResponseEntity<Any> {
+    ): ResponseEntity<PredictionResponse> {
         val userUUID = userResolver.resolveByUidOrUuid(userIdHeader)
-
-        val match = matchRepository.findById(request.matchId).orElse(null)
-            ?: return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(mapOf("error" to "MATCH_NOT_FOUND", "message" to "Partida não encontrada."))
-
-        // CRITICAL VALIDATION: Check kickoff lock
-        if (Instant.now().isAfter(match.kickoffTime) || Instant.now() == match.kickoffTime) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(mapOf("error" to "PREDICTION_LOCKED", "message" to "Este jogo já iniciou. Palpites trancados!"))
-        }
-
-        val existing = predictionRepository.findByUserIdAndMatchId(userUUID, request.matchId)
-        val entityToSave = if (existing != null) {
-            PredictionJpaEntity(
-                id = existing.id,
-                userId = userUUID,
-                matchId = request.matchId,
-                leagueId = match.leagueId,
+        val prediction = submitPredictionUseCase.execute(
+            SubmitPredictionUseCase.Command(
+                userId = UserId(userUUID),
+                matchId = MatchId(request.matchId),
                 predictedHomeScore = request.predictedHomeScore,
-                predictedAwayScore = request.predictedAwayScore,
-                pointsAwarded = existing.pointsAwarded,
-                calculatedAt = existing.calculatedAt,
-                isProcessed = existing.isProcessed,
-                createdAt = existing.createdAt
+                predictedAwayScore = request.predictedAwayScore
             )
-        } else {
-            PredictionJpaEntity(
-                id = UUID.randomUUID(),
-                userId = userUUID,
-                matchId = request.matchId,
-                leagueId = match.leagueId,
-                predictedHomeScore = request.predictedHomeScore,
-                predictedAwayScore = request.predictedAwayScore,
-                pointsAwarded = 0,
-                calculatedAt = null,
-                isProcessed = false,
-                createdAt = Instant.now()
-            )
-        }
-
-        predictionRepository.save(entityToSave)
-        return ResponseEntity.ok(mapOf("status" to "SUCCESS", "message" to "Palpite registrado com sucesso!"))
+        )
+        return ResponseEntity.ok(PredictionResponse.fromDomain(prediction))
     }
 
     // 2. Submit special prediction (CHAMPION, TOP_SCORER, etc.)
@@ -87,48 +49,19 @@ class PredictionController(
     @SecurityRequirement(name = "X-User-Id")
     @PostMapping("/special-predictions")
     fun submitSpecialPrediction(
-        @RequestBody request: SpecialPredictionRequest,
+        @RequestBody @Valid request: SpecialPredictionRequest,
         @RequestHeader(value = "X-User-Id", required = false) userIdHeader: String?
-    ): ResponseEntity<Any> {
+    ): ResponseEntity<SpecialPredictionResponse> {
         val userUUID = userResolver.resolveByUidOrUuid(userIdHeader)
-
-        // CRITICAL VALIDATION: Find first match in league to determine general lock
-        val matches = matchRepository.findByLeagueId(request.leagueId)
-        if (matches.isNotEmpty()) {
-            val firstMatch = matches.minByOrNull { it.kickoffTime }!!
-            if (Instant.now().isAfter(firstMatch.kickoffTime) || Instant.now() == firstMatch.kickoffTime) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(mapOf("error" to "SPECIAL_PREDICTION_LOCKED", "message" to "O torneio já começou. Palpites de longo prazo trancados!"))
-            }
-        }
-
-        val existing = specialPredictionRepository.findByUserIdAndLeagueIdAndType(userUUID, request.leagueId, request.type)
-        val entityToSave = if (existing != null) {
-            SpecialPredictionJpaEntity(
-                id = existing.id,
-                userId = userUUID,
-                leagueId = request.leagueId,
-                type = request.type,
-                predictionValue = request.predictionValue,
-                pointsAwarded = existing.pointsAwarded,
-                isProcessed = existing.isProcessed,
-                createdAt = existing.createdAt
+        val specialPrediction = submitSpecialPredictionUseCase.execute(
+            SubmitSpecialPredictionUseCase.Command(
+                userId = UserId(userUUID),
+                leagueId = LeagueId(request.leagueId),
+                type = SpecialPredictionType.of(request.type),
+                predictionValue = request.predictionValue
             )
-        } else {
-            SpecialPredictionJpaEntity(
-                id = UUID.randomUUID(),
-                userId = userUUID,
-                leagueId = request.leagueId,
-                type = request.type,
-                predictionValue = request.predictionValue,
-                pointsAwarded = 0,
-                isProcessed = false,
-                createdAt = Instant.now()
-            )
-        }
-
-        specialPredictionRepository.save(entityToSave)
-        return ResponseEntity.ok(mapOf("status" to "SUCCESS", "message" to "Palpite especial de ${request.type} registrado!"))
+        )
+        return ResponseEntity.ok(SpecialPredictionResponse.fromDomain(specialPrediction))
     }
 
     // 3. GET Match Predictions for user
@@ -139,24 +72,15 @@ class PredictionController(
         @RequestParam(required = false) matchId: UUID?,
         @RequestParam(required = false) leagueId: UUID?,
         @RequestHeader(value = "X-User-Id", required = false) userIdHeader: String?
-    ): ResponseEntity<Any> {
+    ): ResponseEntity<List<PredictionResponse>> {
         val userUUID = userResolver.resolveByUidOrUuid(userIdHeader)
+        val predictions = getPredictionsUseCase.execute(
+            userId = UserId(userUUID),
+            matchId = matchId?.let { MatchId(it) },
+            leagueId = leagueId?.let { LeagueId(it) }
+        ).map { PredictionResponse.fromDomain(it) }
 
-        return when {
-            matchId != null -> {
-                val prediction = predictionRepository.findByUserIdAndMatchId(userUUID, matchId)
-                ResponseEntity.ok(prediction?.let { listOf(it) } ?: emptyList<PredictionJpaEntity>())
-            }
-            leagueId != null -> {
-                val predictions = predictionRepository.findByUserIdAndLeagueId(userUUID, leagueId)
-                ResponseEntity.ok(predictions)
-            }
-            else -> {
-                val activeLeagueIds = leagueRepository.findByIsActiveTrue().map { it.id }.toSet()
-                val predictions = if (activeLeagueIds.isNotEmpty()) predictionRepository.findByUserIdAndLeagueIdIn(userUUID, activeLeagueIds) else emptyList()
-                ResponseEntity.ok(predictions)
-            }
-        }
+        return ResponseEntity.ok(predictions)
     }
 
     // 4. GET Special Predictions for user
@@ -166,108 +90,44 @@ class PredictionController(
     fun getSpecialPredictions(
         @RequestParam(required = false) leagueId: UUID?,
         @RequestHeader(value = "X-User-Id", required = false) userIdHeader: String?
-    ): ResponseEntity<Any> {
+    ): ResponseEntity<List<SpecialPredictionResponse>> {
         val userUUID = userResolver.resolveByUidOrUuid(userIdHeader)
+        val predictions = getSpecialPredictionsUseCase.execute(
+            userId = UserId(userUUID),
+            leagueId = leagueId?.let { LeagueId(it) }
+        ).map { SpecialPredictionResponse.fromDomain(it) }
 
-        val predictions = if (leagueId != null) {
-            specialPredictionRepository.findByUserIdAndLeagueId(userUUID, leagueId)
-        } else {
-            val activeLeagueIds = leagueRepository.findByIsActiveTrue().map { it.id }.toSet()
-            if (activeLeagueIds.isNotEmpty()) specialPredictionRepository.findByUserIdAndLeagueIdIn(userUUID, activeLeagueIds) else emptyList()
-        }
         return ResponseEntity.ok(predictions)
     }
 
     // 5. POST Admin Endpoint to calculate points for Special Predictions
-    @Transactional
     @PostMapping("/internal/special-predictions/evaluate")
     fun evaluateSpecialPredictions(
-        @RequestBody request: SpecialPredictionEvaluationRequest
-    ): ResponseEntity<Any> {
-        val uncompleted = specialPredictionRepository.findByLeagueIdAndIsProcessedFalse(request.leagueId)
-
-        if (uncompleted.isEmpty()) {
-            return ResponseEntity.ok(mapOf(
-                "status" to "COMPLETED",
-                "message" to "Nenhum palpite especial pendente para processar nesta liga.",
-                "predictionsProcessed" to 0
-            ))
-        }
-
-        val correctValues = mapOf(
-            "CHAMPION" to request.championTeamId,
-            "SECOND_PLACE" to request.secondPlaceTeamId,
-            "THIRD_PLACE" to request.thirdPlaceTeamId,
-            "FOURTH_PLACE" to request.fourthPlaceTeamId
-        )
-
-        val pointsPerType = mapOf(
-            "CHAMPION" to 50,
-            "SECOND_PLACE" to 50,
-            "THIRD_PLACE" to 50,
-            "FOURTH_PLACE" to 50
-        )
-
-        val scoreUpdates = mutableListOf<UserScoreUpdateDto>()
-        val updatedEntities = uncompleted.map { pred ->
-            val correctTeamId = correctValues[pred.type]
-            val earnedPoints = if (correctTeamId != null && pred.predictionValue.equals(correctTeamId, ignoreCase = true)) {
-                pointsPerType[pred.type] ?: 0
-            } else {
-                0
-            }
-
-            if (earnedPoints > 0) {
-                scoreUpdates.add(UserScoreUpdateDto(pred.userId, earnedPoints))
-            }
-
-            SpecialPredictionJpaEntity(
-                id = pred.id,
-                userId = pred.userId,
-                leagueId = pred.leagueId,
-                type = pred.type,
-                predictionValue = pred.predictionValue,
-                pointsAwarded = earnedPoints,
-                isProcessed = true,
-                createdAt = pred.createdAt
+        @RequestBody @Valid request: SpecialPredictionEvaluationRequest
+    ): ResponseEntity<SpecialPredictionEvaluationResponse> {
+        val result = evaluateSpecialPredictionsUseCase.execute(
+            EvaluateSpecialPredictionsUseCase.Command(
+                leagueId = LeagueId(request.leagueId),
+                championTeamId = request.championTeamId,
+                secondPlaceTeamId = request.secondPlaceTeamId,
+                thirdPlaceTeamId = request.thirdPlaceTeamId,
+                fourthPlaceTeamId = request.fourthPlaceTeamId
             )
+        )
+
+        val message = if (result.predictionsProcessed == 0) {
+            "Nenhum palpite especial pendente para processar nesta liga."
+        } else {
+            "Cálculo de palpites especiais concluído com sucesso!"
         }
 
-        specialPredictionRepository.saveAll(updatedEntities)
-
-        if (scoreUpdates.isNotEmpty()) {
-            val aggregatedScores = scoreUpdates.groupBy { it.userId }.map { (userId, updates) ->
-                UserScoreUpdateDto(userId, updates.sumOf { it.pointsGained })
-            }
-            eventPublisher.publishEvent(PredictionsProcessedEvent(request.leagueId, aggregatedScores))
-        }
-
-        return ResponseEntity.ok(mapOf(
-            "status" to "SUCCESS",
-            "message" to "Cálculo de palpites especiais concluído com sucesso!",
-            "predictionsProcessed" to updatedEntities.size,
-            "usersAwarded" to scoreUpdates.map { it.userId }.distinct().size
-        ))
+        return ResponseEntity.ok(
+            SpecialPredictionEvaluationResponse(
+                status = "SUCCESS",
+                message = message,
+                predictionsProcessed = result.predictionsProcessed,
+                usersAwarded = result.usersAwarded
+            )
+        )
     }
 }
-
-// Request DTOs
-data class MatchPredictionRequest(
-    val matchId: UUID,
-    val predictedHomeScore: Int,
-    val predictedAwayScore: Int
-)
-
-data class SpecialPredictionRequest(
-    val leagueId: UUID,
-    val type: String, // CHAMPION, TOP_SCORER, etc.
-    val predictionValue: String
-)
-
-data class SpecialPredictionEvaluationRequest(
-    val leagueId: UUID,
-    val championTeamId: String,
-    val secondPlaceTeamId: String,
-    val thirdPlaceTeamId: String,
-    val fourthPlaceTeamId: String
-)

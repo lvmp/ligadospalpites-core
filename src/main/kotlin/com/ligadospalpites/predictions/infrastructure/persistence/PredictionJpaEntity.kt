@@ -42,12 +42,11 @@ class PredictionJpaEntity(
     val updatedAt: Instant = Instant.now()
 ) {
     fun toDomain(): Prediction = Prediction(
-        id = id,
-        userId = userId,
-        matchId = matchId,
-        leagueId = leagueId,
-        predictedHomeScore = predictedHomeScore,
-        predictedAwayScore = predictedAwayScore,
+        id = com.ligadospalpites.predictions.domain.models.PredictionId(id),
+        userId = com.ligadospalpites.shared.domain.models.UserId(userId),
+        matchId = com.ligadospalpites.shared.domain.models.MatchId(matchId),
+        leagueId = com.ligadospalpites.shared.domain.models.LeagueId(leagueId),
+        score = com.ligadospalpites.predictions.domain.models.MatchPredictionScore.of(predictedHomeScore, predictedAwayScore),
         pointsAwarded = pointsAwarded,
         calculatedAt = calculatedAt,
         isProcessed = isProcessed,
@@ -57,10 +56,10 @@ class PredictionJpaEntity(
 
     companion object {
         fun fromDomain(domain: Prediction): PredictionJpaEntity = PredictionJpaEntity(
-            id = domain.id,
-            userId = domain.userId,
-            matchId = domain.matchId,
-            leagueId = domain.leagueId,
+            id = domain.id.value,
+            userId = domain.userId.value,
+            matchId = domain.matchId.value,
+            leagueId = domain.leagueId.value,
             predictedHomeScore = domain.predictedHomeScore,
             predictedAwayScore = domain.predictedAwayScore,
             pointsAwarded = domain.pointsAwarded,

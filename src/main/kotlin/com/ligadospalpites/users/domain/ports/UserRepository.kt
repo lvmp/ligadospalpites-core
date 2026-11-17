@@ -6,5 +6,6 @@ import java.util.UUID
 interface UserRepository {
     fun findByFirebaseUid(firebaseUid: String): User?
     fun findById(id: UUID): User?
+    fun findAllById(ids: Collection<UUID>): List<User>
     fun save(user: User): User
 }

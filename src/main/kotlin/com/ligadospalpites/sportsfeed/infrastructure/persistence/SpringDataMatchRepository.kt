@@ -9,7 +9,10 @@ import java.util.UUID
 
 interface SpringDataMatchRepository : JpaRepository<MatchJpaEntity, UUID> {
     fun findByLeagueId(leagueId: UUID): List<MatchJpaEntity>
+    fun findByLeagueIdIn(leagueIds: Collection<UUID>): List<MatchJpaEntity>
     fun findBySeasonId(seasonId: UUID): List<MatchJpaEntity>
+    fun findBySeasonIdIn(seasonIds: Collection<UUID>): List<MatchJpaEntity>
+    fun existsByLeagueIdAndStatusIn(leagueId: UUID, statuses: Collection<MatchStatus>): Boolean
 
     @Query("""
         SELECT m FROM MatchJpaEntity m

@@ -21,6 +21,8 @@ class FixtureControllerTest {
     private val userResolver: UserResolver = mock(UserResolver::class.java)
     private val espnSoccerClient: com.ligadospalpites.sportsfeed.infrastructure.client.EspnSoccerClient = mock(com.ligadospalpites.sportsfeed.infrastructure.client.EspnSoccerClient::class.java)
 
+    private lateinit var getStandingsUseCase: com.ligadospalpites.sportsfeed.application.usecases.GetStandingsUseCase
+    private lateinit var getBracketsUseCase: com.ligadospalpites.sportsfeed.application.usecases.GetBracketsUseCase
     private lateinit var controller: FixtureController
 
     private val libertadoresLeagueId = UUID.fromString("4acdf011-fbde-4122-83bc-c46b1ba847de")
@@ -30,6 +32,17 @@ class FixtureControllerTest {
 
     @BeforeEach
     fun setUp() {
+        getStandingsUseCase = com.ligadospalpites.sportsfeed.application.usecases.GetStandingsUseCase(
+            sportRepository = sportRepository,
+            leagueRepository = leagueRepository,
+            matchRepository = matchRepository,
+            seasonRepository = seasonRepository,
+            espnSoccerClient = espnSoccerClient
+        )
+        getBracketsUseCase = com.ligadospalpites.sportsfeed.application.usecases.GetBracketsUseCase(
+            seasonRepository = seasonRepository,
+            matchRepository = matchRepository
+        )
         controller = FixtureController(
             sportRepository = sportRepository,
             leagueRepository = leagueRepository,
@@ -37,7 +50,8 @@ class FixtureControllerTest {
             seasonRepository = seasonRepository,
             entitlementRepository = entitlementRepository,
             userResolver = userResolver,
-            espnSoccerClient = espnSoccerClient
+            getStandingsUseCase = getStandingsUseCase,
+            getBracketsUseCase = getBracketsUseCase
         )
 
         val leagueEntity = LeagueJpaEntity(
@@ -346,6 +360,8 @@ class FixtureControllerTest {
             seasonRepository = seasonRepository,
             entitlementRepository = entitlementRepository,
             userResolver = userResolver,
+            getStandingsUseCase = getStandingsUseCase,
+            getBracketsUseCase = getBracketsUseCase,
             getMatchTimelineUseCase = useCase
         )
 
@@ -377,6 +393,8 @@ class FixtureControllerTest {
             seasonRepository = seasonRepository,
             entitlementRepository = entitlementRepository,
             userResolver = userResolver,
+            getStandingsUseCase = getStandingsUseCase,
+            getBracketsUseCase = getBracketsUseCase,
             getMatchTimelineUseCase = useCase
         )
 
@@ -460,5 +478,26 @@ class FixtureControllerTest {
         // 2. Partidas SCHEDULED devem ter scoreHome e scoreAway nulos (mesmo que estivessem como 0 no banco)
         assertNull(body[1].scoreHome, "Scheduled match must not display 0 as scoreHome")
         assertNull(body[1].scoreAway, "Scheduled match must not display 0 as scoreAway")
+    }
+
+    @Test
+    fun `getLeaguesGroupedBySport should query only active leagues matches and never execute findAll on matchRepository`() {
+        val activeLeague = LeagueJpaEntity(
+            id = libertadoresLeagueId,
+            name = "Copa Libertadores",
+            sportId = footballSportId,
+            isActive = true
+        )
+        val sport = SportJpaEntity(id = footballSportId, name = "Futebol")
+        `when`(leagueRepository.findByIsActiveTrue()).thenReturn(listOf(activeLeague))
+        `when`(sportRepository.findAll()).thenReturn(listOf(sport))
+        `when`(matchRepository.findByLeagueIdIn(setOf(libertadoresLeagueId))).thenReturn(emptyList())
+
+        val response = controller.getLeaguesGroupedBySport()
+
+        assertEquals(200, response.statusCode.value())
+        assertNotNull(response.body)
+        verify(matchRepository, times(1)).findByLeagueIdIn(setOf(libertadoresLeagueId))
+        verify(matchRepository, never()).findAll()
     }
 }

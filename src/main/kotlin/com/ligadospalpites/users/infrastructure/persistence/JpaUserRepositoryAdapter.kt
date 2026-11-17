@@ -18,6 +18,11 @@ class JpaUserRepositoryAdapter(
         return springDataUserRepository.findById(id).map { it.toDomain() }.orElse(null)
     }
 
+    override fun findAllById(ids: Collection<UUID>): List<User> {
+        if (ids.isEmpty()) return emptyList()
+        return springDataUserRepository.findAllById(ids).map { it.toDomain() }
+    }
+
     override fun save(user: User): User {
         val entity = UserJpaEntity.fromDomain(user)
         return springDataUserRepository.save(entity).toDomain()

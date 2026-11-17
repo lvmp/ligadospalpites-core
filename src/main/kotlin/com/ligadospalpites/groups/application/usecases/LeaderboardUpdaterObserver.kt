@@ -1,10 +1,10 @@
 package com.ligadospalpites.groups.application.usecases
 
-import com.ligadospalpites.predictions.domain.events.PredictionsProcessedEvent
-import com.ligadospalpites.groups.infrastructure.persistence.SpringDataGroupMemberRepository
+import com.ligadospalpites.groups.domain.ports.GroupMemberRepository
 import com.ligadospalpites.groups.infrastructure.persistence.RedisLeaderboardRepository
+import com.ligadospalpites.predictions.domain.events.PredictionsProcessedEvent
+import com.ligadospalpites.shared.domain.models.UserId
 import org.slf4j.LoggerFactory
-import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Component
 import org.springframework.transaction.event.TransactionPhase
@@ -13,7 +13,7 @@ import org.springframework.transaction.event.TransactionalEventListener
 @Component
 class LeaderboardUpdaterObserver(
     private val leaderboardRepository: RedisLeaderboardRepository,
-    private val springDataGroupMemberRepository: SpringDataGroupMemberRepository
+    private val groupMemberRepository: GroupMemberRepository
 ) {
     private val log = LoggerFactory.getLogger(LeaderboardUpdaterObserver::class.java)
 
@@ -25,6 +25,8 @@ class LeaderboardUpdaterObserver(
 
         event.scores.forEach { update ->
             log.info("Processing score update for user ${update.userId}: +${update.pointsGained} points")
+            val targetUserId = UserId(update.userId)
+
             // 1. Atualiza ranking global no Redis
             leaderboardRepository.incrementScore(globalKey, update.userId, update.pointsGained)
 
@@ -33,21 +35,21 @@ class LeaderboardUpdaterObserver(
             leaderboardRepository.incrementScore(leagueKey, update.userId, update.pointsGained)
 
             // 2. Busca todos os grupos aos quais este usuário pertence no PostgreSQL
-            val userGroups = springDataGroupMemberRepository.findByUserId(update.userId)
+            val userGroups = groupMemberRepository.findByUserId(targetUserId)
             log.info("User ${update.userId} belongs to ${userGroups.size} groups in Postgres")
 
             userGroups.forEach { membership ->
                 val groupId = membership.groupId
-                log.info("Updating points for user ${update.userId} in group $groupId: current=${membership.accumulatedPoints}")
+                log.info("Updating points for user ${update.userId} in group ${groupId.value}: current=${membership.accumulatedPoints}")
 
                 // 3. Incrementa os pontos na tabela tbl_group_members no Postgres
-                val rowsUpdated = springDataGroupMemberRepository.incrementUserPoints(groupId, update.userId, update.pointsGained)
-                log.info("Rows updated in Postgres for group $groupId, user ${update.userId}: $rowsUpdated")
+                val rowsUpdated = groupMemberRepository.incrementUserPoints(groupId, targetUserId, update.pointsGained)
+                log.info("Rows updated in Postgres for group ${groupId.value}, user ${update.userId}: $rowsUpdated")
 
                 // 4. Atualiza os Sorted Sets do Redis de cada grupo
-                val groupOverallKey = "leaderboard:group:$groupId:overall"
-                val groupStageKey = "leaderboard:group:$groupId:group-stage"
-                val knockoutKey = "leaderboard:group:$groupId:knockout"
+                val groupOverallKey = "leaderboard:group:${groupId.value}:overall"
+                val groupStageKey = "leaderboard:group:${groupId.value}:group-stage"
+                val knockoutKey = "leaderboard:group:${groupId.value}:knockout"
 
                 leaderboardRepository.incrementScore(groupOverallKey, update.userId, update.pointsGained)
                 leaderboardRepository.incrementScore(groupStageKey, update.userId, update.pointsGained)

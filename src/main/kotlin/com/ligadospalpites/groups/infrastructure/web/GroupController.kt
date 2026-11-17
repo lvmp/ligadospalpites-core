@@ -1,13 +1,12 @@
 package com.ligadospalpites.groups.infrastructure.web
 
-import com.ligadospalpites.groups.infrastructure.persistence.SpringDataGroupRepository
-import com.ligadospalpites.groups.infrastructure.persistence.SpringDataGroupMemberRepository
-import com.ligadospalpites.groups.infrastructure.persistence.RedisLeaderboardRepository
-import com.ligadospalpites.groups.infrastructure.persistence.GroupMemberId
+import com.ligadospalpites.groups.application.usecases.ExpelGroupMemberUseCase
+import com.ligadospalpites.groups.application.usecases.GetGroupLeaderboardUseCase
+import com.ligadospalpites.groups.domain.models.LeaderboardPhase
+import com.ligadospalpites.shared.domain.models.GroupId
+import com.ligadospalpites.shared.domain.models.UserId
 import com.ligadospalpites.shared.identity.UserResolver
-import com.ligadospalpites.users.infrastructure.persistence.SpringDataUserRepository
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
-import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.util.UUID
@@ -15,11 +14,9 @@ import java.util.UUID
 @RestController
 @RequestMapping("/api/v1/groups")
 class GroupController(
-    private val groupRepository: SpringDataGroupRepository,
-    private val memberRepository: SpringDataGroupMemberRepository,
-    private val leaderboardRepository: RedisLeaderboardRepository,
-    private val userResolver: UserResolver,
-    private val userRepository: SpringDataUserRepository
+    private val expelGroupMemberUseCase: ExpelGroupMemberUseCase,
+    private val getGroupLeaderboardUseCase: GetGroupLeaderboardUseCase,
+    private val userResolver: UserResolver
 ) {
 
     // 1. Kick/Remove member (Restricted to group creator)
@@ -30,33 +27,23 @@ class GroupController(
         @PathVariable groupId: UUID,
         @PathVariable memberUserId: UUID,
         @RequestHeader(value = "X-User-Id", required = false) userIdHeader: String?
-    ): ResponseEntity<Any> {
+    ): ResponseEntity<Map<String, String>> {
         val requesterUUID = userResolver.resolveByUidOrUuid(userIdHeader)
 
-        val group = groupRepository.findById(groupId).orElse(null)
-            ?: return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(mapOf("error" to "GROUP_NOT_FOUND", "message" to "Grupo não encontrado."))
+        expelGroupMemberUseCase.execute(
+            ExpelGroupMemberUseCase.Command(
+                groupId = GroupId(groupId),
+                memberUserId = UserId(memberUserId),
+                requesterId = UserId(requesterUUID)
+            )
+        )
 
-        // Validation: Verify if requester is the creator/admin
-        if (group.creatorId != requesterUUID) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(mapOf("error" to "NOT_GROUP_ADMIN", "message" to "Apenas o criador do grupo pode expulsar membros."))
-        }
-
-        // Delete from DB
-        val memberId = GroupMemberId(groupId = groupId, userId = memberUserId)
-        if (memberRepository.existsById(memberId)) {
-            memberRepository.deleteById(memberId)
-        }
-
-        // Delete from Redis ZSETs for all periods
-        val phases = listOf("overall", "group-stage", "knockout")
-        phases.forEach { phase ->
-            val key = "leaderboard:group:$groupId:$phase"
-            leaderboardRepository.removeUser(key, memberUserId)
-        }
-
-        return ResponseEntity.ok(mapOf("status" to "SUCCESS", "message" to "Membro removido com sucesso de todas as tabelas e leaderboards."))
+        return ResponseEntity.ok(
+            mapOf(
+                "status" to "SUCCESS",
+                "message" to "Membro removido com sucesso de todas as tabelas e leaderboards."
+            )
+        )
     }
 
     // 2. Get leaderboard/ranking for specific phase
@@ -65,43 +52,23 @@ class GroupController(
         @PathVariable groupId: UUID,
         @RequestParam(defaultValue = "overall") phase: String
     ): ResponseEntity<List<LeaderboardRow>> {
-        val validPhases = listOf("overall", "group-stage", "knockout")
-        val selectedPhase = if (phase in validPhases) phase else "overall"
+        val selectedPhase = LeaderboardPhase.fromString(phase)
 
-        val key = "leaderboard:group:$groupId:$selectedPhase"
-        val topUsers = leaderboardRepository.getTopUsers(key, 50)
+        val rankedMembers = getGroupLeaderboardUseCase.execute(
+            GetGroupLeaderboardUseCase.Query(
+                groupId = GroupId(groupId),
+                phase = selectedPhase,
+                limit = 50
+            )
+        )
 
-        // Fetch user profiles in batch from database
-        val userIds = topUsers.mapNotNull { tuple ->
-            try {
-                UUID.fromString(tuple.value ?: "")
-            } catch (e: Exception) {
-                null
-            }
-        }
-        val users = userRepository.findAllById(userIds)
-        val userMap = users.associateBy { it.id }
-
-        var position = 1
-        val rows = topUsers.mapNotNull { tuple ->
-            val userIdStr = tuple.value ?: return@mapNotNull null
-            val score = tuple.score ?: 0.0
-            val userId = try {
-                UUID.fromString(userIdStr)
-            } catch (e: Exception) {
-                return@mapNotNull null
-            }
-
-            val user = userMap[userId]
-            val displayName = user?.name ?: "Usuário ${userIdStr.take(5)}"
-            val avatarUrl = user?.avatarUrl ?: "https://api.dicebear.com/7.x/bottts/svg?seed=$userIdStr"
-
+        val rows = rankedMembers.map {
             LeaderboardRow(
-                position = position++,
-                userId = userId,
-                displayName = displayName,
-                avatarUrl = avatarUrl,
-                score = score.toInt()
+                position = it.position,
+                userId = it.userId,
+                displayName = it.displayName,
+                avatarUrl = it.avatarUrl,
+                score = it.score
             )
         }
 

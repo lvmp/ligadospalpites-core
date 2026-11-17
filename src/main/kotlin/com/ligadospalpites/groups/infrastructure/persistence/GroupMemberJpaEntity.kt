@@ -1,5 +1,8 @@
 package com.ligadospalpites.groups.infrastructure.persistence
 
+import com.ligadospalpites.groups.domain.models.GroupMember
+import com.ligadospalpites.shared.domain.models.GroupId
+import com.ligadospalpites.shared.domain.models.UserId
 import jakarta.persistence.*
 import java.io.Serializable
 import java.time.Instant
@@ -27,4 +30,20 @@ class GroupMemberJpaEntity(
 
     @Column(name = "accumulated_points", nullable = false)
     val accumulatedPoints: Int = 0
-)
+) {
+    fun toDomain(): GroupMember = GroupMember(
+        groupId = GroupId(groupId),
+        userId = UserId(userId),
+        joinedAt = joinedAt,
+        accumulatedPoints = accumulatedPoints
+    )
+
+    companion object {
+        fun fromDomain(domain: GroupMember): GroupMemberJpaEntity = GroupMemberJpaEntity(
+            groupId = domain.groupId.value,
+            userId = domain.userId.value,
+            joinedAt = domain.joinedAt,
+            accumulatedPoints = domain.accumulatedPoints
+        )
+    }
+}

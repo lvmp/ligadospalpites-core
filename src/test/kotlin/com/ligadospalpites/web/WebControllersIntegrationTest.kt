@@ -217,7 +217,9 @@ class WebControllersIntegrationTest : BaseIntegrationTest() {
             .contentType(MediaType.APPLICATION_JSON)
             .content(payload))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.status", equalTo("SUCCESS")))
+            .andExpect(jsonPath("$.id").isNotEmpty)
+            .andExpect(jsonPath("$.predictedHomeScore", equalTo(3)))
+            .andExpect(jsonPath("$.predictedAwayScore", equalTo(1)))
     }
 
     @Test
