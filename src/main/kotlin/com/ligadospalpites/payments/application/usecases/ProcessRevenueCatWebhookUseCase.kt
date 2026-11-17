@@ -1,14 +1,18 @@
 package com.ligadospalpites.payments.application.usecases
 
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.ligadospalpites.payments.domain.models.RevenueCatEvent
 import com.ligadospalpites.payments.domain.models.StorePlatform
 import com.ligadospalpites.payments.domain.models.Subscription
 import com.ligadospalpites.payments.domain.models.SubscriptionStatus
-import com.ligadospalpites.payments.infrastructure.persistence.*
+import com.ligadospalpites.payments.domain.ports.RevenueCatEventRepository
+import com.ligadospalpites.payments.domain.ports.SubscriptionRepository
+import com.ligadospalpites.payments.infrastructure.web.RevenueCatEventDto
 import com.ligadospalpites.payments.infrastructure.web.RevenueCatWebhookRequest
 import com.ligadospalpites.users.domain.models.EntitlementType
-import com.ligadospalpites.users.infrastructure.persistence.SpringDataUserEntitlementRepository
-import com.ligadospalpites.users.infrastructure.persistence.SpringDataUserRepository
-import com.ligadospalpites.users.infrastructure.persistence.UserEntitlementJpaEntity
+import com.ligadospalpites.users.domain.models.UserEntitlement
+import com.ligadospalpites.users.domain.ports.UserEntitlementRepository
+import com.ligadospalpites.users.domain.ports.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -17,12 +21,12 @@ import java.util.UUID
 
 @Service
 class ProcessRevenueCatWebhookUseCase(
-    private val eventRepository: SpringDataRevenueCatEventRepository,
-    private val subscriptionRepository: SpringDataSubscriptionRepository,
-    private val userRepository: SpringDataUserRepository,
-    private val entitlementRepository: SpringDataUserEntitlementRepository
+    private val eventRepository: RevenueCatEventRepository,
+    private val subscriptionRepository: SubscriptionRepository,
+    private val userRepository: UserRepository,
+    private val entitlementRepository: UserEntitlementRepository
 ) {
-    private val objectMapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
+    private val objectMapper = jacksonObjectMapper()
     private val log = LoggerFactory.getLogger(ProcessRevenueCatWebhookUseCase::class.java)
 
     @Transactional
@@ -47,7 +51,7 @@ class ProcessRevenueCatWebhookUseCase(
 
         // 2. Persistir log bruto do evento
         val payloadJson = objectMapper.writeValueAsString(request)
-        val eventEntity = RevenueCatEventJpaEntity(
+        var eventDomain = RevenueCatEvent(
             id = eventId,
             type = eventType,
             appUserId = appUserIdStr,
@@ -55,28 +59,30 @@ class ProcessRevenueCatWebhookUseCase(
             payload = payloadJson,
             createdAt = Instant.now()
         )
-        eventRepository.save(eventEntity)
+        eventDomain = eventRepository.save(eventDomain)
 
         // 3. Obter o User ID local (UUID) a partir do app_user_id (Firebase UID ou UUID)
-        val userEntity = userRepository.findByFirebaseUid(appUserIdStr)
+        val user = userRepository.findByFirebaseUid(appUserIdStr)
             ?: try {
                 val uuid = UUID.fromString(appUserIdStr)
-                userRepository.findById(uuid).orElse(null)
+                userRepository.findById(uuid)
             } catch (e: IllegalArgumentException) {
                 null
             }
 
-        if (userEntity == null) {
+        if (user == null) {
             log.warn("Usuário com Firebase UID ou UUID '{}' não encontrado localmente. Ignorando processamento de regras.", appUserIdStr)
-            eventEntity.status = "DISCARDED"
-            eventEntity.failureReason = "User with UID/UUID '$appUserIdStr' not found locally."
-            eventRepository.save(eventEntity)
+            val discardedEvent = eventDomain.copy(
+                status = "DISCARDED",
+                failureReason = "User with UID/UUID '$appUserIdStr' not found locally."
+            )
+            eventRepository.save(discardedEvent)
             return true // Retorna true para evitar retries de id inválido do RevenueCat
         }
 
-        val userId = userEntity.id
+        val userId = user.id
 
-        // 5. Mapear plataforma da loja
+        // 4. Mapear plataforma da loja
         val storeStr = event.store ?: ""
         val storePlatform = when (storeStr.uppercase()) {
             "APP_STORE" -> StorePlatform.APPLE_APP_STORE
@@ -84,7 +90,7 @@ class ProcessRevenueCatWebhookUseCase(
             else -> StorePlatform.STRIPE
         }
 
-        // 6. Processar de acordo com o tipo de evento com auditoria detalhada
+        // 5. Processar de acordo com o tipo de evento com auditoria detalhada
         var processStatus = "PROCESSED"
         var failureMsg: String? = null
 
@@ -110,14 +116,16 @@ class ProcessRevenueCatWebhookUseCase(
             failureMsg = e.message?.take(255)
         }
 
-        eventEntity.status = processStatus
-        eventEntity.failureReason = failureMsg
-        eventRepository.save(eventEntity)
+        val finalEvent = eventDomain.copy(
+            status = processStatus,
+            failureReason = failureMsg
+        )
+        eventRepository.save(finalEvent)
 
         return true
     }
 
-    private fun processActiveAccess(userId: UUID, eventId: String, event: com.ligadospalpites.payments.infrastructure.web.RevenueCatEventDto, store: StorePlatform) {
+    private fun processActiveAccess(userId: UUID, eventId: String, event: RevenueCatEventDto, store: StorePlatform) {
         val entitlementId = event.entitlementId ?: event.entitlementIds?.firstOrNull()
         if (entitlementId == null) {
             throw IllegalArgumentException("Nenhum entitlement_id encontrado no evento do RevenueCat: $eventId")
@@ -135,18 +143,13 @@ class ProcessRevenueCatWebhookUseCase(
         }
 
         if (matchingEntitlement != null) {
-            val updated = UserEntitlementJpaEntity(
-                id = matchingEntitlement.id,
-                userId = userId,
-                entitlementType = entitlementType,
-                sportId = sportId,
-                expiresAt = expirationInstant,
-                createdAt = matchingEntitlement.createdAt
+            val updated = matchingEntitlement.copy(
+                expiresAt = expirationInstant
             )
             entitlementRepository.save(updated)
             log.info("Entitlement atualizado para o usuário {}: tipo={}, sportId={}, expiração={}", userId, entitlementType, sportId, expirationInstant)
         } else {
-            val newEntitlement = UserEntitlementJpaEntity(
+            val newEntitlement = UserEntitlement(
                 id = UUID.randomUUID(),
                 userId = userId,
                 entitlementType = entitlementType,
@@ -160,24 +163,21 @@ class ProcessRevenueCatWebhookUseCase(
 
         // Upsert na Subscription
         val transactionId = eventId
-        val existingSub = subscriptionRepository.findByTransactionId(transactionId).orElse(null)
+        val existingSub = subscriptionRepository.findByTransactionId(transactionId)
         val productIdStr = event.productId ?: ""
 
         if (existingSub != null) {
-            val updatedSub = SubscriptionJpaEntity(
-                id = existingSub.id,
+            val updatedSub = existingSub.copy(
                 userId = userId,
                 store = store,
-                transactionId = transactionId,
                 productId = productIdStr,
                 status = SubscriptionStatus.ACTIVE,
                 currentPeriodEnd = expirationInstant,
-                createdAt = existingSub.createdAt,
                 updatedAt = Instant.now()
             )
             subscriptionRepository.save(updatedSub)
         } else {
-            val newSub = SubscriptionJpaEntity(
+            val newSub = Subscription(
                 id = UUID.randomUUID(),
                 userId = userId,
                 store = store,
@@ -192,7 +192,7 @@ class ProcessRevenueCatWebhookUseCase(
         }
     }
 
-    private fun processExpiredAccess(userId: UUID, eventId: String, event: com.ligadospalpites.payments.infrastructure.web.RevenueCatEventDto) {
+    private fun processExpiredAccess(userId: UUID, eventId: String, event: RevenueCatEventDto) {
         val entitlementId = event.entitlementId ?: event.entitlementIds?.firstOrNull() ?: return
         val (entitlementType, sportId) = mapEntitlement(entitlementId)
 
@@ -203,15 +203,9 @@ class ProcessRevenueCatWebhookUseCase(
         }
 
         if (matching != null) {
-            // Seta a expiração no passado (horário atual ou do evento) para cortar o acesso
             val expiredAt = event.expirationAtMs?.let { Instant.ofEpochMilli(it) } ?: Instant.now()
-            val updated = UserEntitlementJpaEntity(
-                id = matching.id,
-                userId = userId,
-                entitlementType = entitlementType,
-                sportId = sportId,
-                expiresAt = expiredAt,
-                createdAt = matching.createdAt
+            val updated = matching.copy(
+                expiresAt = expiredAt
             )
             entitlementRepository.save(updated)
             log.info("Entitlement expirado com sucesso no banco para o usuário {}: {}", userId, entitlementId)
@@ -219,27 +213,22 @@ class ProcessRevenueCatWebhookUseCase(
 
         // Atualiza log de assinatura
         val transactionId = eventId
-        val existingSub = subscriptionRepository.findByTransactionId(transactionId).orElse(null)
+        val existingSub = subscriptionRepository.findByTransactionId(transactionId)
         val productIdStr = event.productId ?: ""
 
         val userSubs = subscriptionRepository.findByUserId(userId)
         val originalSub = userSubs.find { it.productId == productIdStr } ?: userSubs.maxByOrNull { it.updatedAt }
 
         if (existingSub != null) {
-            val updatedSub = SubscriptionJpaEntity(
-                id = existingSub.id,
+            val updatedSub = existingSub.copy(
                 userId = userId,
-                store = existingSub.store,
-                transactionId = transactionId,
                 productId = productIdStr,
                 status = SubscriptionStatus.EXPIRED,
-                currentPeriodEnd = existingSub.currentPeriodEnd,
-                createdAt = existingSub.createdAt,
                 updatedAt = Instant.now()
             )
             subscriptionRepository.save(updatedSub)
         } else {
-            val newSub = SubscriptionJpaEntity(
+            val newSub = Subscription(
                 id = UUID.randomUUID(),
                 userId = userId,
                 store = originalSub?.store ?: StorePlatform.STRIPE,
@@ -255,44 +244,32 @@ class ProcessRevenueCatWebhookUseCase(
 
         // Atualizar também a assinatura original se houver
         if (originalSub != null && originalSub.transactionId != transactionId) {
-            val updatedOriginal = SubscriptionJpaEntity(
-                id = originalSub.id,
-                userId = userId,
-                store = originalSub.store,
-                transactionId = originalSub.transactionId,
-                productId = originalSub.productId,
+            val updatedOriginal = originalSub.copy(
                 status = SubscriptionStatus.EXPIRED,
-                currentPeriodEnd = originalSub.currentPeriodEnd,
-                createdAt = originalSub.createdAt,
                 updatedAt = Instant.now()
             )
             subscriptionRepository.save(updatedOriginal)
         }
     }
 
-    private fun processCancelledSubscription(userId: UUID, eventId: String, event: com.ligadospalpites.payments.infrastructure.web.RevenueCatEventDto) {
+    private fun processCancelledSubscription(userId: UUID, eventId: String, event: RevenueCatEventDto) {
         val transactionId = eventId
-        val existingSub = subscriptionRepository.findByTransactionId(transactionId).orElse(null)
+        val existingSub = subscriptionRepository.findByTransactionId(transactionId)
         val productIdStr = event.productId ?: ""
 
         val userSubs = subscriptionRepository.findByUserId(userId)
         val originalSub = userSubs.find { it.productId == productIdStr } ?: userSubs.maxByOrNull { it.updatedAt }
 
         if (existingSub != null) {
-            val updatedSub = SubscriptionJpaEntity(
-                id = existingSub.id,
+            val updatedSub = existingSub.copy(
                 userId = userId,
-                store = existingSub.store,
-                transactionId = transactionId,
                 productId = productIdStr,
                 status = SubscriptionStatus.CANCELLED,
-                currentPeriodEnd = existingSub.currentPeriodEnd,
-                createdAt = existingSub.createdAt,
                 updatedAt = Instant.now()
             )
             subscriptionRepository.save(updatedSub)
         } else {
-            val newSub = SubscriptionJpaEntity(
+            val newSub = Subscription(
                 id = UUID.randomUUID(),
                 userId = userId,
                 store = originalSub?.store ?: StorePlatform.STRIPE,
@@ -308,15 +285,8 @@ class ProcessRevenueCatWebhookUseCase(
 
         // Atualizar também a assinatura original se houver
         if (originalSub != null && originalSub.transactionId != transactionId) {
-            val updatedOriginal = SubscriptionJpaEntity(
-                id = originalSub.id,
-                userId = userId,
-                store = originalSub.store,
-                transactionId = originalSub.transactionId,
-                productId = originalSub.productId,
+            val updatedOriginal = originalSub.copy(
                 status = SubscriptionStatus.CANCELLED,
-                currentPeriodEnd = originalSub.currentPeriodEnd,
-                createdAt = originalSub.createdAt,
                 updatedAt = Instant.now()
             )
             subscriptionRepository.save(updatedOriginal)
@@ -328,8 +298,6 @@ class ProcessRevenueCatWebhookUseCase(
         return if (entitlementId.equals("premium", ignoreCase = true)) {
             Pair(EntitlementType.PREMIUM, null)
         } else {
-            // Mapeia por exemplo "sport_pass_football" para o ID de futebol
-            // Futebol ID: f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c
             val footballId = UUID.fromString("f3b3b44b-6f81-42cb-b1b7-d1a1005a8f4c")
             Pair(EntitlementType.SPORT_PASS, footballId)
         }

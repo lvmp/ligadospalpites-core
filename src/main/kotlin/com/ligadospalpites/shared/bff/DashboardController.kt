@@ -85,8 +85,24 @@ class DashboardController(
             Pair(rank, score)
         }, executor)
 
-        // 2. Fetch Next Scheduled Matches (Async - Next 7 days including current date)
+        // 2. Fetch Next Scheduled Matches (Async - Next 7 days including current date with Redis L2 cache)
         val nextMatchesFuture = CompletableFuture.supplyAsync({
+            val cacheKey = "dashboard:matches:${sportId ?: "all"}:${leagueId ?: "all"}"
+            val cachedJson = try {
+                redisTemplate.opsForValue().get(cacheKey)
+            } catch (e: Exception) {
+                null
+            }
+
+            if (!cachedJson.isNullOrBlank()) {
+                try {
+                    val listType = objectMapper.typeFactory.constructCollectionType(List::class.java, NextMatchResponse::class.java)
+                    return@supplyAsync objectMapper.readValue<List<NextMatchResponse>>(cachedJson, listType)
+                } catch (e: Exception) {
+                    // Fallback to database on cache deserialization failure
+                }
+            }
+
             val zoneId = ZoneId.of("America/Sao_Paulo")
             val today = LocalDate.now(zoneId)
             val startOfToday = today.atStartOfDay(zoneId).toInstant()
@@ -114,7 +130,7 @@ class DashboardController(
                 emptyList()
             }
 
-            matches.map {
+            val result = matches.map {
                 NextMatchResponse(
                     matchId = it.id,
                     sportId = it.sportId,
@@ -135,6 +151,14 @@ class DashboardController(
                     streamUrl = it.streamUrl
                 )
             }
+
+            try {
+                redisTemplate.opsForValue().set(cacheKey, objectMapper.writeValueAsString(result), java.time.Duration.ofSeconds(30))
+            } catch (e: Exception) {
+                // Ignore transient cache write failures
+            }
+
+            result
         }, executor)
 
         // 3. Fetch User Groups Highlights (Async)

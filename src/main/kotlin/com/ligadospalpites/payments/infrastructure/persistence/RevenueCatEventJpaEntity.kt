@@ -29,4 +29,30 @@ class RevenueCatEventJpaEntity(
 
     @Column(name = "created_at", nullable = false, updatable = false)
     val createdAt: Instant = Instant.now()
-)
+) {
+    fun toDomain(): com.ligadospalpites.payments.domain.models.RevenueCatEvent =
+        com.ligadospalpites.payments.domain.models.RevenueCatEvent(
+            id = id,
+            type = type,
+            appUserId = appUserId,
+            productId = productId,
+            payload = payload,
+            status = status,
+            failureReason = failureReason,
+            createdAt = createdAt
+        )
+
+    companion object {
+        fun fromDomain(domain: com.ligadospalpites.payments.domain.models.RevenueCatEvent): RevenueCatEventJpaEntity =
+            RevenueCatEventJpaEntity(
+                id = domain.id,
+                type = domain.type,
+                appUserId = domain.appUserId,
+                productId = domain.productId,
+                payload = domain.payload,
+                status = domain.status,
+                failureReason = domain.failureReason,
+                createdAt = domain.createdAt
+            )
+    }
+}
