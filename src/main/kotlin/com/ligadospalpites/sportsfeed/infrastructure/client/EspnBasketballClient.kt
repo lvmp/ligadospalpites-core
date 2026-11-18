@@ -2,6 +2,7 @@ package com.ligadospalpites.sportsfeed.infrastructure.client
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.ligadospalpites.sportsfeed.domain.models.NbaTeamAliasResolver
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.client.SimpleClientHttpRequestFactory
@@ -56,10 +57,12 @@ class EspnBasketballClient(
     }
 
     fun fetchNbaStandings(): List<com.ligadospalpites.sportsfeed.infrastructure.web.StandingRow> {
-        logger.info("Fetching official NBA Standings from ESPN Public API")
+        val standingsBaseUrl = baseUrl.replace("/apis/site/v2/", "/apis/v2/").trimEnd('/')
+        val standingsUri = "$standingsBaseUrl/nba/standings"
+        logger.info("Fetching official NBA Standings from ESPN Public API: $standingsUri")
         return try {
             val response = restClient.get()
-                .uri("/nba/standings")
+                .uri(standingsUri)
                 .retrieve()
                 .body(EspnNbaStandingsResponse::class.java)
 
@@ -78,10 +81,16 @@ class EspnBasketballClient(
 
             val conferences = collectConferences(response?.children)
             conferences.forEach { conf ->
-                val confName = conf.name ?: "NBA"
+                val rawConfName = conf.name ?: "NBA"
+                val confName = when {
+                    rawConfName.contains("East", ignoreCase = true) -> NbaTeamAliasResolver.EASTERN_CONFERENCE
+                    rawConfName.contains("West", ignoreCase = true) -> NbaTeamAliasResolver.WESTERN_CONFERENCE
+                    else -> rawConfName
+                }
                 val entries = conf.standings?.entries ?: emptyList()
                 entries.forEachIndexed { idx, entry ->
-                    val teamName = entry.team?.displayName ?: entry.team?.name ?: "Time"
+                    val rawTeamName = entry.team?.displayName ?: entry.team?.name ?: "Time"
+                    val teamName = NbaTeamAliasResolver.canonicalName(rawTeamName)
                     val logo = entry.team?.logo ?: entry.team?.logos?.firstOrNull()?.href
                     val statMap = (entry.stats ?: emptyList()).associate { (it.name ?: "") to (it.displayValue ?: "") }
                     val wins = statMap["wins"]?.toIntOrNull() ?: 0
@@ -90,10 +99,11 @@ class EspnBasketballClient(
                     val winRate = winPercentStr?.toDoubleOrNull() ?: if (wins + losses > 0) Math.round((wins.toDouble() / (wins + losses)) * 1000.0) / 1000.0 else 0.0
                     val gb = statMap["gamesBehind"] ?: "-"
                     val streak = statMap["streak"] ?: ""
+                    val position = statMap["playoffSeed"]?.toDoubleOrNull()?.toInt() ?: (idx + 1)
 
                     rows.add(
                         com.ligadospalpites.sportsfeed.infrastructure.web.StandingRow(
-                            position = idx + 1,
+                            position = position,
                             teamId = java.util.UUID.nameUUIDFromBytes(teamName.toByteArray()),
                             teamName = teamName,
                             played = wins + losses,
@@ -151,8 +161,10 @@ class EspnBasketballClient(
         val homeCompetitor = competition.competitors?.find { it.homeAway == "home" } ?: return null
         val awayCompetitor = competition.competitors.find { it.homeAway == "away" } ?: return null
 
-        val homeName = homeCompetitor.team?.displayName ?: homeCompetitor.team?.name ?: "Home"
-        val awayName = awayCompetitor.team?.displayName ?: awayCompetitor.team?.name ?: "Away"
+        val rawHomeName = homeCompetitor.team?.displayName ?: homeCompetitor.team?.name ?: "Home"
+        val rawAwayName = awayCompetitor.team?.displayName ?: awayCompetitor.team?.name ?: "Away"
+        val homeName = if (leagueSlug == "nba") NbaTeamAliasResolver.canonicalName(rawHomeName) else rawHomeName
+        val awayName = if (leagueSlug == "nba") NbaTeamAliasResolver.canonicalName(rawAwayName) else rawAwayName
 
         val homeLogo = homeCompetitor.team?.logo ?: homeCompetitor.team?.logos?.firstOrNull()?.href
         val awayLogo = awayCompetitor.team?.logo ?: awayCompetitor.team?.logos?.firstOrNull()?.href

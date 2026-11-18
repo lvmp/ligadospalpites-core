@@ -2,6 +2,7 @@ package com.ligadospalpites.sportsfeed.infrastructure.client
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
+import com.ligadospalpites.sportsfeed.domain.models.NbaTeamAliasResolver
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
 import io.github.resilience4j.retry.annotation.Retry
 import org.slf4j.LoggerFactory
@@ -102,8 +103,8 @@ class BalldontlieClient(
             BalldontlieNbaGame(
                 externalId = game.id.toString(),
                 date = game.datetime ?: if (game.date.contains("T")) game.date else "${game.date}T00:00:00Z",
-                homeTeamName = game.homeTeam.fullName.ifBlank { game.homeTeam.name },
-                awayTeamName = game.visitorTeam.fullName.ifBlank { game.visitorTeam.name },
+                homeTeamName = NbaTeamAliasResolver.canonicalName(game.homeTeam.fullName.ifBlank { game.homeTeam.name }),
+                awayTeamName = NbaTeamAliasResolver.canonicalName(game.visitorTeam.fullName.ifBlank { game.visitorTeam.name }),
                 homeTeamLogoUrl = null,
                 awayTeamLogoUrl = null,
                 homeScore = game.homeTeamScore,
@@ -124,7 +125,7 @@ class BalldontlieClient(
 
             val rawList = response?.data ?: emptyList()
             rawList.mapIndexed { idx, s ->
-                val teamName = s.team.fullName.ifBlank { s.team.name }
+                val teamName = NbaTeamAliasResolver.canonicalName(s.team.fullName.ifBlank { s.team.name })
                 val conf = when {
                     s.conference.startsWith("East", ignoreCase = true) -> "Eastern Conference"
                     s.conference.startsWith("West", ignoreCase = true) -> "Western Conference"

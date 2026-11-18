@@ -2,6 +2,7 @@ package com.ligadospalpites.sportsfeed.infrastructure.client
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.ligadospalpites.sportsfeed.domain.models.NbaTeamAliasResolver
 import com.ligadospalpites.sportsfeed.infrastructure.web.StandingRow
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
 import io.github.resilience4j.retry.annotation.Retry
@@ -83,7 +84,8 @@ class StatsNbaClient(
             val teamId = if (teamIdIdx != null && teamIdIdx < row.size) row[teamIdIdx]?.toString() else null
             val teamCity = if (teamCityIdx != null && teamCityIdx < row.size) row[teamCityIdx]?.toString() ?: "" else ""
             val teamShortName = if (teamNameIdx != null && teamNameIdx < row.size) row[teamNameIdx]?.toString() ?: "" else ""
-            val fullTeamName = if (teamCity.isNotBlank() && teamShortName.isNotBlank()) "$teamCity $teamShortName".trim() else teamShortName
+            val rawFullTeamName = if (teamCity.isNotBlank() && teamShortName.isNotBlank()) "$teamCity $teamShortName".trim() else teamShortName
+            val fullTeamName = NbaTeamAliasResolver.canonicalName(rawFullTeamName)
 
             val confRaw = if (confIdx != null && confIdx < row.size) row[confIdx]?.toString() ?: "" else ""
             val groupName = when {

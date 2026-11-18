@@ -346,6 +346,63 @@ class FixtureControllerTest {
     }
 
     @Test
+    fun `should unify NBA team aliases like LA Clippers into Western Conference in fallback`() {
+        val nbaLeagueId = UUID.fromString("5c1e3a11-b9db-44ab-ba02-411a0c0bcf14")
+        val basketballSportId = UUID.fromString("e5284bf1-d576-4740-97cc-f06bca181cb2")
+        val nbaLeagueEntity = LeagueJpaEntity(
+            id = nbaLeagueId,
+            name = "NBA",
+            sportId = basketballSportId,
+            isActive = true,
+            format = "POINTS"
+        )
+        val basketballSportEntity = SportJpaEntity(id = basketballSportId, name = "Basquete")
+
+        val nbaMatches = listOf(
+            MatchJpaEntity(
+                id = UUID.randomUUID(),
+                sportId = basketballSportId,
+                leagueId = nbaLeagueId,
+                seasonId = UUID.randomUUID(),
+                homeTeamName = "LA Clippers",
+                awayTeamName = "New York Knicks",
+                kickoffTime = Instant.now(),
+                status = MatchStatus.FINISHED,
+                homeScore = 112,
+                awayScore = 104,
+                phase = "Temporada Regular"
+            ),
+            MatchJpaEntity(
+                id = UUID.randomUUID(),
+                sportId = basketballSportId,
+                leagueId = nbaLeagueId,
+                seasonId = UUID.randomUUID(),
+                homeTeamName = "Los Angeles Clippers",
+                awayTeamName = "Miami Heat",
+                kickoffTime = Instant.now(),
+                status = MatchStatus.FINISHED,
+                homeScore = 108,
+                awayScore = 101,
+                phase = "Temporada Regular"
+            )
+        )
+
+        `when`(leagueRepository.findById(nbaLeagueId)).thenReturn(Optional.of(nbaLeagueEntity))
+        `when`(sportRepository.findById(basketballSportId)).thenReturn(Optional.of(basketballSportEntity))
+        `when`(matchRepository.findByLeagueId(nbaLeagueId)).thenReturn(nbaMatches)
+
+        val response = controller.getStandings(nbaLeagueId)
+
+        assertEquals(200, response.statusCode.value())
+        val rows = response.body!!
+        val clippersRows = rows.filter { it.teamName == "Los Angeles Clippers" }
+        assertEquals(1, clippersRows.size, "LA Clippers and Los Angeles Clippers must be merged into one row")
+        assertEquals("Western Conference", clippersRows.first().groupName)
+        assertEquals(2, clippersRows.first().played)
+        assertEquals(2, clippersRows.first().won)
+    }
+
+    @Test
     fun `should return 403 Forbidden when user is not premium on timeline endpoint`() {
         val matchId = UUID.randomUUID()
         val userId = UUID.randomUUID()

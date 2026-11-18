@@ -2,6 +2,7 @@ package com.ligadospalpites.sportsfeed.application.usecases
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ligadospalpites.sportsfeed.domain.models.MatchStatus
+import com.ligadospalpites.sportsfeed.domain.models.NbaTeamAliasResolver
 import com.ligadospalpites.sportsfeed.infrastructure.client.*
 import com.ligadospalpites.sportsfeed.infrastructure.persistence.*
 import com.ligadospalpites.sportsfeed.infrastructure.web.StandingRow
@@ -269,7 +270,11 @@ class GetStandingsUseCase(
                 }
             }
 
-            val teams = (matches.map { it.homeTeamName } + matches.map { it.awayTeamName }).distinct()
+            val normalizeTeam: (String) -> String = { raw ->
+                if (isNba) NbaTeamAliasResolver.canonicalName(raw) else raw
+            }
+
+            val teams = (matches.map { normalizeTeam(it.homeTeamName) } + matches.map { normalizeTeam(it.awayTeamName) }).distinct()
             if (teams.isNotEmpty()) {
                 val finishedMatches = matches.filter { 
                     it.status == MatchStatus.FINISHED && 
@@ -277,37 +282,23 @@ class GetStandingsUseCase(
                     ! (it.phase ?: "").contains("preseason", ignoreCase = true)
                 }
 
-                val nbaWesternConferenceTeams = setOf(
-                    "dallas mavericks", "denver nuggets", "golden state warriors", "houston rockets",
-                    "los angeles clippers", "los angeles lakers", "memphis grizzlies", "minnesota timberwolves",
-                    "new orleans pelicans", "oklahoma city thunder", "phoenix suns", "portland trail blazers",
-                    "sacramento kings", "san antonio spurs", "utah jazz"
-                )
-
-                fun resolveConference(teamName: String): String {
-                    val norm = teamName.lowercase().trim()
-                    return if (nbaWesternConferenceTeams.any { norm.contains(it) || it.contains(norm) }) {
-                        "Western Conference"
-                    } else {
-                        "Eastern Conference"
-                    }
-                }
-
                 val computedRows = teams.map { teamName ->
                     var played = 0
                     var won = 0
                     var lost = 0
                     finishedMatches.forEach { m ->
-                        if (m.homeTeamName == teamName || m.awayTeamName == teamName) {
+                        val homeTeam = normalizeTeam(m.homeTeamName)
+                        val awayTeam = normalizeTeam(m.awayTeamName)
+                        if (homeTeam == teamName || awayTeam == teamName) {
                             played++
-                            val isHome = m.homeTeamName == teamName
+                            val isHome = homeTeam == teamName
                             val myScore = if (isHome) m.homeScore ?: 0 else m.awayScore ?: 0
                             val oppScore = if (isHome) m.awayScore ?: 0 else m.homeScore ?: 0
                             if (myScore > oppScore) won++ else if (myScore < oppScore) lost++
                         }
                     }
                     val winRate = if (played > 0) Math.round((won.toDouble() / played) * 1000.0) / 1000.0 else 0.0
-                    val group = if (isNba) resolveConference(teamName) else null
+                    val group = if (isNba) (NbaTeamAliasResolver.resolveConference(teamName) ?: NbaTeamAliasResolver.EASTERN_CONFERENCE) else null
                     StandingRow(
                         position = 0,
                         teamId = UUID.nameUUIDFromBytes(teamName.toByteArray()),
